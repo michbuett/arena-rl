@@ -6,33 +6,21 @@
 
     /**
      * Description
-     *
-     * @class browser.Viewport
-     * @extends MateriaPrima
      */
     alchemy.formula.add({
-        name: 'arena.Viewport',
+        name: 'arena.HUD',
         extend: 'arena.View',
         requires: [],
         overrides: {
             template: [
-                /*jshint white: false*/
-                '<div id="viewport">',
-                    '<div id="fps"></div>',
-                    '<div id="hud"></div>',
-                    '<div id="map"></div>',
-                '</div>'
-                /*jshint white: true*/
+                '<div id="fps"></div>'
             ].join(''),
 
             init: function () {
-                _super.call(this);
-
                 this.on('rendered', function () {
                     this.$fpsEl = $('#fps');
-                    this.$hudEl = $('#hud');
-                    this.$mapEl = $('#map');
                 }, this);
+                _super.call(this);
             },
 
             update: function (frame, app) {
