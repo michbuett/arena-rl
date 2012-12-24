@@ -1,0 +1,67 @@
+(function () {
+    'use strict';
+
+    var alchemy = require('./alchemy.js');
+    /**
+     * Description
+     *
+     * @class arena.Map
+     * @extends arena.View
+     */
+    alchemy.formula.add({
+        name: 'arena.Map',
+        extend: 'Oculus',
+        overrides: {
+            tileTypes: {
+                '.': {
+                    type: 'floor'
+                },
+                '#': {
+                    type: 'wall'
+                },
+                '~': {
+                    type: 'water'
+                }
+            },
+
+            map: [
+                '      ###########      ',
+                '    ###.........###    ',
+                '   ##.............##   ',
+                '  ##...............##  ',
+                ' ##.................## ',
+                '##...................##',
+                '#.......#..~..#.......#',
+                '#..........~..........#',
+                '#.......~~~~~~~.......#',
+                '#..........~..........#',
+                '#......#...~..#.......#',
+                '##...................##',
+                ' ##.................## ',
+                '  ##...............##  ',
+                '   ##.............##   ',
+                '    ###.........###    ',
+                '      ###########      '
+            ],
+
+            init: function () {
+                this.tiles = [];
+                for (var i = 0; i < this.map.length; i++) {
+                    var row = this.map[i];
+                    for (var j = 0; j < row.length; j++) {
+                        var cfg = this.tileTypes[row.charAt(j)];
+                        if (cfg) {
+                            this.tiles.push(alchemy.mix({
+                                row: i,
+                                col: j
+                            }, cfg));
+                        }
+                    }
+                }
+
+                _super.call(this);
+            }
+        }
+    });
+}());
+
