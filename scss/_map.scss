@@ -10,15 +10,15 @@
         height: 32px;
 
         &.floor {
-            background-image: url('../images/sand1.png');
+            background-image: url('../images/sand.png');
         }
 
         &.wall {
-            background-image: url('../images/shoals_wall1.png');
+            background-image: url('../images/wall.png');
         }
 
         &.water {
-            background-image: url('../images/shoals_shallow_water1.png');
+            background-image: url('../images/water.png');
         }
     }
 }
