@@ -9,7 +9,14 @@
     alchemy.formula.add({
         name: 'arena.Application',
         extend: 'browser.Application',
-        requires: ['arena.HUD', 'arena.Map', 'arena.MapView'],
+        requires: [
+            'arena.HUD',
+            'arena.Map',
+            'arena.MapView',
+            'arena.Player',
+            'arena.EntityView'
+        ],
+
         overrides: {
             prepare: function () {
                 this.messages = alchemy('Oculus').create();
@@ -17,17 +24,31 @@
                     target: '#hud',
                     messages: this.messages
                 });
+
                 this.map = alchemy('arena.Map').create();
                 this.mapView = alchemy('arena.MapView').create({
                     target: '#map',
+                    map: this.map,
+                    messages: this.messages
+                });
+
+                this.player = alchemy('arena.Player').create({
                     map: this.map
+                });
+                this.playerView = alchemy('arena.EntityView').create({
+                    id: 'player',
+                    target: '#map',
+                    entity: this.player,
+                    messages: this.messages
                 });
 
                 this.messages.trigger('app:start');
             },
 
             update: function (frame) {
+                this.player.update(frame, this);
                 this.hud.update(frame, this);
+
                 if (frame > 1000) {
                     this.end();
                 }

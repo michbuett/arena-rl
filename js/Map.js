@@ -50,6 +50,8 @@
                 '      ###########      '
             ],
 
+            startPos: [11, 1],
+
             init: function () {
                 this.tiles = [];
                 for (var i = 0; i < this.map.length; i++) {
@@ -66,6 +68,10 @@
                 }
 
                 _super.call(this);
+            },
+
+            getStartPos: function () {
+                return this.startPos;
             }
         }
     });

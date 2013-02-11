@@ -12,6 +12,7 @@
         <script type="text/javascript" src="support/alchemy.js/lib/core/Alchemy.js"></script>
         <script type="text/javascript">
             var alchemy = require('alchemy');
+            var debug;
             alchemy.heatUp({
                 path: {
                     core: 'support/alchemy.js/lib/core',
@@ -26,6 +27,7 @@
                         title: 'Arena'
                     });
                     app.launch();
+                    debug = app;
                 }
             });
         </script>

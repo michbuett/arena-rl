@@ -25,23 +25,12 @@
                 }
             },
 
-            getData: (function () {
-                function renderItem(item, key, ctxt) {
-                    item.render(ctxt);
-                }
-                return function () {
-                    var itemCtxt;
-                    if (this.items) {
-                        itemCtxt = [];
-                        alchemy.each(this.items, renderItem, this, [itemCtxt]);
-                    }
-                    return {
-                        id: this.id,
-                        cls: this.cls,
-                        items: itemCtxt && itemCtxt.join('')
-                    };
+            getData: function () {
+                return {
+                    id: this.id,
+                    cls: this.cls
                 };
-            }()),
+            },
 
             render: function (ctxt) {
                 ctxt.push(alchemy.render(this.template, this.getData()));
