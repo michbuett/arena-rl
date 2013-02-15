@@ -19,23 +19,23 @@
 
         overrides: {
             prepare: function () {
-                this.messages = alchemy('Oculus').create();
-                this.hud = alchemy('arena.HUD').create({
+                this.messages = alchemy('Oculus').brew();
+                this.hud = alchemy('arena.HUD').brew({
                     target: '#hud',
                     messages: this.messages
                 });
 
-                this.map = alchemy('arena.Map').create();
-                this.mapView = alchemy('arena.MapView').create({
+                this.map = alchemy('arena.Map').brew();
+                this.mapView = alchemy('arena.MapView').brew({
                     target: '#map',
                     map: this.map,
                     messages: this.messages
                 });
 
-                this.player = alchemy('arena.Player').create({
+                this.player = alchemy('arena.Player').brew({
                     map: this.map
                 });
-                this.playerView = alchemy('arena.EntityView').create({
+                this.playerView = alchemy('arena.EntityView').brew({
                     id: 'player',
                     target: '#map',
                     entity: this.player,

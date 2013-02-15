@@ -16,13 +16,15 @@
         overrides: {
             template: '<div id="<$=data.id$>" class="<$=data.cls$>"><$=data.items$></div>',
 
-            init: function () {
-                _super.call(this);
+            init: function hocuspocus(_super) {
+                return function () {
+                    _super.call(this);
 
-                if (this.target) {
-                    this.renderTo(this.target);
-                    delete this.target;
-                }
+                    if (this.target) {
+                        this.renderTo(this.target);
+                        delete this.target;
+                    }
+                };
             },
 
             getData: function () {

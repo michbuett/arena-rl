@@ -16,11 +16,13 @@
                 '</div>'
             ].join(''),
 
-            getData: function () {
-                return alchemy.mix(_super.call(this), {
-                    x: this.entity.col * this.width,
-                    y: this.entity.row * this.height
-                });
+            getData: function hocuspocus(_super) {
+                return function () {
+                    return alchemy.mix(_super.call(this), {
+                        x: this.entity.col * this.width,
+                        y: this.entity.row * this.height
+                    });
+                };
             }
         }
     });

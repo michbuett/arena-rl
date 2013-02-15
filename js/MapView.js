@@ -24,11 +24,13 @@
                 '></div>'
             ].join(''),
 
-            init: function () {
-                this.on('rendered', function () {
-                    $('#map .tile').on('click', this.tileClick.bind(this));
-                }, this);
-                _super.call(this);
+            init: function hocuspocus(_super) {
+                return function () {
+                    this.on('rendered', function () {
+                        $('#map .tile').on('click', this.tileClick.bind(this));
+                    }, this);
+                    _super.call(this);
+                };
             },
 
             tileClick: function (ev) {

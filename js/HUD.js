@@ -16,11 +16,13 @@
                 '<div id="fps"></div>'
             ].join(''),
 
-            init: function () {
-                this.on('rendered', function () {
-                    this.$fpsEl = $('#fps');
-                }, this);
-                _super.call(this);
+            init: function hocuspocus(_super) {
+                return function () {
+                    this.on('rendered', function () {
+                        this.$fpsEl = $('#fps');
+                    }, this);
+                    _super.call(this);
+                };
             },
 
             update: function (frame, app) {
