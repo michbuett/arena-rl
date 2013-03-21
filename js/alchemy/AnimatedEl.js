@@ -1,86 +1,87 @@
 (function () {
-    var AnimatedEl = {
+    'use strict';
 
-        animations: undefined,
+    var alchemy = require('./alchemy.js');
 
-        constructor: function (cfg) {
-            var animations = cfg && cfg.animations,
-                animKey,
-                animCfg;
+    /**
+     * Description
+     */
+    alchemy.formula.add({
+        name: 'arena.alchemy.AnimatedEl',
+        extend: 'arena.View',
 
-            _super.call(this, cfg);
+        overrides: {
 
-            this.animations = {};
+            animations: undefined,
 
-            if (animations) {
-                for (animKey in animations) {
-                    if (animations.hasOwnProperty(animKey)) {
-                        animCfg = animations[animKey];
+            init: function hocuspocus(_super) {
+                return function () {
+                    var animations = this.animations;
+                    this.animations = {};
 
-                        if (Alchemy.isArray(animCfg)) {
+                    alchemy.each(animations, function (animCfg, animKey) {
+                        if (alchemy.isArray(animCfg)) {
                             animCfg = {
                                 frames: animCfg
                             };
                         }
                         this.addAnimation(animKey, animCfg);
+                    }, this);
+
+                    _super.call(this);
+                };
+            },
+
+            addAnimation: function (key, cfg) {
+                if (this.defaults) {
+                    cfg = alchemy.mix(cfg, this.defaults, {
+                        override: false
+                    });
+                }
+                cfg.x = cfg.x || 0;
+                cfg.y = cfg.y || 0;
+                cfg.listeners = {
+                    framechanged: {
+                        fn: this.clear,
+                        scope: this
                     }
+                };
+
+                this.animations[key] = alchemy.v.Animation.create(cfg);
+            },
+
+            play: function (anim) {
+                if (this.animations[anim]) {
+                    this.currAnim = anim;
+                    this.animations[anim].start();
                 }
-            }
-        },
+            },
 
-        addAnimation: function (key, cfg) {
-            if (this.defaults) {
-                cfg = Alchemy.mix(cfg, this.defaults, {
-                    override: false
-                });
-            }
-            cfg.x = cfg.x || 0;
-            cfg.y = cfg.y || 0;
-            cfg.listeners = {
-                framechanged: {
-                    fn: this.clear,
-                    scope: this
+            getCurrentAnimation: function () {
+                return this.animations[this.currAnim];
+            },
+
+            clear: function () {
+                var renderCtx = this.getContext();
+                if (renderCtx) {
+                    renderCtx.clearRect(0, 0, this.getWidth(), this.getHeight());
                 }
-            };
+            },
 
-            this.animations[key] = Alchemy.v.Animation.create(cfg);
-        },
-
-        play: function (anim) {
-            if (this.animations[anim]) {
-                this.currAnim = anim;
-                this.animations[anim].start();
-            }
-        },
-
-        getCurrentAnimation: function () {
-            return this.animations[this.currAnim];
-        },
-
-        clear: function () {
-            var renderCtx = this.getContext();
-            if (renderCtx) {
-                renderCtx.clearRect(0, 0, this.getWidth(), this.getHeight());
-            }
-        },
-
-        renderCvsContent: function () {
-            var renderCtx = this.getContext(),
+            renderCvsContent: function () {
+                var renderCtx = this.getContext(),
                 anim = this.getCurrentAnimation();
-            if (anim && renderCtx) {
-                anim.render(renderCtx);
-            }
-        },
+                if (anim && renderCtx) {
+                    anim.render(renderCtx);
+                }
+            },
 
-        update: function () {
-            var anim = this.getCurrentAnimation();
-            if (anim) {
-                anim.update();
+            update: function () {
+                var anim = this.getCurrentAnimation();
+                if (anim) {
+                    anim.update();
+                }
             }
         }
-    };
-
-    Alchemy.v.AnimatedEl = Alchemy.brew({
-        extend: Alchemy.v.CvsContainer
-    }, AnimatedEl);
-})();
+    });
+}());

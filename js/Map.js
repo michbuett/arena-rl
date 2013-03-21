@@ -10,7 +10,7 @@
      */
     alchemy.formula.add({
         name: 'arena.Map',
-        extend: 'Oculus',
+        extend: 'alchemy.core.Oculus',
         overrides: {
             tileTypes: {
                 '.': {

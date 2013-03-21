@@ -12,7 +12,7 @@
      */
     alchemy.formula.add({
         name: 'arena.View',
-        extend: 'Oculus',
+        extend: 'alchemy.core.Oculus',
         overrides: {
             template: '<div id="<$=data.id$>" class="<$=data.cls$>"><$=data.items$></div>',
 

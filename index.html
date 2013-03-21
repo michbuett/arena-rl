@@ -13,10 +13,10 @@
         <script type="text/javascript">
             var alchemy = require('alchemy');
             var debug;
+
             alchemy.heatUp({
                 path: {
-                    core: 'support/alchemy.js/lib/core',
-                    browser: 'support/alchemy.js/lib/browser',
+                    alchemy: 'support/alchemy.js/lib',
                     arena: 'js'
                 },
 
@@ -24,7 +24,8 @@
 
                 onReady: function () {
                     var app = alchemy('arena.Application').brew({
-                        title: 'Arena'
+                        title: 'Arena',
+                        debug: debug
                     });
                     app.launch();
                     debug = app;

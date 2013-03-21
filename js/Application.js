@@ -8,29 +8,52 @@
      */
     alchemy.formula.add({
         name: 'arena.Application',
-        extend: 'browser.Application',
+        extend: 'alchemy.browser.Application',
         requires: [
             'arena.HUD',
             'arena.Map',
             'arena.MapView',
             'arena.Player',
-            'arena.EntityView'
+            'arena.EntityView',
+            'arena.alchemy.Resources'
         ],
 
         overrides: {
+
             prepare: function () {
-                this.messages = alchemy('Oculus').brew();
-                this.hud = alchemy('arena.HUD').brew({
-                    target: '#hud',
-                    messages: this.messages
+                this.resources = alchemy('Resources').brew();
+                this.resources.define([{
+                    src: 'images/player2.png',
+                    type: 'spritesheet',
+                    spriteWidth: 25,
+                    spriteHeight: 25
+                }]);
+                this.resources.loadAll({
+                    success: function (ressource, progress) {
+                        console.log('Loading resources... ' + progress + '%');
+                    },
+                    failure: function (resource, progress, cfg) {
+                        console.log('Cannot load resource:' + cfg.src);
+                    },
+                    finished: function () {
+                        console.log('Resource loading completed.');
+                    },
+                    scope: this
                 });
+                this.end(); // TODO: remove after debugging
+
+                this.messages = alchemy('Oculus').brew();
+                // this.hud = alchemy('arena.HUD').brew({
+                //     target: '#hud',
+                //     messages: this.messages
+                // });
 
                 this.map = alchemy('arena.Map').brew();
-                this.mapView = alchemy('arena.MapView').brew({
-                    target: '#map',
-                    map: this.map,
-                    messages: this.messages
-                });
+                // this.mapView = alchemy('arena.MapView').brew({
+                //     target: '#map',
+                //     map: this.map,
+                //     messages: this.messages
+                // });
 
                 this.player = alchemy('arena.Player').brew({
                     map: this.map

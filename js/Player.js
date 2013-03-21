@@ -4,7 +4,7 @@
     var alchemy = require('./alchemy.js');
     alchemy.formula.add({
         name: 'arena.Player',
-        extend: 'Oculus',
+        extend: 'alchemy.core.Oculus',
         overrides: {
             col: undefined,
             row: undefined,
