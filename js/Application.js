@@ -21,6 +21,8 @@
         overrides: {
 
             prepare: function () {
+                this.messages = alchemy('Oculus').brew();
+
                 this.resources = alchemy('Resources').brew();
                 this.resources.define([{
                     src: 'images/player2.png',
@@ -37,12 +39,14 @@
                     },
                     finished: function () {
                         console.log('Resource loading completed.');
+                        this.initGUI();
                     },
                     scope: this
                 });
                 this.end(); // TODO: remove after debugging
+            },
 
-                this.messages = alchemy('Oculus').brew();
+            initGUI: function () {
                 // this.hud = alchemy('arena.HUD').brew({
                 //     target: '#hud',
                 //     messages: this.messages
@@ -62,7 +66,8 @@
                     id: 'player',
                     target: '#map',
                     entity: this.player,
-                    messages: this.messages
+                    messages: this.messages,
+                    sheet: this.resources.get('images/player2.png')
                 });
 
                 this.messages.trigger('app:start');

@@ -9,6 +9,7 @@
     alchemy.formula.add({
         name: 'arena.alchemy.Animatus',
         alias: 'Animatus',
+        extend: 'alchemy.core.Oculus',
         overrides: {
 
             /**
@@ -103,6 +104,13 @@
                 this.image = this.frames[this.currentFrame].image;
                 this.frameStartTime = Date.now();
                 this.trigger('framechanged', this);
+            },
+
+            draw: function (ctxt) {
+                if (this.image) {
+                    ctxt.drawImage(this.image, 0, 0);
+                }
+                return ctxt;
             },
 
             update: function () {

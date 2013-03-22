@@ -9,15 +9,23 @@
     alchemy.formula.add({
         name: 'arena.alchemy.AnimatedEl',
         extend: 'arena.View',
+        requires: ['alchemy.core.Collectum', 'arena.alchemy.Animatus'],
 
         overrides: {
+            template: [
+                '<canvas id="<$=data.id$>"',
+                ' width="<$=data.width$>"',
+                ' height="<$=data.height$>"',
+                ' class="Ü-animatus <$=data.cls$>"',
+                '</canvas>'
+            ].join(''),
 
             animations: undefined,
 
             init: function hocuspocus(_super) {
                 return function () {
                     var animations = this.animations;
-                    this.animations = {};
+                    this.animations = alchemy('Collectum').brew();
 
                     alchemy.each(animations, function (animCfg, animKey) {
                         if (alchemy.isArray(animCfg)) {
@@ -33,46 +41,47 @@
             },
 
             addAnimation: function (key, cfg) {
-                if (this.defaults) {
-                    cfg = alchemy.mix(cfg, this.defaults, {
-                        override: false
-                    });
-                }
-                cfg.x = cfg.x || 0;
-                cfg.y = cfg.y || 0;
-                cfg.listeners = {
-                    framechanged: {
-                        fn: this.clear,
-                        scope: this
-                    }
-                };
+                var anim = alchemy('Animatus').brew(alchemy.mix({
+                    id: key,
+                    x: 0,
+                    y: 0,
+                    sheet: this.sheet
+                }, this.defaults, cfg));
 
-                this.animations[key] = alchemy.v.Animation.create(cfg);
+                this.observe(anim, 'framechanged', this.redraw, this);
+
+                this.animations.add(anim);
             },
 
             play: function (anim) {
-                if (this.animations[anim]) {
-                    this.currAnim = anim;
-                    this.animations[anim].start();
+                if (this.animations.contains(anim)) {
+                    this.currAnim = this.animations.get(anim);
+                    this.currAnim.start();
                 }
             },
 
             getCurrentAnimation: function () {
-                return this.animations[this.currAnim];
+                return this.currAnim;
             },
 
-            clear: function () {
-                var renderCtx = this.getContext();
-                if (renderCtx) {
-                    renderCtx.clearRect(0, 0, this.getWidth(), this.getHeight());
+            getContext: function () {
+                if (!this.canvasCtxt) {
+                    this.canvasCtxt = this.el && this.el.getContext('2d');
                 }
+                return this.canvasCtxt;
             },
 
-            renderCvsContent: function () {
-                var renderCtx = this.getContext(),
-                anim = this.getCurrentAnimation();
-                if (anim && renderCtx) {
-                    anim.render(renderCtx);
+            redraw: function () {
+                var anim;
+                var ctxt = this.getContext();
+
+                if (ctxt) {
+                    ctxt.clearRect(0, 0, this.width, this.height);
+
+                    anim = this.getCurrentAnimation();
+                    if (anim) {
+                        anim.draw(ctxt);
+                    }
                 }
             },
 
