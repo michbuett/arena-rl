@@ -12,9 +12,8 @@
         requires: [
             'arena.HUD',
             'arena.Map',
-            'arena.MapView',
             'arena.Player',
-            'arena.EntityView',
+            'arena.ViewFactory',
             'arena.alchemy.Resources'
         ],
 
@@ -22,6 +21,15 @@
 
             prepare: function () {
                 this.messages = alchemy('Oculus').brew();
+                this.viewFactory = alchemy('arena.ViewFactory').brew();
+
+                this.hud = alchemy('arena.HUD').brew({
+                    target: '#hud',
+                    app: this,
+                    messages: this.messages,
+                    factory: this.viewFactory
+                });
+
 
                 this.resources = alchemy('Resources').brew();
                 this.resources.define([{
@@ -30,6 +38,7 @@
                     spriteWidth: 25,
                     spriteHeight: 25
                 }]);
+
                 this.resources.loadAll({
                     success: function (ressource, progress) {
                         console.log('Loading resources... ' + progress + '%');
@@ -39,51 +48,34 @@
                     },
                     finished: function () {
                         console.log('Resource loading completed.');
-                        this.initGUI();
+                        this.initMap();
                     },
                     scope: this
                 });
-                this.end(); // TODO: remove after debugging
             },
 
-            initGUI: function () {
-                // this.hud = alchemy('arena.HUD').brew({
-                //     target: '#hud',
-                //     messages: this.messages
-                // });
-
+            initMap: function () {
                 this.map = alchemy('arena.Map').brew();
-                // this.mapView = alchemy('arena.MapView').brew({
-                //     target: '#map',
-                //     map: this.map,
-                //     messages: this.messages
-                // });
-
                 this.player = alchemy('arena.Player').brew({
                     map: this.map
                 });
-                this.playerView = alchemy('arena.EntityView').brew({
-                    id: 'player',
-                    target: '#map',
-                    entity: this.player,
-                    messages: this.messages,
-                    sheet: this.resources.get('images/player2.png')
-                });
 
+                this.hud.showMap(this.map);
                 this.messages.trigger('app:start');
             },
 
-            update: function (frame) {
-                this.player.update(frame, this);
-                this.hud.update(frame, this);
+            update: function (params) {
+                if (this.map) {
+                    this.map.update(params);
+                }
 
-                if (frame > 1000) {
+                if (params.frame > 1000) {
                     this.end();
                 }
             },
 
-            draw: function () {
-                //this.viewport.draw();
+            draw: function (params) {
+                this.hud.update(params);
             }
         }
     });

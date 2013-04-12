@@ -48,7 +48,9 @@
                     }, tile)));
                 }, this, [ctxt]);
                 return ctxt;
-            }
+            },
+
+            update: function () {}
         }
     });
 }());

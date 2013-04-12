@@ -25,15 +25,41 @@
                 };
             },
 
-            update: function (frame, app) {
-                if (frame % 100 === 0) {
+            update: function (params) {
+                if (params.frame % 100 === 0) {
                     if (this.$fpsEl) {
-                        this.$fpsEl.text('FPS: ' + Math.round(app.fps()));
+                        this.$fpsEl.text('FPS: ' + Math.round(this.app.fps()));
                     }
+                }
+
+                if (this.map) {
+                    this.map.update(params);
                 }
             },
 
+
+            showMap: function (map) {
+                this.map = this.factory.createView(map, {
+                    map: map,
+                    target: '#map',
+                    messages: this.messages
+                });
+            },
+
             draw: function () {
+            },
+
+
+            dispose: function hocuspocus(_super) {
+                return function () {
+                    this.map.dispose();
+
+                    delete this.map;
+                    delete this.app;
+                    delete this.$fpsEl;
+
+                    _super.call(this);
+                };
             }
         }
     });

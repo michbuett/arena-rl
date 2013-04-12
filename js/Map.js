@@ -74,6 +74,9 @@
 
             getStartPos: function () {
                 return this.startPos;
+            },
+
+            update: function () {
             }
         }
     });
