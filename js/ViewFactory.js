@@ -39,7 +39,7 @@
                     objName = obj;
                 }
                 if (alchemy.isObject(obj)) {
-                    objName = obj.getMetaAttr('name');
+                    objName = obj.meta('name');
                 }
                 return alchemy(this.viewMap[objName] || 'arena.View');
             }

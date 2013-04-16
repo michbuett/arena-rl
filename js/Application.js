@@ -18,20 +18,46 @@
         ],
 
         overrides: {
+            /** @lends arena.Application */
+
+            mods: [{
+                potion: 'arena.HUD',
+                target: '#hud'
+            }, {
+                potion: 'arena.Map'
+            }],
+
+            /**
+             * @name init
+             * @methodOf arena.Application
+             */
+            init: function hocuspocus(_super) {
+                return function () {
+                    this.messages = alchemy('Oculus').brew();
+                    this.resources = alchemy('Resources').brew();
+                    this.viewFactory = alchemy('arena.ViewFactory').brew();
+
+                    alchemy.each(this.mods, function (item, index) {
+                        var potion = item.potion;
+                        delete item.potion;
+
+                        this.mods[index] = alchemy(potion).brew(alchemy.mix({
+                            app: this,
+                            messages: this.messages,
+                            resources: this.resources,
+                            viewFactory: this.viewFactory
+                        }, item));
+                    }, this);
+
+                    _super.call(this);
+                };
+            },
 
             prepare: function () {
-                this.messages = alchemy('Oculus').brew();
-                this.viewFactory = alchemy('arena.ViewFactory').brew();
+                alchemy.each(this.mods, function (mod) {
+                    mod.prepare();
+                }, this);
 
-                this.hud = alchemy('arena.HUD').brew({
-                    target: '#hud',
-                    app: this,
-                    messages: this.messages,
-                    factory: this.viewFactory
-                });
-
-
-                this.resources = alchemy('Resources').brew();
                 this.resources.define([{
                     src: 'images/player2.png',
                     type: 'spritesheet',
@@ -48,34 +74,59 @@
                     },
                     finished: function () {
                         console.log('Resource loading completed.');
-                        this.initMap();
+                        this.messages.trigger('app:start');
                     },
                     scope: this
                 });
             },
 
             initMap: function () {
-                this.map = alchemy('arena.Map').brew();
                 this.player = alchemy('arena.Player').brew({
                     map: this.map
                 });
-
-                this.hud.showMap(this.map);
-                this.messages.trigger('app:start');
             },
 
-            update: function (params) {
-                if (this.map) {
-                    this.map.update(params);
+
+            update: (function () {
+                function updateMod(mod, key, params) {
+                    mod.update(params);
                 }
 
-                if (params.frame > 1000) {
-                    this.end();
-                }
-            },
+                return function (params) {
+                    alchemy.each(this.mods, updateMod, this, [params]);
 
-            draw: function (params) {
-                this.hud.update(params);
+                    if (params.frame > 1000) { // TODO: remove if app runs
+                        this.end();
+                    }
+                };
+            }()),
+
+            draw: (function () {
+                function drawMod(mod, key, params) {
+                    mod.draw(params);
+                }
+
+                return function (params) {
+                    alchemy.each(this.mods, drawMod, this, [params]);
+                };
+            }()),
+
+            /**
+             * @name dispose
+             * @methodOf arena.Application
+             */
+            dispose: function hocuspocus(_super) {
+                return function () {
+                    alchemy.each(this.mods, function (mod) {
+                        mod.dispose();
+                    }, this);
+
+                    this.viewFactory.dispose();
+                    this.resources.dispose();
+                    this.messages.dispose();
+
+                    _super.call(this);
+                };
             }
         }
     });

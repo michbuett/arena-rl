@@ -10,7 +10,10 @@
     alchemy.formula.add({
         name: 'arena.HUD',
         extend: 'arena.View',
-        requires: [],
+        ingredients: [{
+            key: 'mod',
+            ptype: 'arena.ApplicationModule'
+        }],
         overrides: {
             template: [
                 '<div id="fps"></div>'
@@ -21,6 +24,11 @@
                     this.on('rendered', function () {
                         this.$fpsEl = $('#fps');
                     }, this);
+
+                    this.observe(this.messages, 'map:init', function (data) {
+                        this.showMap(data.map);
+                    }, this);
+
                     _super.call(this);
                 };
             },
@@ -37,16 +45,12 @@
                 }
             },
 
-
             showMap: function (map) {
-                this.map = this.factory.createView(map, {
+                this.map = this.viewFactory.createView(map, {
                     map: map,
                     target: '#map',
                     messages: this.messages
                 });
-            },
-
-            draw: function () {
             },
 
 
