@@ -113,10 +113,10 @@
                 return ctxt;
             },
 
-            update: function () {
+            update: function (params) {
                 if (this.isPlaying()) {
                     var cFrame = this.frames[this.currentFrame];
-                    if (Date.now() - this.frameStartTime > cFrame.durration) {
+                    if (params.now - this.frameStartTime > cFrame.durration) {
                         this.nextFrame();
                     }
                 }

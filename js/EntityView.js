@@ -15,12 +15,12 @@
                 },
                 'idyl': {
                     frames: [0]
-                },
-                defaults: {
-                    src: 'images/human_template.png',
-                    defaults: {
-                        durration: 200
-                    }
+                }
+            },
+
+            defaults: { // default values for each animation
+                defaults: { // default values for each frame
+                    durration: 200
                 }
             },
 

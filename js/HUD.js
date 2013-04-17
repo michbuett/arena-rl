@@ -25,10 +25,6 @@
                         this.$fpsEl = $('#fps');
                     }, this);
 
-                    this.observe(this.messages, 'map:init', function (data) {
-                        this.showMap(data.map);
-                    }, this);
-
                     _super.call(this);
                 };
             },
@@ -39,20 +35,7 @@
                         this.$fpsEl.text('FPS: ' + Math.round(this.app.fps()));
                     }
                 }
-
-                if (this.map) {
-                    this.map.update(params);
-                }
             },
-
-            showMap: function (map) {
-                this.map = this.viewFactory.createView(map, {
-                    map: map,
-                    target: '#map',
-                    messages: this.messages
-                });
-            },
-
 
             dispose: function hocuspocus(_super) {
                 return function () {

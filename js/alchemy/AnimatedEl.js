@@ -17,6 +17,8 @@
                 ' width="<$=data.width$>"',
                 ' height="<$=data.height$>"',
                 ' class="Ü-animatus <$=data.cls$>"',
+                ' style="left: <$=data.x$>px; top: <$=data.y$>px;"',
+                ' >',
                 '</canvas>'
             ].join(''),
 
@@ -85,10 +87,10 @@
                 }
             },
 
-            update: function () {
+            update: function (params) {
                 var anim = this.getCurrentAnimation();
                 if (anim) {
-                    anim.update();
+                    anim.update(params);
                 }
             }
         }

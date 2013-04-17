@@ -25,6 +25,8 @@
                 target: '#hud'
             }, {
                 potion: 'arena.Map'
+            }, {
+                potion: 'arena.Player'
             }],
 
             /**
@@ -58,12 +60,6 @@
                     mod.prepare();
                 }, this);
 
-                this.resources.define([{
-                    src: 'images/player2.png',
-                    type: 'spritesheet',
-                    spriteWidth: 25,
-                    spriteHeight: 25
-                }]);
 
                 this.resources.loadAll({
                     success: function (ressource, progress) {
@@ -79,13 +75,6 @@
                     scope: this
                 });
             },
-
-            initMap: function () {
-                this.player = alchemy('arena.Player').brew({
-                    map: this.map
-                });
-            },
-
 
             update: (function () {
                 function updateMod(mod, key, params) {
