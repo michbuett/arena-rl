@@ -38,23 +38,20 @@
             },
 
             init: function () {
-                this.resources = alchemy('Collectum').brew({
-                    idProp: 'src'
-                });
+                this.resources = alchemy('Collectum').brew();
             },
 
             /**
              * Get one resource which has been loaded
              *
-             * @param {String} src
-             *      the source URL string
+             * @param {String} id The resource identifier
              *
              * @return {Object}
              *      the resource object
              */
-            get: function (src) {
-                if (this.isLoaded(src)) {
-                    return this.resources.get(src).data;
+            get: function (id) {
+                if (this.isLoaded(id)) {
+                    return this.resources.get(id).data;
                 } else {
                     return null;
                 }
@@ -64,54 +61,48 @@
              * Return <code>true</code> if src is in the process of loading
              * (but not finished yet)
              *
-             * @param {String} src
-             *      the src URL
+             * @param {String} id The resource identifier
              *
              * @return {Boolean}
              */
-            isLoading: function (src) {
-                var res = this.resources.get(src);
+            isLoading: function (id) {
+                var res = this.resources.get(id);
                 return res && res.status === 'loading';
             },
 
             /**
              * Return <code>true</code> if src has been loaded completely
              *
-             * @param {String} src
-             *      the src URL
+             * @param {String} id The resource identifier
              *
              * @return {Boolean}
              */
-            isLoaded: function (src) {
-                var res = this.resources.get(src);
+            isLoaded: function (id) {
+                var res = this.resources.get(id);
                 return res && res.status === 'success';
             },
 
-            getPostfix: function (src) {
-                return (/\.([a-zA-Z0-9]+)$/.exec(src)[1]).toLowerCase();
-            },
-
-            getType: function (src) {
-                return this.fileTypes[this.getPostfix(src)] || 'default';
-            },
-
             /**
-             * Add array of paths or single path to resource-list. Later load with loadAll()
+             * Adds one or more resource definition which can be later loaded
+             * using {@link arena.alchemy.Resources#loadAll}
+             *
+             * @param {Object/Array} cfg The resource definition object or an array of those objects
+             * @param {String} cfg.id The resource identifier
+             * @param {String} cfg.src The source URL
+             * @param {String} cfg.type Optional; The resource type (will be determined by the src if omitted)
+             * @param {Function} cfg.success Optional; The callback when the resource was loaded successfully
+             * @param {Function} cfg.error Optional; The callback when loading the resource failed
+             * @param {Object} cfg.scope Optional; The execution context for the callbacks
              *
              * @example
-             * resources.define("player.png")
-             * resources.define(["media/bullet1.png", "media/bullet2.png"])
-             * resources.loadAll({onfinish: start_game})
-             *
+             * resources.define({id: 'my-sprite', src: 'images/sprite.png', success: onLoadCallback});
+             * resources.define([{id: 'sprite1', src: 'images/sprite1.png'}, {id: 'sprite2, src: 'images/sprite2.png'}]);
+             * resources.loadAll({finished: start_game});
              */
             define: function (cfg) {
                 if (alchemy.isArray(cfg)) {
                     alchemy.each(cfg, this.define, this);
                     return;
-                }
-
-                if (alchemy.isString(cfg)) {
-                    cfg = {src: cfg};
                 }
 
                 this.resources.add(alchemy.mix({
@@ -132,21 +123,17 @@
 
             /** Load one resource-object, i.e: {src: "foo.png"} */
             load: function (cfg) {
+                if (!alchemy.isObject(cfg)) {
+                    return;
+                }
+
                 var data;
                 var type = cfg.type;
                 var srcUrl = this.root + cfg.src + "?" + alchemy.random(10000000);
                 var successCb = this.loadSuccess.bind(this, cfg);
                 var failureCB = this.loadFailure.bind(this, cfg);
-                /*
-                var successCb = (function () {
-                    this.loadSuccess(cfg);
-                }).bind(this);
-                var failureCB = (function () {
-                    this.loadFailure(cfg);
-                }).bind(this);
-                */
 
-                if (!this.resources.contains(cfg.src)) {
+                if (!this.resources.contains(cfg.id)) {
                     this.define(cfg);
                 }
 
@@ -164,16 +151,33 @@
 
                 default:
                     data = new XMLHttpRequest();
-                    data.onreadystatechange = successCb;
+                    data.onload = successCb;
+                    data.onerror = failureCB;
                     data.open('GET', srcUrl, true);
                     data.send(null);
                     break;
                 }
 
-                alchemy.mix(this.resources.get(cfg.src), {
+                alchemy.mix(this.resources.get(cfg.id), {
                     status: 'loading',
                     data: data
                 });
+            },
+
+
+            //
+            //
+            // private helper methods
+            //
+            //
+
+            /**
+             * Helper method to determine the resource type based on the source URL
+             * @private
+             */
+            getType: function (src) {
+                var postfix = (/\.([a-zA-Z0-9]+)$/.exec(src)[1]).toLowerCase();
+                return this.fileTypes[postfix] || 'default';
             },
 
             /**
@@ -181,8 +185,7 @@
              * @private
              */
             loadSuccess: function (cfg) {
-                var src = cfg.src,
-                    resource = this.resources.get(src),
+                var resource = this.resources.get(cfg.id),
                     type = resource.type.toLowerCase();
 
                 // update status
@@ -197,7 +200,7 @@
                     break;
 
                 case 'json':
-                    if (this.readyState !== 4) {
+                    if (!resource.data || resource.data.readyState !== 4) {
                         return;
                     }
                     resource.data = JSON.parse(resource.data.responseText);
@@ -215,7 +218,7 @@
             /** @private */
             loadFailure: function (cfg) {
                 this.failureCount++;
-                this.processCallbacks(this.resources[cfg.src], false, cfg);
+                this.processCallbacks(this.resources.get(cfg.id), false, cfg);
             },
 
             /** @private */
