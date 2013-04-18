@@ -10,11 +10,11 @@
             height: 32,
 
             animations: {
-                'walk': {
-                    frames: [8, 9]
-                },
                 'idyl': {
                     frames: [0]
+                },
+                'walk': {
+                    frames: [10, 11, 12, 13]
                 }
             },
 

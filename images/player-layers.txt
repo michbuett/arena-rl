@@ -1,0 +1,28 @@
+# mtPaint layers
+1
+1
+player3.png
+Hintergrund
+1
+0
+0
+0
+-1
+100
+help-lines.png
+Hilfslinien
+1
+0
+0
+0
+-1
+25
+# mtPaint animation
+1
+100
+frames
+f
+10
+0
+0
+0

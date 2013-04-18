@@ -16,7 +16,7 @@
             init: function () {
                 this.resources.define([{
                     id: 'playerSprite',
-                    src: 'images/player2.png',
+                    src: 'images/player3.png',
                     type: 'spritesheet',
                     spriteWidth: 25,
                     spriteHeight: 25
