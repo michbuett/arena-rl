@@ -27,7 +27,7 @@
             init: function hocuspocus(_super) {
                 return function () {
                     this.tiles = [];
-                    alchemy.each(this.map.tiles, function (tile) {
+                    this.map.tiles.each(function (tile) {
                         this.tiles.push(alchemy.mix({
                             x: this.getScreenX(tile.col),
                             y: this.getScreenY(tile.row)
