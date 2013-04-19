@@ -7,11 +7,11 @@
     /**
      * Description
      *
-     * @class arena.View
+     * @class arena.view.Prima
      * @extends Oculus
      */
     alchemy.formula.add({
-        name: 'arena.View',
+        name: 'arena.view.Prima',
         extend: 'alchemy.core.Oculus',
         overrides: {
             template: '<div id="<$=data.id$>" class="<$=data.cls$>"><$=data.items$></div>',

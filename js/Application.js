@@ -13,7 +13,7 @@
             'arena.HUD',
             'arena.Map',
             'arena.Player',
-            'arena.ViewFactory',
+            'arena.view.Factory',
             'arena.alchemy.Resources'
         ],
 
@@ -37,7 +37,7 @@
                 return function () {
                     this.messages = alchemy('Oculus').brew();
                     this.resources = alchemy('Resources').brew();
-                    this.viewFactory = alchemy('arena.ViewFactory').brew();
+                    this.viewFactory = alchemy('arena.view.Factory').brew();
 
                     alchemy.each(this.mods, function (item, index) {
                         var potion = item.potion;

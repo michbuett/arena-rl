@@ -8,7 +8,7 @@
      */
     alchemy.formula.add({
         name: 'arena.alchemy.AnimatedEl',
-        extend: 'arena.View',
+        extend: 'arena.view.Prima',
         requires: ['alchemy.core.Collectum', 'arena.alchemy.Animatus'],
 
         overrides: {

@@ -8,17 +8,17 @@
      * Description
      */
     alchemy.formula.add({
-        name: 'arena.ViewFactory',
+        name: 'arena.view.Factory',
         requires: [
-            'arena.View',
-            'arena.MapView',
-            'arena.EntityView'
+            'arena.view.Prima',
+            'arena.view.Map',
+            'arena.view.Entity'
         ],
 
         overrides: {
             viewMap: {
-                'arena.Map': 'arena.MapView',
-                'arena.Player': 'arena.EntityView'
+                'arena.Map': 'arena.view.Map',
+                'arena.Player': 'arena.view.Entity'
             },
 
             init: function () {
@@ -41,7 +41,7 @@
                 if (alchemy.isObject(obj)) {
                     objName = obj.meta('name');
                 }
-                return alchemy(this.viewMap[objName] || 'arena.View');
+                return alchemy(this.viewMap[objName] || 'arena.view.Prima');
             }
         }
     });

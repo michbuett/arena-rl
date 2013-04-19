@@ -3,7 +3,7 @@
 
     var alchemy = require('./alchemy.js');
     alchemy.formula.add({
-        name: 'arena.EntityView',
+        name: 'arena.view.Entity',
         extend: 'arena.alchemy.AnimatedEl',
         overrides: {
             width: 32,
