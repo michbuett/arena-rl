@@ -9,14 +9,6 @@
             width: 32,
             height: 32,
 
-            animations: {
-                'idyl': {
-                    frames: [0]
-                },
-                'walk': {
-                    frames: [10, 11, 12, 13]
-                }
-            },
 
             defaults: { // default values for each animation
                 defaults: { // default values for each frame
@@ -32,11 +24,19 @@
                 };
             },
 
+            getScreenX: function (mapX) {
+                return Math.floor(this.mapView.getScreenX(mapX) - this.width / 2);
+            },
+
+            getScreenY: function (mapY) {
+                return Math.floor(this.mapView.getScreenY(mapY) - this.height / 2);
+            },
+
             getData: function hocuspocus(_super) {
                 return function () {
                     return alchemy.mix(_super.call(this), {
-                        x: this.entity.col * this.width,
-                        y: this.entity.row * this.height,
+                        x: this.getScreenX(this.entity.x),
+                        y: this.getScreenY(this.entity.y),
                         height: this.height,
                         width: this.width
                     });

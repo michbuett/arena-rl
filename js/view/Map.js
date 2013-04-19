@@ -26,11 +26,29 @@
 
             init: function hocuspocus(_super) {
                 return function () {
+                    this.tiles = [];
+                    alchemy.each(this.map.tiles, function (tile) {
+                        this.tiles.push(alchemy.mix({
+                            x: this.getScreenX(tile.col),
+                            y: this.getScreenY(tile.row)
+                        }, tile));
+                    }, this);
+
+
                     this.on('rendered', function () {
                         $('#map .tile').on('click', this.tileClick.bind(this));
                     }, this);
+
                     _super.call(this);
                 };
+            },
+
+            getScreenX: function (mapX) {
+                return this.tileWidth * mapX;
+            },
+
+            getScreenY: function (mapY) {
+                return this.tileHeight * mapY;
             },
 
             tileClick: function (ev) {
@@ -41,11 +59,8 @@
             },
 
             render: function (ctxt) {
-                alchemy.each(this.map.tiles, function (tile, i, ctxt) {
-                    ctxt.push(alchemy.render(this.tileTemplate, alchemy.mix({
-                        x: this.tileWidth * tile.col,
-                        y: this.tileHeight * tile.row
-                    }, tile)));
+                alchemy.each(this.tiles, function (tile, i, ctxt) {
+                    ctxt.push(alchemy.render(this.tileTemplate, tile));
                 }, this, [ctxt]);
                 return ctxt;
             },

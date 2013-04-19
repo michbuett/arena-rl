@@ -28,17 +28,28 @@
 
             setMap: function (data) {
                 this.map = data.map;
-                this.mapView = data.mapView;
+                this.mapView = data.view;
 
                 var pos = this.map.getStartPos();
-                this.col = pos[0];
-                this.row = pos[1];
+                this.x = pos[0];
+                this.y = pos[1];
 
                 this.view = this.viewFactory.createView(this, {
                     target: '#map',
                     entity: this,
+                    mapView: this.mapView,
                     id: 'player',
-                    sheet: this.resources.get('playerSprite')
+                    sheet: this.resources.get('playerSprite'),
+                    animations: {
+                        'idyl': {
+                            frames: [0]
+                        },
+                        'walk': {
+                            frames: [10, 11, 12, 13]
+                        }
+                    },
+                    width: 25,
+                    height: 25
                 });
             },
 
