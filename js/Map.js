@@ -16,7 +16,7 @@
             ptype: 'arena.ApplicationModule'
         }],
         overrides: {
-            /** @lends arena.Map */
+            /** @lends arena.Map.prototype */
 
             init: function hocuspocus(_super) {
                 return function () {
@@ -78,114 +78,161 @@
 
             isBlocked: function (col,  row) {
                 var tile = this.getTile(col, row);
-                return tile && tile.type !== 'floor';
+                return !tile || tile.type !== 'floor';
             },
 
-            // function A*(start,goal)
-            //      closedset := the empty set    // The set of nodes already evaluated.
-            //      openset := {start}    // The set of tentative nodes to be evaluated, initially containing the start node
-            //      came_from := the empty map    // The map of navigated nodes.
-            //
-            //      g_score[start] := 0    // Cost from start along best known path.
-            //      // Estimated total cost from start to goal through y.
-            //      f_score[start] := g_score[start] + heuristic_cost_estimate(start, goal)
-            //
-            //      while openset is not empty
-            //          current := the node in openset having the lowest f_score[] value
-            //          if current = goal
-            //              return reconstruct_path(came_from, goal)
-            //
-            //          remove current from openset
-            //          add current to closedset
-            //          for each neighbor in neighbor_nodes(current)
-            //              tentative_g_score := g_score[current] + dist_between(current,neighbor)
-            //              if neighbor in closedset
-            //                  if tentative_g_score >= g_score[neighbor]
-            //                      continue
-            //
-            //              if neighbor not in openset or tentative_g_score < g_score[neighbor]
-            //                  came_from[neighbor] := current
-            //                  g_score[neighbor] := tentative_g_score
-            //                  f_score[neighbor] := g_score[neighbor] + heuristic_cost_estimate(neighbor, goal)
-            //                  if neighbor not in openset
-            //                      add neighbor to openset
-            //
-            //      return failure
-            //
-            //  function reconstruct_path(came_from, current_node)
-            //      if current_node in came_from
-            //          p := reconstruct_path(came_from, came_from[current_node])
-            //          return (p + current_node)
-            //      else
-            //          return current_node
 
-            getPath: function (startCol, startRow, endCol, endRow) {
-                var openList;
-                var closedList;
-                var current;
-                var nodes;
+            /**
+             * Callculates the shortes path from the civen start tile to a goal tile using
+             * an A* algorithm
+             *
+             * @param {Object} start The start point
+             * @param {Number} start.col The column index of the start point
+             * @param {Number} start.row The row index of the start point
+             *
+             * @param {Object} goal The goal point
+             * @param {Number} goal.col The column index of the goal point
+             * @param {Number} goal.row The row index of the goal point
+             *
+             * @return {Object[]} An array of map points the leads from the start
+             *      to the goal. Each object provides teh properties <code>col</code>
+             *      and <code>row</code>; It returns <code>null</code> if there is no
+             *      path
+             */
+            getPath: (function () {
+                var neighborOffsets = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]];
 
-                if (this.isBlocked(startCol, startCol)) {
-                    return null;
-                }
+                // helper to find all available neighbor tiles
+                function collectNeighbors(nodeList, curr, map) {
+                    var neighbors = [];
+                    alchemy.each(neighborOffsets, function (offset) {
+                        var neighborCol = curr.col + offset[0];
+                        var neighborRow = curr.row + offset[1];
+                        var key = this.createKey(neighborCol, neighborRow);
 
-                if (this.isBlocked(endCol, endRow)) {
-                    return null;
-                }
+                        if (!this.isBlocked(neighborCol, neighborRow)) {
+                            if (!nodeList.contains(key)) {
+                                var startDistance = curr.startDistance + 1;
 
-                openList = [{
-                    col: startCol,
-                    row: startRow,
-                    startDisance: 0,
-                    path: []
-                }];
-                closedList = {};
-                nodes = {};
+                                nodeList.add({
+                                    id: key,
+                                    col: neighborCol,
+                                    row: neighborRow,
+                                    startDistance: startDistance
+                                });
+                            }
 
-                while (openList.length > 0) {
-                    current = openList.pop();
-                    if (current.col === endCol && current.row === endRow) {
-                        return current.path;
-                    }
-                    closedList[this.createKey(current.col, current.row)] = current;
-
-                    alchemy.each(this.collectNeighbors(current), function (neighbor) {
-                        var n = closedList[this.createKey(neighbor.col, neighbor.row)];
-                        if (n && n.startDisance < neighbor.startDisance) {
-                            return;
+                            neighbors.push(nodeList.get(key));
                         }
-                        // TODO: implement remaining parts using the improved Collectum
+                    }, map);
 
-
-                    }, this);
-
+                    return neighbors;
                 }
-                return null;
-            },
 
-            collectNeighbors: function (curr) {
-                var neighbors = [];
-                alchemy.each([[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]], function (offset) {
-                    var neighborCol = curr.col + offset[0];
-                    var neighborRow = curr.row + offset[0];
+                // helper to create the path array for the found result
+                function createPath(node) {
+                    var path = [{
+                        col: node.col,
+                        row: node.row
+                    }];
+                    node = node.cameFrom;
 
-                    if (!this.isBlocked(neighborCol, neighborRow)) {
-                        neighbors.push({
-                            col: neighborCol,
-                            row: neighborRow,
-                            startDisance: curr.startDisance + 1,
-                            path: curr.path.concat(curr)
+                    while (node) {
+                        path.unshift({
+                            col: node.col,
+                            row: node.row
                         });
+                        node = node.cameFrom;
                     }
-                }, this);
-                return neighbors;
-            },
+                    return path;
+                }
 
-            estimateDistance: function (x1, y1, x2, y2) {
-                var dx = x2 - x1;
-                var dy = y2 - y1;
-                return Math.max(Math.abs(dx), Math.abs(dy));
-            }
+                // helper to estimate the distance between two tiles
+                function estimateDistance(x1, y1, x2, y2) {
+                    var dx = x2 - x1;
+                    var dy = y2 - y1;
+                    return Math.max(Math.abs(dx), Math.abs(dy));
+                }
+
+                function processNeighbors(n, index, current, openList, closedList, goal) {
+                    var newStartDistance = current.startDistance + 1;
+                    if (closedList.contains(n) && n.startDistance <= newStartDistance) {
+                        return;
+                    }
+                    if (!openList.contains(n) || n.startDistance > newStartDistance) {
+                        n.cameFrom = current;
+                        n.startDistance = newStartDistance;
+                        n.goalDistance = newStartDistance + estimateDistance(n.col, n.row, goal.col, goal.row);
+                        openList.add(n);
+                    }
+                }
+
+                return function (start, goal) {
+                    if (!alchemy.isObject(start) || this.isBlocked(start.col, start.row)) {
+                        // no valid start point -> exit
+                        return null;
+                    }
+
+                    if (!alchemy.isObject(goal) || this.isBlocked(goal.col, goal.row)) {
+                        // no valid end point -> exit
+                        return null;
+                    }
+
+                    var nodes = alchemy('Collectum').brew();
+                    var openList = alchemy('Collectum').brew({
+                        next: function () {
+                            var min = this.at(0);
+                            for (var i = 1, l = this.items.length; i < l; i++) {
+                                var item = this.items[i];
+                                if (item.goalDistance < min.goalDistance) {
+                                    min = item;
+                                }
+                            }
+                            return min;
+                        }
+                    });
+                    var closedList = alchemy('Collectum').brew();
+                    var current;
+                    var run = 0;
+
+                    nodes.add({
+                        id: this.createKey(start.col, start.row),
+                        col: start.col,
+                        row: start.row,
+                        startDistance: 0,
+                        goalDistance: estimateDistance(start.col, start.row, goal.col, goal.row)
+                    });
+                    openList.add(nodes.at(0));
+
+                    while (openList.length > 0) {
+                        if (run > 1000) {
+                            // Prevent endless loop while developing
+                            // TODO: remove this after exhaustive testing
+                            window.console.warn('To many iterations! Possible endless loop!');
+                            return null;
+                        }
+
+                        // get the item with smallest distance to the goal from the open list
+                        current = openList.next();
+                        if (current.col === goal.col && current.row === goal.row) {
+                            // the current candidat is the goal tile
+                            // -> return result
+                            return createPath(current);
+                        } else {
+                            // the current candidat is not the goal
+                            // -> mark it as "processed"
+                            closedList.add(current);
+                            openList.remove(current);
+                            // -> ... and look its at its neighbors
+                            var neighbors = collectNeighbors(nodes, current, this);
+                            alchemy.each(neighbors, processNeighbors, this, [current, openList, closedList, goal]);
+                        }
+                        run++;
+                    }
+                    // there is no path
+                    return null;
+                };
+            }()),
         }
     });
 }());
