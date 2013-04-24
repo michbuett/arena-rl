@@ -147,22 +147,16 @@
                     return path;
                 }
 
-                // helper to estimate the distance between two tiles
-                function estimateDistance(x1, y1, x2, y2) {
-                    var dx = x2 - x1;
-                    var dy = y2 - y1;
-                    return Math.max(Math.abs(dx), Math.abs(dy));
-                }
-
-                function processNeighbors(n, index, current, openList, closedList, goal) {
-                    var newStartDistance = current.startDistance + 1;
+                // helper method that explores a single neighbor tile
+                function processNeighbor(n, index, current, goal, openList, closedList, map) {
+                    var newStartDistance = current.startDistance + map.distance(current.col, current.row, n.col, n.row);
                     if (closedList.contains(n) && n.startDistance <= newStartDistance) {
                         return;
                     }
                     if (!openList.contains(n) || n.startDistance > newStartDistance) {
                         n.cameFrom = current;
                         n.startDistance = newStartDistance;
-                        n.goalDistance = newStartDistance + estimateDistance(n.col, n.row, goal.col, goal.row);
+                        n.goalDistance = newStartDistance + map.distance(n.col, n.row, goal.col, goal.row);
                         openList.add(n);
                     }
                 }
@@ -200,7 +194,7 @@
                         col: start.col,
                         row: start.row,
                         startDistance: 0,
-                        goalDistance: estimateDistance(start.col, start.row, goal.col, goal.row)
+                        goalDistance: this.distance(start.col, start.row, goal.col, goal.row)
                     });
                     openList.add(nodes.at(0));
 
@@ -225,7 +219,7 @@
                             openList.remove(current);
                             // -> ... and look its at its neighbors
                             var neighbors = collectNeighbors(nodes, current, this);
-                            alchemy.each(neighbors, processNeighbors, this, [current, openList, closedList, goal]);
+                            alchemy.each(neighbors, processNeighbor, this, [current, goal, openList, closedList, this]);
                         }
                         run++;
                     }
@@ -233,6 +227,27 @@
                     return null;
                 };
             }()),
+
+            /**
+             * Estimates the distance between two map points (tiles) A and B ignoring possible obstacles
+             * (based on http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html#heuristics-for-grid-maps)
+             *
+             * @param {Number} x The x-coordinate of point A
+             * @param {Number} y The y-coordinate of point A
+             * @param {Number} x The x-coordinate of point B
+             * @param {Number} y The y-coordinate of point B
+             * @return {Number} The estimated distance
+             */
+            distance: (function () {
+                var Dp = 1; // distance for perpendicular (non-diaginal) steps
+                var Dd = Math.sqrt(2); // distance for diaginal steps
+
+                return function (x1, y1, x2, y2) {
+                    var dx = Math.abs(Math.floor(x1) - Math.floor(x2));
+                    var dy = Math.abs(Math.floor(y1) - Math.floor(y2));
+                    return (Dp * (dx + dy) + (Dd - 2 * Dp) * Math.min(dx, dy));
+                };
+            }())
         }
     });
 }());
