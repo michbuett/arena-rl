@@ -20,8 +20,10 @@
                 ' class="tile <$=data.type $>"',
                 ' style="left:<$=data.x$>px; top:<$=data.y$>px;"',
                 ' data-column="<$=data.col$>"',
-                ' data-row="<$=data.row$>"',
-                '></div>'
+                ' data-row="<$=data.row$>" >',
+                '  <div class="bg"></div>',
+                '  <div class="fg"></div>',
+                '</div>'
             ].join(''),
 
             init: function hocuspocus(_super) {
@@ -52,9 +54,9 @@
             },
 
             tileClick: function (ev) {
-                var target = ev && ev.target;
-                if (target) {
-                    this.trigger('tile:click', $(ev.target).data());
+                var target = ev && ev.target && $(ev.target).parent('.tile');
+                if (target && target.length > 0) {
+                    this.trigger('tile:click', target.data());
                 }
             },
 
