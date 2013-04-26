@@ -116,28 +116,29 @@
                 this.successCount = 0;
                 this.failureCount = 0;
 
-                this.resources.each(function (cfg) {
-                    this.load(alchemy.mix(cfg, options));
+                this.resources.each(function (resource) {
+                    this.load(resource, options);
                 }, this);
             },
 
             /** Load one resource-object, i.e: {src: "foo.png"} */
-            load: function (cfg) {
-                if (!alchemy.isObject(cfg)) {
+            load: function (resource, options) {
+                if (alchemy.isString(resource)) {
+                    resource = this.get(resource);
+                }
+                if (!alchemy.isObject(resource)) {
                     return;
                 }
-
-                var data;
-                var type = cfg.type;
-                var srcUrl = this.root + cfg.src + "?" + alchemy.random(10000000);
-                var successCb = this.loadSuccess.bind(this, cfg);
-                var failureCB = this.loadFailure.bind(this, cfg);
-
-                if (!this.resources.contains(cfg.id)) {
-                    this.define(cfg);
+                if (!this.resources.contains(resource)) {
+                    this.define(resource);
                 }
 
-                switch (type) {
+                var srcUrl = this.root + resource.src + "?" + alchemy.random(10000000);
+                var successCb = this.loadSuccess.bind(this, resource, options);
+                var failureCB = this.loadFailure.bind(this, resource, options);
+                var data;
+
+                switch (resource.type) {
                 case 'spritesheet':
                 case 'image':
                     data = new Image();
@@ -158,7 +159,7 @@
                     break;
                 }
 
-                alchemy.mix(this.resources.get(cfg.id), {
+                alchemy.mix(resource, {
                     status: 'loading',
                     data: data
                 });
@@ -184,9 +185,8 @@
              * Callback for all resource-loading.
              * @private
              */
-            loadSuccess: function (cfg) {
-                var resource = this.resources.get(cfg.id),
-                    type = resource.type.toLowerCase();
+            loadSuccess: function (resource, options) {
+                var type = resource.type.toLowerCase();
 
                 // update status
                 resource.status = 'success';
@@ -196,7 +196,7 @@
                 case 'spritesheet':
                     resource.data = alchemy('SpriteSheet').brew(alchemy.mix({
                         image: resource.data
-                    }, cfg));
+                    }, resource));
                     break;
 
                 case 'json':
@@ -212,36 +212,39 @@
                 }
 
                 this.successCount++;
-                this.processCallbacks(resource, true, cfg);
+                this.processCallbacks(resource, true, options);
             },
 
             /** @private */
-            loadFailure: function (cfg) {
+            loadFailure: function (resource, options) {
                 this.failureCount++;
-                this.processCallbacks(this.resources.get(cfg.id), false, cfg);
+                this.processCallbacks(resource, false, options);
             },
 
             /** @private */
-            processCallbacks: function (resource, success, cfg) {
+            processCallbacks: function (resource, success, options) {
                 var percent = Math.round((this.successCount + this.failureCount) / this.resources.length * 100);
 
                 if (success) {
-                    if (cfg.success) {
-                        cfg.success.call(cfg.scope, resource, percent, cfg);
+                    if (resource.success) {
+                        resource.success.call(resource.scope, resource);
+                    }
+                    if (options && options.success) {
+                        options.success.call(options.scope, resource, percent, options);
                     }
                 } else {
-                    if (cfg.failure) {
-                        cfg.failure.call(cfg.scope, resource, percent, cfg);
+                    if (resource.failure) {
+                        resource.failure.call(resource.scope);
+                    }
+                    if (options && options.failure) {
+                        options.failure.call(options.scope, resource, percent, options);
                     }
                 }
-                alchemy.each(resource.callbacks, function (cbCfg) {
-                    cbCfg.callback.call(cbCfg.scope, (success ? resource : null));
-                });
 
                 if (percent >= 100) {
                     // When loadAll() is 100%, then call the final callback
-                    if (cfg.finished) {
-                        cfg.finished.call(cfg.scope, cfg);
+                    if (options && options.finished) {
+                        options.finished.call(options.scope, options);
                     }
                 }
             }
