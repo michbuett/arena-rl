@@ -109,6 +109,7 @@
                     status: 'waiting',
                     type: this.getType(cfg.src)
                 }, cfg));
+                return this.resources.at(-1);
             },
 
             /** Load all pre-specified resources */
@@ -130,7 +131,11 @@
                     return;
                 }
                 if (!this.resources.contains(resource)) {
-                    this.define(resource);
+                    resource = this.define(resource);
+                }
+                if (this.isLoaded(resource)) {
+                    this.loadSuccess(resource, options);
+                    return;
                 }
 
                 var srcUrl = this.root + resource.src + "?" + alchemy.random(10000000);

@@ -29,6 +29,10 @@
                     var animations = this.animations;
                     this.animations = alchemy('Collectum').brew();
 
+                    if (alchemy.isString(this.sheet)) {
+                        this.sheet = this.resources.get(this.sheet);
+                    }
+
                     alchemy.each(animations, function (animCfg, animKey) {
                         if (alchemy.isArray(animCfg)) {
                             animCfg = {

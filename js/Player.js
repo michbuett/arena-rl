@@ -14,16 +14,7 @@
             row: undefined,
 
             init: function () {
-                this.resources.define([{
-                    id: 'playerSprite',
-                    src: 'images/player3.png',
-                    type: 'spritesheet',
-                    spriteWidth: 25,
-                    spriteHeight: 25
-                }]);
-
                 this.observe(this.messages, 'map:init', this.setMap, this);
-
             },
 
             setMap: function (data) {
@@ -32,9 +23,21 @@
                 this.observe(this.mapView, 'tile:click', this.handleTileClick, this);
 
                 var pos = this.map.getStartPos();
-                this.x = pos[0];
-                this.y = pos[1];
 
+                this.entities.createEntity('player', {
+                    id: 'player',
+                    position: {
+                        x: pos[0],
+                        y: pos[1]
+                    },
+                    view: {
+                        target: '#map',
+                        entity: this,
+                        mapView: this.mapView
+                    }
+                });
+
+                /*
                 this.view = this.viewFactory.createView(this, {
                     target: '#map',
                     entity: this,
@@ -52,6 +55,7 @@
                     width: 25,
                     height: 25
                 });
+                */
             },
 
             handleTileClick: function (eventData) {

@@ -1,0 +1,28 @@
+{
+    "resources": [{
+        "id": "playerSprite",
+        "src": "images/player3.png",
+        "type": "spritesheet",
+        "spriteWidth": 25,
+        "spriteHeight": 25
+    }],
+
+    "entities": {
+        "player": {
+            "position": {},
+            "movement": {},
+            "view": {
+                "potion": "arena.view.Entity",
+                "sheet": "playerSprite",
+                "animations": {
+                    "idyl": {
+                        "frames": [0]
+                    },
+                    "walk": {
+                        "frames": [10, 11, 12, 13]
+                    }
+                }
+            }
+        }
+    }
+}

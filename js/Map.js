@@ -20,17 +20,17 @@
 
             init: function hocuspocus(_super) {
                 return function () {
-                    this.observe(this.messages, 'app:start', this.initMap, this);
+                    this.resources.define({
+                        id: 'mapdata',
+                        src: 'data/maps.json'
+                    });
 
                     _super.call(this);
                 };
             },
 
             prepare: function () {
-                this.resources.define({
-                    id: 'mapdata',
-                    src: 'data/maps.json'
-                });
+                this.initMap();
             },
 
             initMap: function () {
