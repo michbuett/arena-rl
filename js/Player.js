@@ -1,3 +1,5 @@
+/* global $ */
+
 (function () {
     'use strict';
 
@@ -37,6 +39,8 @@
                     }
                 });
 
+                this.position = this.entities.getComponent('player', 'position');
+
                 /*
                 this.view = this.viewFactory.createView(this, {
                     target: '#map',
@@ -64,8 +68,8 @@
                 }
                 var ts = Date.now();
                 var path = this.map.getPath({
-                    col: Math.floor(this.x),
-                    row: Math.floor(this.y)
+                    col: Math.floor(this.position.x),
+                    row: Math.floor(this.position.y)
                 }, {
                     col: eventData.column,
                     row: eventData.row

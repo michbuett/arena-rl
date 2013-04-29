@@ -14,6 +14,8 @@
             "view": {
                 "potion": "arena.view.Entity",
                 "sheet": "playerSprite",
+                "width": 25,
+                "height": 25,
                 "animations": {
                     "idyl": {
                         "frames": [0]

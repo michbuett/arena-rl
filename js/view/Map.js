@@ -38,7 +38,7 @@
 
 
                     this.on('rendered', function () {
-                        $('#map .tile').on('click', this.tileClick.bind(this));
+                        $('#map').on('click', this.tileClick.bind(this));
                     }, this);
 
                     _super.call(this);
