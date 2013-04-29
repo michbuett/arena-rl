@@ -33,40 +33,18 @@
                         y: pos[1]
                     },
                     view: {
-                        target: '#map',
                         entity: this,
                         mapView: this.mapView
                     }
                 });
 
-                this.position = this.entities.getComponent('player', 'position');
-
-                /*
-                this.view = this.viewFactory.createView(this, {
-                    target: '#map',
-                    entity: this,
-                    mapView: this.mapView,
-                    id: 'player',
-                    sheet: this.resources.get('playerSprite'),
-                    animations: {
-                        'idyl': {
-                            frames: [0]
-                        },
-                        'walk': {
-                            frames: [10, 11, 12, 13]
-                        }
-                    },
-                    width: 25,
-                    height: 25
-                });
-                */
+                this.position = this.entities.getComponent('position', 'player');
             },
 
             handleTileClick: function (eventData) {
                 if (!eventData) {
                     return;
                 }
-                var ts = Date.now();
                 var path = this.map.getPath({
                     col: Math.floor(this.position.x),
                     row: Math.floor(this.position.y)
@@ -79,20 +57,12 @@
                     return;
                 }
 
-                console.log('Calculated path of length ' + path.length + ' ( ' + (Date.now() - ts) + 'ms)');
-
                 $('.tile.selected').removeClass('selected');
                 alchemy.each(path, function (tile) {
-                    $('.tile[data-column=' + tile.col + '][data-row=' + tile.row +']').addClass('selected');
+                    $('.tile[data-column=' + tile.col + '][data-row=' + tile.row + ']').addClass('selected');
                 });
 
             },
-
-            update: function (params) {
-                if (this.view) {
-                    this.view.update(params);
-                }
-            }
         }
     });
 }());

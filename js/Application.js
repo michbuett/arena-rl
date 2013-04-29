@@ -13,6 +13,7 @@
             'arena.modules.HUD',
             'arena.modules.Map',
             'arena.modules.Player',
+            'arena.modules.Renderer',
             'arena.Entities',
             'arena.view.Factory',
             'arena.alchemy.Resources'
@@ -24,11 +25,11 @@
             modules: [{
                 potion: 'arena.modules.HUD',
                 target: '#hud'
-            }, {
-                potion: 'arena.modules.Map'
-            }, {
-                potion: 'arena.modules.Player'
-            }],
+            },
+                'arena.modules.Map',
+                'arena.modules.Player',
+                'arena.modules.Renderer'
+            ],
 
             /**
              * @name init
@@ -45,16 +46,24 @@
                     });
 
                     alchemy.each(this.modules, function (item, index) {
-                        var potion = item.potion;
-                        delete item.potion;
-
-                        this.modules[index] = alchemy(potion).brew(alchemy.mix({
+                        var potion;
+                        var cfg = {
                             app: this,
                             messages: this.messages,
                             resources: this.resources,
                             entities: this.entities,
                             viewFactory: this.viewFactory
-                        }, item));
+                        };
+
+                        if (alchemy.isString(item)) {
+                            potion = item;
+                        } else {
+                            potion = item.potion;
+                            delete item.potion;
+                            cfg = alchemy.mix(cfg, item);
+                        }
+
+                        this.modules[index] = alchemy(potion).brew(cfg);
                     }, this);
 
                     _super.call(this);

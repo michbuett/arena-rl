@@ -15,18 +15,13 @@
             ptype: 'arena.modules.Prima'
         }],
         overrides: {
-            template: [
-                '<div id="fps"></div>'
-            ].join(''),
 
-            init: function hocuspocus(_super) {
-                return function () {
-                    this.on('rendered', function () {
-                        this.$fpsEl = $('#fps');
-                    }, this);
+            prepare: function () {
+                var viewId = this.entities.createEntity('hud');
 
-                    _super.call(this);
-                };
+                this.entities.getComponent('view', viewId).on('rendered', function () {
+                    this.$fpsEl = $('#fps');
+                }, this);
             },
 
             update: function (params) {
@@ -35,18 +30,6 @@
                         this.$fpsEl.text('FPS: ' + Math.round(this.app.fps()));
                     }
                 }
-            },
-
-            dispose: function hocuspocus(_super) {
-                return function () {
-                    this.map.dispose();
-
-                    delete this.map;
-                    delete this.app;
-                    delete this.$fpsEl;
-
-                    _super.call(this);
-                };
             }
         }
     });

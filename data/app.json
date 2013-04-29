@@ -8,6 +8,22 @@
     }],
 
     "entities": {
+
+        "hud": {
+            "view": {
+                "potion": "arena.view.Prima",
+                "parent": "#hud",
+                "template": "<div id=\"fps\"></div>"
+            }
+        },
+
+        "map": {
+            "view": {
+                "potion": "arena.view.Map",
+                "parent": "#map"
+            }
+        },
+
         "player": {
             "position": {},
             "movement": {},
@@ -16,6 +32,7 @@
                 "sheet": "playerSprite",
                 "width": 25,
                 "height": 25,
+                "parent": "#map",
                 "animations": {
                     "idyl": {
                         "frames": [0]

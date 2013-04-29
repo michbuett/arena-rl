@@ -52,15 +52,16 @@
                 }
                 this.startPos = map.startPos;
 
-                this.mapView = this.viewFactory.createView(this, {
-                    map: this,
-                    target: '#map',
-                    messages: this.messages
+                this.entities.createEntity('map', {
+                    id: 'map',
+                    view: {
+                        map: this
+                    }
                 });
 
                 this.messages.trigger('map:init', {
                     map: this,
-                    view: this.mapView
+                    view: this.entities.getComponent('view', 'map')
                 });
             },
 

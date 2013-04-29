@@ -5,17 +5,19 @@
 
     // Predefined globals whom JSHint will ignore.
     "browser"       : true,   // Standard browser globals e.g. "window", "document".
-    "node"          : true,
+    "node"          : false,
     "rhino"         : false,
     "couch"         : false,
     "wsh"           : false,   // Windows Scripting Host.
-    "jquery"        : false,
+    "jquery"        : true,
     "prototypejs"   : false,
     "mootools"      : false,
     "dojo"          : false,
 
     // Globals
     "predef"        : [
+        // alchemy.js require
+        "require",
         // for jasmine testing framework
         "jasmine", "describe", "it", "beforeEach", "afterEach", "spyOn", "waits", "waitsFor", "runs", "expect"
     ],

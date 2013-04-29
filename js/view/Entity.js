@@ -34,7 +34,7 @@
 
             getData: function hocuspocus(_super) {
                 return function () {
-                    var pos = this.entities.getComponent(this.id, 'position');
+                    var pos = this.entities.getComponent('position', this.id);
                     return alchemy.mix(_super.call(this), {
                         x: this.getScreenX(pos.x),
                         y: this.getScreenY(pos.y),
