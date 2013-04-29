@@ -8,11 +8,11 @@
      * Description
      */
     alchemy.formula.add({
-        name: 'arena.HUD',
+        name: 'arena.modules.HUD',
         extend: 'arena.view.Prima',
         ingredients: [{
             key: 'mod',
-            ptype: 'arena.ApplicationModule'
+            ptype: 'arena.modules.Prima'
         }],
         overrides: {
             template: [

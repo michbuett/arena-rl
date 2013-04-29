@@ -17,7 +17,7 @@
         extend: 'alchemy.core.Oculus',
         ingredients: [{
             key: 'mod',
-            ptype: 'arena.ApplicationModule'
+            ptype: 'arena.modules.Prima'
         }],
         overrides: {
             /** @lends arena.Entities.prototype */

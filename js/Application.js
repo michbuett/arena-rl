@@ -10,9 +10,9 @@
         name: 'arena.Application',
         extend: 'alchemy.browser.Application',
         requires: [
-            'arena.HUD',
-            'arena.Map',
-            'arena.Player',
+            'arena.modules.HUD',
+            'arena.modules.Map',
+            'arena.modules.Player',
             'arena.Entities',
             'arena.view.Factory',
             'arena.alchemy.Resources'
@@ -22,12 +22,12 @@
             /** @lends arena.Application */
 
             modules: [{
-                potion: 'arena.HUD',
+                potion: 'arena.modules.HUD',
                 target: '#hud'
             }, {
-                potion: 'arena.Map'
+                potion: 'arena.modules.Map'
             }, {
-                potion: 'arena.Player'
+                potion: 'arena.modules.Player'
             }],
 
             /**

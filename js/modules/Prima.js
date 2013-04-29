@@ -7,14 +7,14 @@
      * A generic application module
      *
      * @class
-     * @name arena.ApplicationModule
+     * @name arena.modules.Prima
      * @extends alchemy.core.Ingredient
      */
     alchemy.formula.add({
-        name: 'arena.ApplicationModule',
+        name: 'arena.modules.Prima',
         extend: 'alchemy.core.Ingredient',
         overrides: {
-            /** @lends arena.ApplicationModule */
+            /** @lends arena.modules.Prima */
 
             publics: ['prepare', 'update', 'draw'],
 

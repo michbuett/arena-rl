@@ -17,8 +17,8 @@
 
         overrides: {
             viewMap: {
-                'arena.Map': 'arena.view.Map',
-                'arena.Player': 'arena.view.Entity'
+                'arena.modules.Map': 'arena.view.Map',
+                'arena.modules.Player': 'arena.view.Entity'
             },
 
             init: function () {

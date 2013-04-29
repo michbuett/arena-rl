@@ -5,18 +5,18 @@
     /**
      * Description
      *
-     * @class arena.Map
+     * @class arena.modules.Map
      * @extends alchemy.core.Oculus
      */
     alchemy.formula.add({
-        name: 'arena.Map',
+        name: 'arena.modules.Map',
         extend: 'alchemy.core.Oculus',
         ingredients: [{
             key: 'mod',
-            ptype: 'arena.ApplicationModule'
+            ptype: 'arena.modules.Prima'
         }],
         overrides: {
-            /** @lends arena.Map.prototype */
+            /** @lends arena.modules.Map.prototype */
 
             init: function hocuspocus(_super) {
                 return function () {

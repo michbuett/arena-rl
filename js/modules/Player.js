@@ -5,11 +5,11 @@
 
     var alchemy = require('./alchemy.js');
     alchemy.formula.add({
-        name: 'arena.Player',
+        name: 'arena.modules.Player',
         extend: 'alchemy.core.Oculus',
         ingredients: [{
             key: 'mod',
-            ptype: 'arena.ApplicationModule'
+            ptype: 'arena.modules.Prima'
         }],
         overrides: {
             col: undefined,
