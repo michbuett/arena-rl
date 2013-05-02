@@ -16,17 +16,14 @@
             'arena.modules.Player',
             'arena.modules.Renderer',
             'arena.Entities',
-            'arena.view.Factory',
             'arena.alchemy.Resources'
         ],
 
         overrides: {
             /** @lends arena.Application */
 
-            modules: [{
-                potion: 'arena.modules.HUD',
-                target: '#hud'
-            },
+            modules: [
+                'arena.modules.HUD',
                 'arena.modules.Map',
                 'arena.modules.Player',
                 'arena.modules.Renderer'
@@ -40,7 +37,6 @@
                 return function () {
                     this.messages = alchemy('Oculus').brew();
                     this.resources = alchemy('Resources').brew();
-                    this.viewFactory = alchemy('arena.view.Factory').brew();
                     this.entities = alchemy('Entities').brew({
                         messages: this.messages,
                         resources: this.resources
@@ -53,7 +49,6 @@
                             messages: this.messages,
                             resources: this.resources,
                             entities: this.entities,
-                            viewFactory: this.viewFactory
                         };
 
                         if (alchemy.isString(item)) {
@@ -142,7 +137,6 @@
                         mod.dispose();
                     }, this);
 
-                    this.viewFactory.dispose();
                     this.resources.dispose();
                     this.messages.dispose();
 

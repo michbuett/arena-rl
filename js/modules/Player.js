@@ -7,6 +7,9 @@
     alchemy.formula.add({
         name: 'arena.modules.Player',
         extend: 'alchemy.core.Oculus',
+        requires: [
+            'arena.view.Entity'
+        ],
         ingredients: [{
             key: 'mod',
             ptype: 'arena.modules.Prima'

@@ -11,6 +11,9 @@
     alchemy.formula.add({
         name: 'arena.modules.Map',
         extend: 'alchemy.core.Oculus',
+        requires: [
+            'arena.view.Map'
+        ],
         ingredients: [{
             key: 'mod',
             ptype: 'arena.modules.Prima'
