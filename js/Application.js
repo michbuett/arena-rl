@@ -9,6 +9,7 @@
     alchemy.formula.add({
         name: 'arena.Application',
         extend: 'alchemy.browser.Application',
+
         requires: [
             'arena.modules.HUD',
             'arena.modules.Map',
@@ -95,24 +96,32 @@
                 });
             },
 
+            /**
+             * Generic draw method that calls the "update" method of each registered
+             * application modules; Can be overridden;
+             *
+             * @param {Object} params The loop params object
+             * @param {Number} params.frame The index of the current frame
+             * @param {Number} params.now The current timestamp
+             */
             update: (function () {
                 function updateModule(mod, key, params) {
                     mod.update(params);
                 }
 
                 return function (params) {
-                    // update application modules
                     alchemy.each(this.modules, updateModule, this, [params]);
-                    // update all entities
-
-                    this.entities.update(params);
-
-                    if (params.frame > 1000) { // TODO: remove if app runs
-                        this.end();
-                    }
                 };
             }()),
 
+            /**
+             * Generic draw method that calls the "draw" method of each registered
+             * application modules; Can be overridden;
+             *
+             * @param {Object} params The loop params object
+             * @param {Number} params.frame The index of the current frame
+             * @param {Number} params.now The current timestamp
+             */
             draw: (function () {
                 function drawModule(mod, key, params) {
                     mod.draw(params);
