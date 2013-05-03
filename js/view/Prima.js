@@ -69,6 +69,8 @@
                 return this.el;
             },
 
+            moveTo: alchemy.emptyFn,
+
             update: alchemy.emptyFn
         }
     });

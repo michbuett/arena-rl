@@ -42,6 +42,11 @@
                         this.addAnimation(animKey, animCfg);
                     }, this);
 
+
+                    if (this.idleAnimation) {
+                        this.play(this.idleAnimation);
+                    }
+
                     _super.call(this);
                 };
             },
@@ -60,6 +65,7 @@
             },
 
             play: function (anim) {
+                anim = anim || this.idleAnimation;
                 if (this.animations.contains(anim)) {
                     this.currAnim = this.animations.get(anim);
                     this.currAnim.start();

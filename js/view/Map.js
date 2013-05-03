@@ -37,8 +37,17 @@
                     }, this);
 
 
+                    // initialize mouse events
                     this.on('rendered', function () {
-                        $('#map').on('click', this.tileClick.bind(this));
+                        this.boundMouseDownHandler = this.mouseDownHandler.bind(this);
+                        this.boundMouseUpHandler = this.mouseUpHandler.bind(this);
+                        this.boundMouseMoveHandler = this.mouseMoveHandler.bind(this);
+                        this.boundClickHandler = this.clickHandler.bind(this);
+
+                        $('#map').on('mousedown', this.boundMouseDownHandler);
+                        $('#map').on('mouseup', this.boundMouseUpHandler);
+                        $('#map').on('mousemove', this.boundMouseMoveHandler);
+                        $('#map').on('click', this.boundClickHandler);
                     }, this);
 
                     _super.call(this);
@@ -53,12 +62,14 @@
                 return this.tileHeight * mapY;
             },
 
-            tileClick: function (ev) {
-                var target = ev && ev.target && $(ev.target).parent('.tile');
-                if (target && target.length > 0) {
-                    this.trigger('tile:click', target.data());
-                }
+            getMapX: function (screenX) {
+                return screenX / this.tileWidth;
             },
+
+            getMapY: function (screenY) {
+                return screenY / this.tileHeight;
+            },
+
 
             render: function (ctxt) {
                 alchemy.each(this.tiles, function (tile, i, ctxt) {
@@ -67,7 +78,52 @@
                 return ctxt;
             },
 
-            update: function () {}
+            dispose: function hocuspocus(_super) {
+                return function () {
+                    $('#map').off('mousedown', this.boundMouseDownHandler);
+                    $('#map').off('mouseup', this.boundMouseUpHandler);
+                    $('#map').off('mousemove', this.boundMouseMoveHandler);
+                    $('#map').off('click', this.boundClickHandler);
+
+                    _super.call(this);
+                };
+            },
+
+            //
+            //
+            // private helper
+            //
+            //
+
+            mouseDownHandler: function (e) {
+                this.trigger('map:mousedown', this.getEventPosition(e));
+            },
+
+            mouseUpHandler: function (e) {
+                this.trigger('map:mouseup', this.getEventPosition(e));
+            },
+
+            mouseMoveHandler: function (e) {
+                this.trigger('map:hover', this.getEventPosition(e));
+            },
+
+            clickHandler: function (e) {
+                this.trigger('map:click', this.getEventPosition(e));
+
+                var tile = e && e.target && $(e.target).parent('.tile');
+                if (tile && tile.length > 0) {
+                    this.trigger('tile:click', alchemy.mix(e, tile.data()));
+                }
+            },
+
+            getEventPosition: function (e) {
+                return alchemy.mix(e, {
+                    mapX: this.getMapX(e.pageX),
+                    mapY: this.getMapY(e.pageY),
+                    screenX: e.pageX,
+                    screenY: e.pageY
+                });
+            }
         }
     });
 }());

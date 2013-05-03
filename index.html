@@ -29,17 +29,17 @@
                     app.launch();
 
                     // init debug mechanisms
-                    alchemy.override(app, {
-                        // overrides app.update to stop Application after 1000 frames automatically
-                        update: function hocuspocus(_super) {
-                            return function (params) {
-                                _super.call(this, params);
-                                if (params.frame > 1000) {
-                                    this.end();
-                                }
-                            };
-                        }
-                    });
+                    // alchemy.override(app, {
+                    //     // overrides app.update to stop Application after 1000 frames automatically
+                    //     update: function hocuspocus(_super) {
+                    //         return function (params) {
+                    //             _super.call(this, params);
+                    //             if (params.frame > 1000) {
+                    //                 this.end();
+                    //             }
+                    //         };
+                    //     }
+                    // });
                     debug = app;
                 }
             });

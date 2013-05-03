@@ -16,14 +16,6 @@
                 }
             },
 
-            init: function hocuspocus(_super) {
-                return function () {
-                    _super.call(this);
-
-                    this.play('walk');
-                };
-            },
-
             getScreenX: function (mapX) {
                 return Math.floor(this.mapView.getScreenX(mapX) - this.width / 2);
             },
@@ -42,7 +34,14 @@
                         width: this.width
                     });
                 };
-            }
+            },
+
+            moveTo: function (mapX, mapY) {
+                this.$el.css({
+                    top: this.getScreenY(mapY),
+                    left: this.getScreenX(mapX)
+                });
+            },
         }
     });
 }());

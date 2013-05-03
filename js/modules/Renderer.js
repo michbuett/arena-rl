@@ -28,9 +28,37 @@
                 }
             },
 
-            updateView: function (view, id, params) {
+            updateView: function (view, index, params) {
                 this.renderView(view);
+
+                var entityPos = this.entities.getComponent('position', view.id);
+                if (entityPos) {
+                    view.lastPos = view.lastPos || {};
+                    this.updateViewPos(view, entityPos, view.lastPos);
+                }
+
                 view.update(params);
+            },
+
+            updateViewPos: function (view, currentPos, lastPos) {
+                var currX = currentPos.x;
+                var currY = currentPos.y;
+                var lastX = lastPos.x;
+                var lastY = lastPos.y;
+                var currDir = currentPos.direction;
+                var lastDir = lastPos.direction;
+
+                if (currDir >= 0 && currDir !== lastDir) {
+                    var cssRotate = 270 - currDir;
+                    view.$el.css('transform', 'rotate(' + cssRotate + 'deg)');
+                    lastPos.direction = currDir;
+                }
+
+                if (currX !== lastX || currY !== lastY) {
+                    view.moveTo(currX, currY);
+                    lastPos.x = currX;
+                    lastPos.y = currY;
+                }
             },
 
             renderView: function (view) {

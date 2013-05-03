@@ -34,13 +34,14 @@
                 "height": 25,
                 "parent": "#map",
                 "animations": {
-                    "idyl": {
+                    "idle": {
                         "frames": [0]
                     },
                     "walk": {
                         "frames": [10, 11, 12, 13]
                     }
-                }
+                },
+                "idleAnimation": "idle"
             }
         }
     }
