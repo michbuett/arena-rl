@@ -50,7 +50,7 @@
 
                 if (currDir >= 0 && currDir !== lastDir) {
                     var cssRotate = 270 - currDir;
-                    view.$el.css('transform', 'rotate(' + cssRotate + 'deg)');
+                    view.$el.css('transform', 'rotate(' + cssRotate + 'deg) translate3d(0, 0, 0)');
                     lastPos.direction = currDir;
                 }
 

@@ -1,10 +1,10 @@
 {
     "resources": [{
         "id": "playerSprite",
-        "src": "images/player3.png",
+        "src": "images/player4.png",
         "type": "spritesheet",
-        "spriteWidth": 25,
-        "spriteHeight": 25
+        "spriteWidth": 50,
+        "spriteHeight": 50
     }],
 
     "entities": {
@@ -30,16 +30,22 @@
             "view": {
                 "potion": "arena.view.Entity",
                 "sheet": "playerSprite",
-                "width": 25,
-                "height": 25,
+                "width": 50,
+                "height": 50,
                 "parent": "#map",
                 "animations": {
                     "idle": {
                         "frames": [0]
                     },
                     "walk": {
-                        "frames": [10, 11, 12, 13]
+                        "frames": [10, 11, 12, 13, 14, 15, 16, 17]
+                    },
+                    "defaults": {
+                        "defaults": {
+                            "durration": 100
+                        }
                     }
+
                 },
                 "idleAnimation": "idle"
             }
