@@ -5,6 +5,16 @@
 
     /**
      * Description
+     *
+     * @class
+     * @name arena.Application
+     * @extends alchemy.browser.Application
+     * @requires arena.modules.HUD
+     * @requires arena.modules.Map
+     * @requires arena.modules.Player
+     * @requires arena.modules.Renderer
+     * @requires arena.Entities
+     * @requires arena.alchemy.Resources
      */
     alchemy.formula.add({
         name: 'arena.Application',
@@ -20,7 +30,7 @@
         ],
 
         overrides: {
-            /** @lends arena.Application */
+            /** @lends arena.Application.prototype */
 
             modules: [
                 'arena.modules.HUD',
@@ -30,8 +40,7 @@
             ],
 
             /**
-             * @name init
-             * @methodOf arena.Application
+             * @function
              */
             init: function hocuspocus(_super) {
                 return function () {
@@ -66,6 +75,12 @@
                 };
             },
 
+            /**
+             * Prepares the application:
+             * - load configuration
+             * - initialize entities
+             * - define/load resources
+             */
             prepare: function () {
                 this.resources.load({
                     src: 'data/app.json',
@@ -128,8 +143,9 @@
             }()),
 
             /**
-             * @name dispose
-             * @methodOf arena.Application
+             * Override super type to dispose modules, resource manager, message bus
+             * and entity manager
+             * @function
              */
             dispose: function hocuspocus(_super) {
                 return function () {
@@ -138,6 +154,7 @@
                     }, this);
 
                     this.resources.dispose();
+                    this.entities.dispose();
                     this.messages.dispose();
 
                     _super.call(this);
@@ -151,11 +168,17 @@
             //
             //
 
+            /**
+             * Callback for loading a single resource
+             * @private
+             */
             handleResourcesSuccess: function (resource, progress) {
                 console.log('Loading resources... ' + progress + '%');
+
                 /**
-                 * Fired after a sinle resources has been loaded
+                 * Fired after a single resources has been loaded
                  * @event
+                 * @name resource:loaded
                  * @param {Object} data The event data
                  * @param {Object} data.resource The loaded resource
                  * @param {Object} data.progress The overall resource loading progress
@@ -166,16 +189,38 @@
                 });
             },
 
+            /**
+             * Callback in case a resource cannot be loaded
+             * @private
+             */
             handleResourcesFailure: function (resource, progress, cfg) {
                 console.log('Cannot load resource:' + cfg.src);
+
+                /**
+                 * Fired after a single resources has been failed to loaded
+                 * @event
+                 * @name resource:error
+                 * @param {Object} data The event data
+                 * @param {Object} data.resource The resource configuration which failed to load
+                 */
+                this.messages.trigger('resource:loaded', {
+                    resource: resource,
+                    progress: progress
+                });
+
             },
 
+            /**
+             * Callback in case all resources are loaded
+             * @private
+             */
             handleResourcesFinished: function () {
                 console.log('Resource loading completed.');
 
                 /**
                  * Fired after all resources are loaded
                  * @event
+                 * @name app:resourcesloaded
                  */
                 this.messages.trigger('app:resourcesloaded');
 
@@ -187,6 +232,7 @@
                 /**
                  * Fired after application is ready
                  * @event
+                 * @name app:start
                  */
                 this.messages.trigger('app:start');
             }
