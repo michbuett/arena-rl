@@ -9,7 +9,7 @@
      */
     alchemy.formula.add({
         name: 'arena.modules.HUD',
-        extend: 'arena.view.Prima',
+        extend: 'alchemy.browser.View',
         ingredients: [{
             key: 'mod',
             ptype: 'arena.modules.Prima'

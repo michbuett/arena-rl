@@ -11,7 +11,7 @@
 
         "hud": {
             "view": {
-                "potion": "arena.view.Prima",
+                "potion": "alchemy.browser.View",
                 "parent": "#hud",
                 "template": "<div id=\"fps\"></div>"
             }

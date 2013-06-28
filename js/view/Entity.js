@@ -4,7 +4,7 @@
     var alchemy = require('./alchemy.js');
     alchemy.formula.add({
         name: 'arena.view.Entity',
-        extend: 'arena.alchemy.AnimatedEl',
+        extend: 'alchemy.browser.AnimatedEl',
         overrides: {
             width: 32,
             height: 32,

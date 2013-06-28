@@ -7,11 +7,11 @@
      * Description
      *
      * @class arena.view.Map
-     * @extends arena.view.Prima
+     * @extends alchemy.browser.View
      */
     alchemy.formula.add({
         name: 'arena.view.Map',
-        extend: 'arena.view.Prima',
+        extend: 'alchemy.browser.View',
         overrides: {
             tileWidth: 32,
             tileHeight: 32,
