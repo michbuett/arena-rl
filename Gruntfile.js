@@ -18,6 +18,30 @@ module.exports = function(grunt) {
             }
         },
 
+        sass: {
+            dev: {
+                options: {
+                    sourcemap: true,
+                    style: 'expanded',
+                    lineNumbers: true,
+                    debugInfo: true,
+                },
+
+                files: {
+                    'css/arena.css': 'scss/arena.scss',
+                }
+            },
+
+            release: {
+                options: {
+                    style: 'compressed'
+                },
+                files: {
+                    'css/arena.css': 'scss/arena.scss',
+                }
+            }
+        },
+
         watch: {
             files: ['<%= jshint.files %>'],
             tasks: ['jshint']
@@ -27,6 +51,7 @@ module.exports = function(grunt) {
     grunt.loadNpmTasks('grunt-contrib-jshint');
     grunt.loadNpmTasks('grunt-contrib-watch');
     grunt.loadNpmTasks('grunt-jsonlint');
+    grunt.loadNpmTasks('grunt-contrib-sass');
 
     grunt.registerTask('test', ['jsonlint', 'jshint']);
 };
