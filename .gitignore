@@ -1,5 +1,2 @@
-tags
-.sass-cache
-arena.css
-arena.css.map
-node_modules/
+/target
+**/*.rs.bk

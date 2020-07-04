@@ -1,0 +1,30 @@
+#+TODO: TODO IN-PROGRESS DONE
+
+* Roadmap
+** IN-PROGRESS MVP: Make it work [83%]
+   - [X] render some image using SDL/openGL
+   - [X] draw selected details
+   - [X] draw controls
+   - [X] control pc entity
+   - [X] turn based movement on map tiles
+   - [X] add enemies and let them follow the player
+   - [X] combat (with insuries, deaths, ...)
+   - [X] winning conditions
+   - [X] allow different major states (e.g. start screen, team selection, combat)
+   - [X] clean (dead) code
+   - [ ] implement start screen
+   - [ ] implement (basic) team/player selection screen
+
+** TODO Should Haves: Make it fun [0%]
+   - [ ] weapons
+   - [ ] refinement of combat rules
+   - [ ] player/team selection add-ons (e.g. different characters)
+   - [ ] descriptions of tiles, actors, ...
+   - [ ] (noticeable) feedback of events (e.g. crits, ..)
+   - [ ] save/load games
+   - [ ] game configurtion managment
+
+** TODO Improved looks: Make it beautiful [0%]
+   - [ ] use of new sprites
+   - [ ] effect animations (e.g. crash, ..)
+   - [ ] Video configuration (fullscreen, resolution, ...)

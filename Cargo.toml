@@ -1,0 +1,15 @@
+[package]
+name = "arena-rl"
+version = "0.1.0"
+authors = ["mbuettner"]
+edition = "2018"
+
+[dependencies]
+rand = "0.7"
+shred = "0.9"
+specs = "0.14"
+specs-derive = "0.4"
+
+[dependencies.sdl2]
+features = ["image", "ttf"]
+version = "0.32"
