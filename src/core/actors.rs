@@ -70,7 +70,7 @@ impl ActorBuilder {
             behaviour: None,
             armor: Armor {
                 // default to "no armor"-armor
-                look: vec!["body103", "head001"],
+                look: vec![],
                 protection: 0,
             },
         }
@@ -136,7 +136,7 @@ impl ActorBuilder {
 
 // #[derive(Debug, Clone)]
 // pub struct Look (Vec<&'static str>);
-pub type Look = Vec<&'static str>;
+pub type Look = Vec<(&'static str, u16)>;
 
 #[derive(Debug, Clone)]
 pub struct Armor {
@@ -211,7 +211,7 @@ impl Actor {
                     // it's over now...
                     return Condition::Dead(self.pos, Item {
                         name: format!("Corpse of {}", self.name),
-                        look: vec!("corpses")
+                        look: vec!(("corpses", 1))
                     });
                 }
             }
@@ -375,7 +375,7 @@ pub fn combat(attack: Attack, defence: Defence, target: Actor) -> CombatResult {
         if target.has_effect(&Effect::Dying()) {
             CombatResult::Hit(Condition::Dead(target.pos, Item {
                 name: format!("Corpse of {}", target.name),
-                look: vec!("corpses")
+                look: vec!(("corpses", 1))
             }))
         } else {
             let mut wounds = target.wounds.clone();
@@ -478,3 +478,27 @@ fn generate_name() -> String {
     .unwrap()
     .to_string()
 }
+
+pub fn generate_player(pos: WorldPos, t: Team) -> Actor {
+    extern crate rand;
+    use rand::prelude::*;
+    let range = rand::distributions::Uniform::from(1..=100);
+    let mut rng = rand::thread_rng();
+
+    ActorBuilder::new(pos, Attributes::new(4, 4, 4), t)
+        .armor(Armor { look: vec!(("player", rng.sample(range))), protection: 2 })
+        .build()
+}
+
+pub fn generate_enemy(pos: WorldPos, t: Team) -> Actor {
+    extern crate rand;
+    use rand::prelude::*;
+    let range = rand::distributions::Uniform::from(1..=1216);
+    let mut rng = rand::thread_rng();
+
+    ActorBuilder::new(pos, Attributes::new(3, 3, 3), t)
+        .armor(Armor { look: vec!(("enemy", rng.sample(range))), protection: 0 })
+        .behaviour(AiBehaviour::Default)
+        .build()
+}
+

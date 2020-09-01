@@ -80,8 +80,9 @@ fn get_sprites(obj: &GameObject) -> Option<Sprites> {
                 offset: (0, 0),
             });
 
-            for key in a.look().iter() {
-                sprites.push(map_sprite(key));
+            for l in a.look().iter() {
+                sprites.push(map_sprite(l));
+
             }
 
             Some(Sprites(sprites))
@@ -93,20 +94,22 @@ fn get_sprites(obj: &GameObject) -> Option<Sprites> {
     }
 }
 
-fn map_sprite(s: &str) -> Sprite {
+fn map_sprite((s, num): &(&str, u16)) -> Sprite {
     // dbg!(s);
-    match s {
-        "player" => Sprite {
-            texture: "player".to_string(),
-            region: (256, 0, 128, 128),
-            offset: (0, -32),
-        },
+    match *s {
+        "player" => from_tiles(5125 + num),
+        // "player" => Sprite {
+        //     texture: "tiles".to_string(),
+        //     region: (160, 2592, 32, 32),
+        //     offset: (0, -32),
+        // },
 
-        "enemy" => Sprite {
-            texture: "enemy".to_string(),
-            region: (0, 0, 128, 128),
-            offset: (0, -32),
-        },
+        "enemy" => from_tiles(3840 + num),
+        // "enemy" => Sprite {
+        //     texture: "tiles".to_string(),
+        //     region: (0 + offset_x, 1888 + offset_y, 32, 32),
+        //     offset: (0, -32),
+        // },
 
         _ => Sprite {
             texture: s.to_string(),
@@ -129,7 +132,7 @@ fn get_txt(obj: &GameObject) -> Option<Text> {
             }
 
             return Some(
-                Text::new(format!("{}/{}", a.energy(), a.num_wounds(),), "normal").offset(39, 90),
+                Text::new(format!("{}/{}", a.energy(), a.num_wounds(),), "normal").offset(39, 95),
             );
         }
 
@@ -137,6 +140,17 @@ fn get_txt(obj: &GameObject) -> Option<Text> {
     }
 }
 
-trait ToSprites {
-    fn to_sprites(&self) -> Sprites;
+fn from_tiles(num: u16) -> Sprite {
+    let x = (num as i32 % 64) * 32;
+    let y = (num as i32 / 64) * 32;
+
+    Sprite {
+        texture: "tiles".to_string(),
+        region: (x, y, 32, 32),
+        offset: (0, -32),
+    }
 }
+
+// trait ToSprites {
+//     fn to_sprites(&self) -> Sprites;
+// }

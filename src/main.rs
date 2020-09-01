@@ -120,19 +120,19 @@ fn find_render_driver(name: &str) -> Option<u32> {
     None
 }
 
-fn create_player(pos: WorldPos) -> GameObject {
-    let actor = ActorBuilder::new(pos, Attributes::new(4, 4, 4), Team("Player", 1))
-        .armor(Armor { look: vec!("player"), protection: 2 })
-        .build();
+// fn create_player(pos: WorldPos) -> GameObject {
+//     let actor = ActorBuilder::new(pos, Attributes::new(4, 4, 4), Team("Player", 1))
+//         .armor(Armor { look: vec!("player"), protection: 2 })
+//         .build();
 
-    GameObject::Actor(actor)
-}
+//     GameObject::Actor(actor)
+// }
 
-fn create_enemy(pos: WorldPos) -> GameObject {
-    let actor = ActorBuilder::new(pos, Attributes::new(4, 4, 4), Team("CPU", 2))
-        .behaviour(AiBehaviour::Default)
-        .armor(Armor { look: vec!("enemy"), protection: 0 })
-        .build();
+// fn create_enemy(pos: WorldPos) -> GameObject {
+//     let actor = ActorBuilder::new(pos, Attributes::new(4, 4, 4), Team("CPU", 2))
+//         .behaviour(AiBehaviour::Default)
+//         .armor(Armor { look: vec!("enemy"), protection: 0 })
+//         .build();
     
-    GameObject::Actor(actor)
-}
+//     GameObject::Actor(actor)
+// }

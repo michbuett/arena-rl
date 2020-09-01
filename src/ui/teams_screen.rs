@@ -2,7 +2,7 @@ use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
 
-use crate::core::{GameObject, UserInput, WorldPos, Team, Armor, ActorBuilder, Attributes};
+use crate::core::{GameObject, UserInput, WorldPos, Team, Armor, Attributes};
 use crate::ui::{AssetRepo, ClickArea, ClickAreas};
 
 pub fn render(
@@ -53,9 +53,7 @@ pub fn render_start_btn(
     Ok(ClickArea {
         clipping_area: start_btn_area,
         action: Box::new(|_| UserInput::SelectTeam(vec!(
-            create_player(WorldPos(6.0, 6.0)),
-            create_player(WorldPos(6.0, 5.0)),
-            create_player(WorldPos(5.0, 6.0)),
+            // TODO: pass configured player characters
         ))),
     })
 }
@@ -67,12 +65,4 @@ pub fn render_actors(
     _assets: &AssetRepo,
 ) -> Result<ClickAreas, String> {
     Ok(vec![])
-}
-
-fn create_player(pos: WorldPos) -> GameObject {
-    let actor = ActorBuilder::new(pos, Attributes::new(4, 4, 4), Team("Player", 1))
-        .armor(Armor { look: vec!("player"), protection: 2 })
-        .build();
-
-    GameObject::Actor(actor)
 }

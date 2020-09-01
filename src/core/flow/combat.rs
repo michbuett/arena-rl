@@ -2,13 +2,15 @@ use std::time::Instant;
 
 use specs::prelude::*;
 
-use super::super::actors::{GameObject, Actor, Team};
+use super::super::actors::{GameObject, Actor, Team, generate_player, generate_enemy};
 use super::super::action::{Action, Reaction, Change, run_action};
 use super::super::ai::{action, actions_at, reaction, select_action};
 use super::types::*;
 use crate::components::*;
 use crate::core::{WorldPos};
 
+const TEAM_PLAYER: Team = Team("Player", 1);
+const TEAM_CPU: Team = Team("Computer", 2);
 
 /// Steps the game one tick forward using the given user input
 pub fn step<'a, 'b>(g: CombatData<'a, 'b>, i: &Option<UserInput>) -> CombatData<'a, 'b> {
@@ -209,17 +211,31 @@ fn next_state<'a, 'b>(
     w: &World,
 ) -> (u64, Option<CombatState>) {
     match state {
-        CombatState::Init(game_objects) => {
+        CombatState::Init(_game_objects) => {
+            // TODO use configured characters
+            // -> find way to inject team and pos
+
+            let game_objects = vec!(
+                GameObject::Actor(generate_player(WorldPos(7.0, 6.0), TEAM_PLAYER)),
+                GameObject::Actor(generate_player(WorldPos(8.0, 6.0), TEAM_PLAYER)),
+                GameObject::Actor(generate_player(WorldPos(7.0, 7.0), TEAM_PLAYER)),
+                GameObject::Actor(generate_player(WorldPos(8.0, 7.0), TEAM_PLAYER)),
+            );
+
             for o in game_objects {
                 insert_game_object_components(o.clone(), w);
             }
+
+            spawn_enemies(turn, w);
 
             (turn, Some(CombatState::FindActor()))
         }
 
         CombatState::FindActor() => {
             if let Some(team) = find_winning_team(w) {
-                return (turn, Some(CombatState::Win(team)));
+                if team == TEAM_CPU {
+                    return (turn, Some(CombatState::Win(team)));
+                }
             }
 
             if let Some(ea) = next_ready_entity(w, turn) {
@@ -258,7 +274,13 @@ fn next_state<'a, 'b>(
             } else {
                 // no further in the current turn
                 // => step the game one turn forward
-                (turn + 1, Some(CombatState::FindActor()))
+                let new_turn = turn + 1;
+
+                if new_turn % 10 == 0 {
+                    spawn_enemies(new_turn, w);
+                }
+                
+                (new_turn, Some(CombatState::FindActor()))
             }
         }
 
@@ -297,4 +319,13 @@ fn next_state<'a, 'b>(
             (turn, None)
         }
     }
+}
+
+fn spawn_enemies(_turn: u64, w: &World) {
+    vec!(
+        GameObject::Actor(generate_enemy(WorldPos(1.0, 6.0), TEAM_CPU)),
+        GameObject::Actor(generate_enemy(WorldPos(1.0, 5.0), TEAM_CPU)),
+        GameObject::Actor(generate_enemy(WorldPos(6.0, 0.0), TEAM_CPU)),
+        GameObject::Actor(generate_enemy(WorldPos(7.0, 0.0), TEAM_CPU)),
+    ).drain(..).for_each(move |enemy| insert_game_object_components(enemy, w));
 }

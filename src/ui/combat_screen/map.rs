@@ -57,7 +57,7 @@ fn render_sprite(
     let (offset_x, offset_y) = sprite.offset;
     let (xt, yt) = screen_pos;
     let source = Rect::new(xs, ys, w, h);
-    let target = Rect::new(xt + offset_x, yt + offset_y, w, h);
+    let target = Rect::new(xt + offset_x, yt + offset_y, TILE_WIDTH, TILE_HEIGHT);
 
     cvs.copy(&sprite_tex, Some(source), Some(target))
 }
