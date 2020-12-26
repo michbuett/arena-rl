@@ -2,7 +2,53 @@ extern crate rand;
 
 use rand::prelude::*;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
+pub struct D6(pub u8);
+
+impl D6 {
+    pub fn new(x: u8) -> Self {
+        assert!(1 <= x && x <= 6);
+        Self(x)
+    }
+
+    pub fn roll() -> Self {
+        let range = rand::distributions::Uniform::from(1..=6);
+        let mut rng = rand::thread_rng();
+
+        Self(rng.sample(range))
+    }
+
+    pub fn result(self, difficulty: i8) -> RR {
+        use std::cmp::{min, max};
+        let r_idx = (self.0 - 1) as usize;
+        let d_idx = (2 + max(-2, min(3, difficulty))) as usize;
+        let result = SUCCESS_TABLE[d_idx][r_idx];
+
+        // println!("Roll {}, difficulty: {}, result: {:?}", self.0, difficulty, result);
+
+        result
+    }
+}
+
+const SUCCESS_TABLE: [[RR; 6]; 6] = [
+    [RR::SuccessBut, RR::Success, RR::Success, RR::CritSuccess, RR::CritSuccess, RR::CritSuccess], // d(-2)
+    [RR::SuccessBut, RR::SuccessBut, RR::Success, RR::Success, RR::CritSuccess, RR::CritSuccess], // d(-1)
+    [RR::Fail, RR::SuccessBut, RR::SuccessBut, RR::Success, RR::Success, RR::CritSuccess], // d(0)
+    [RR::Fail, RR::Fail, RR::SuccessBut, RR::SuccessBut, RR::Success, RR::Success], //d(+1)
+    [RR::CritFail, RR::Fail, RR::Fail, RR::SuccessBut, RR::SuccessBut, RR::Success], //d(+2)
+    [RR::CritFail, RR::CritFail, RR::Fail, RR::Fail, RR::SuccessBut, RR::SuccessBut], //d(+3)
+];
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum RR {
+    CritFail,
+    Fail,
+    SuccessBut,
+    Success,
+    CritSuccess,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub struct Dice(u8);
 
 impl Dice {

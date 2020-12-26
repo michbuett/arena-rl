@@ -1,7 +1,8 @@
-use std::cmp::min;
-
+use std::cmp::max;
 use super::dice::*;
-use crate::core::{DisplayStr, WorldPos};
+use crate::core::{Action, DisplayStr, WorldPos, Tile};
+
+const STAT_AVERAGE: u8 = 4;
 
 /// Anything that exists in the world
 #[derive(Debug, Clone)]
@@ -27,21 +28,21 @@ pub struct Item {
 ///  8 =>  5 => Supernatural
 ///  9 =>  6 => ? (Ultra, Marvelous)
 /// 10 =>  7 => Godlike (unlimited power)
-#[derive(Debug, Clone)]
-pub struct Attributes {
-    /// cognitiv abilities, intelligence, wisdom
-    mind: i8,
-    /// agility, dextery, speed
-    speed: i8,
-    /// strength, endurance
-    power: i8,
-}
+// #[derive(Debug, Clone)]
+// pub struct Attributes {
+//     /// cognitiv abilities, intelligence, wisdom
+//     mind: i8,
+//     /// agility, dextery, speed
+//     speed: i8,
+//     /// strength, endurance
+//     power: i8,
+// }
 
-impl Attributes {
-    pub fn new(mind: i8, speed: i8, power: i8) -> Self {
-        Self { mind, speed, power }
-    }
-}
+// impl Attributes {
+//     pub fn new(mind: i8, speed: i8, power: i8) -> Self {
+//         Self { mind, speed, power }
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub enum AiBehaviour {
@@ -49,22 +50,24 @@ pub enum AiBehaviour {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Team(pub &'static str, pub u8);
+pub struct Team(pub &'static str, pub u8, pub bool);
 
 pub struct ActorBuilder {
-    attributes: Attributes,
+    // attributes: Attributes,
     behaviour: Option<AiBehaviour>,
     pos: WorldPos,
     team: Team,
     armor: Armor,
     name: String,
+    traits: Vec<Trait>,
 }
 
 impl ActorBuilder {
-    pub fn new(pos: WorldPos, attributes: Attributes, team: Team) -> Self {
+    pub fn new(pos: WorldPos, team: Team) -> Self {
+    // pub fn new(pos: WorldPos, attributes: Attributes, team: Team) -> Self {
         Self {
             pos,
-            attributes,
+            // attributes,
             team,
             name: generate_name(),
             behaviour: None,
@@ -73,25 +76,32 @@ impl ActorBuilder {
                 look: vec![],
                 protection: 0,
             },
+            traits: Vec::new(),
         }
     }
 
     pub fn build(self) -> Actor {
-        let a = self.attributes;
-        let energy = a.speed + a.power;
+        // let a = self.attributes;
+        // let energy = a.speed + a.power;
 
         Actor {
             name: self.name,
             active: false,
             pos: self.pos,
-            energy: (energy, energy),
-            attributes: (a.clone(), a.clone()),
-            wounds: Vec::new(),
+            // energy: (energy, energy),
+            // attributes: (a.clone(), a.clone()),
+            pain: 0,
+            wounds: 0,
+            // wounds: Vec::new(),
             effects: Vec::new(),
+            traits: Vec::new(),
+            pending_action: None,
             behaviour: self.behaviour,
             team: self.team,
             armor: self.armor,
             turn: 0,
+            quick_action_available: true,
+            // activations: roll_activations(3),
             attacks: vec![
                 AttackOption {
                     name: DisplayStr("Swing"),
@@ -99,13 +109,6 @@ impl ActorBuilder {
                     distance: (0.0, 1.42),
                     damage: 4,
                     costs: 3,
-                },
-                AttackOption {
-                    name: DisplayStr("Strong Blow"),
-                    dice: 3,
-                    distance: (0.0, 1.42),
-                    damage: 5,
-                    costs: 4,
                 },
             ],
             defences: vec![DefenceOption {
@@ -119,7 +122,7 @@ impl ActorBuilder {
                 tags: Vec::new(),
                 to_hit: Dice::new(4),
             },
-        }
+        }.set_traits(self.traits)
     }
 
     pub fn behaviour(self, b: AiBehaviour) -> Self {
@@ -131,6 +134,10 @@ impl ActorBuilder {
 
     pub fn armor(self, armor: Armor) -> Self {
         Self { armor, ..self }
+    }
+
+    pub fn traits(self, traits: Vec<Trait>) -> Self {
+        Self { traits, ..self }
     }
 }
 
@@ -148,134 +155,247 @@ pub struct Armor {
 pub struct Actor {
     pub name: String,
     /// base | effectiv
-    attributes: (Attributes, Attributes),
+    // attributes: (Attributes, Attributes),
     /// (current, max)
-    energy: (i8, i8),
-    wounds: Vec<Wound>,
+    // energy: (i8, i8),
+    pain: u8,
+    wounds: u8,
+    // wounds: Vec<Wound>,
     effects: Vec<Effect>,
+    traits: Vec<Trait>,
     wields: Weapon,
     attacks: Vec<AttackOption>,
     defences: Vec<DefenceOption>,
     armor: Armor,
+    // activations: Vec<Activation>,
+    quick_action_available: bool,
 
     pub turn: u64,
     pub active: bool,
     pub team: Team,
     pub pos: WorldPos,
+    pub pending_action: Option<Box<(Action, u8)>>,
     pub behaviour: Option<AiBehaviour>,
 }
 
 impl Actor {
-    pub fn move_to(self, pos: WorldPos) -> Self {
-        Self { pos, ..self }
+    pub fn move_to(self, to: Tile) -> Self {
+        assert!(self.can_move(), "Actor cannot move: {:?}", self);
+        
+        Self {
+            pos: to.to_world_pos(),
+            quick_action_available: false,
+            // activations: use_activation(D6::new(1), self.activations),
+            ..self
+        }
     }
 
+    pub fn can_move(&self) -> bool {
+        self.quick_action_available
+    }
+    
     pub fn is_pc(&self) -> bool {
         self.behaviour.is_none()
     }
 
-    pub fn initiative(&self) -> u32 {
-        if self.energy() <= 0
-            || self.attributes().speed <= 0
-            || self.has_effect(&Effect::Dead())
-            || self.has_effect(&Effect::Dying())
-        {
-            return 0;
-        }
-
-        10_000 * self.energy() as u32
-            + 100 * self.attributes().speed as u32
-            + Roll::new(1, Dice::new(1)).total()
-    }
-
-    pub fn next_turn(self, turn: u64) -> Condition {
-        let (e_current, e_max) = self.energy;
-        let mut e_new = min(e_max, e_current + e_max);
-        let power = self.attributes().power;
-        let num_wounds = self.num_wounds();
-        let mut effects = self.effects;
-
-        if effects.contains(&Effect::Dying()) {
-            let tries = save_roll(num_wounds) as i8;
-
-            if tries <= power {
-                // actor has recovered from its dying state
-                effects = effects
-                    .drain(..)
-                    .filter(|e| *e != Effect::Dying())
-                    .collect();
-            } else {
-                e_new = min(e_new, power + e_new - tries);
-
-                if e_new < 0 {
-                    // it's over now...
-                    return Condition::Dead(self.pos, Item {
-                        name: format!("Corpse of {}", self.name),
-                        look: vec!(("corpses", 1))
-                    });
-                }
-            }
-        }
-
-        Condition::Alive(Actor {
-            turn,
-            effects,
-            energy: (e_new, e_max),
+    pub fn activate(self) -> Self {
+        Self {
+            active: true,
             ..self
-        })
+        }
     }
 
-    pub fn done(self, costs: u8) -> Self {
+    pub fn prepare(self, action: (Action, u8)) -> Actor {
         Actor {
+            pending_action: Some(Box::new(action)),
+            quick_action_available: false,
             active: false,
-            energy: (self.energy.0 - costs as i8, self.energy.1),
             ..self
         }
     }
 
-    pub fn energy(&self) -> i8 {
-        self.energy.0
+    pub fn start_next_turn(self) -> (Actor, Option<Box<(Action, u8)>>) {
+        let pending_action = self.pending_action;
+        let next_turn_actor = Self {
+            pending_action: None,
+            quick_action_available: true,
+            ..self
+        };
+        
+        (next_turn_actor, pending_action)
     }
+    
+    // pub fn next_turn(self, turn: u64) -> Condition {
+    //     let (e_current, e_max) = self.energy;
+    //     let mut e_new = min(e_max, e_current + e_max);
+    //     let power = self.attributes().power;
+    //     let num_wounds = self.num_wounds();
+    //     let mut effects = self.effects;
 
-    fn attributes(&self) -> &Attributes {
-        &self.attributes.1
-    }
+    //     if effects.contains(&Effect::Dying()) {
+    //         let tries = save_roll(num_wounds) as i8;
 
-    pub fn attacks(&self, target: &Actor) -> Vec<Attack> {
+    //         if tries <= power {
+    //             // actor has recovered from its dying state
+    //             effects = effects
+    //                 .drain(..)
+    //                 .filter(|e| *e != Effect::Dying())
+    //                 .collect();
+    //         } else {
+    //             e_new = min(e_new, power + e_new - tries);
+
+    //             if e_new < 0 {
+    //                 // it's over now...
+    //                 return Condition::Dead(
+    //                     self.pos,
+    //                     Item {
+    //                         name: format!("Corpse of {}", self.name),
+    //                         look: vec![("corpses", 1)],
+    //                     },
+    //                 );
+    //             }
+    //         }
+    //     }
+
+    //     // TODO: calc number of activations from current stats
+    //     // let max_activations: usize = 3;
+
+    //     Condition::Alive(Actor {
+    //         turn,
+    //         effects,
+    //         energy: (e_new, e_max),
+    //         quick_action_available: true,
+    //         // activations: roll_activations(max_activations.checked_sub(num_wounds).unwrap_or(0)),
+    //         ..self
+    //     })
+    // }
+
+    // pub fn done(self, costs: u8) -> Self {
+    //     Actor {
+    //         active: false,
+    //         energy: (0, self.energy.1),
+    //         // energy: (self.energy.0 - costs as i8, self.energy.1),
+    //         ..self
+    //     }
+    // }
+
+    // pub fn energy(&self) -> i8 {
+    //     self.energy.0
+    // }
+
+    // fn attributes(&self) -> &Attributes {
+    //     &self.attributes.1
+    // }
+
+    pub fn attacks(&self, target: &Actor) -> Vec<AttackOption> {
         let distance = WorldPos::distance(&self.pos, &target.pos);
         self.attacks
             .iter()
             .filter(|o| o.distance.0 <= distance && distance <= o.distance.1)
             .cloned()
-            .map(|o| o.into_attack(&self.wields))
+            // .map(|o| o.into_attack(&self.wields))
             .collect()
     }
 
-    pub fn defences(&self, _: &Attack) -> Vec<Defence> {
-        // TODO: consider attack and remaining energy
-        self.defences
-            .iter()
-            .cloned()
-            .map(|o| o.into_defence())
-            .collect()
+    // pub fn defences(&self, _: &Attack) -> Vec<Defence> {
+    //     // TODO: consider attack and remaining energy
+    //     self.defences
+    //         .iter()
+    //         .cloned()
+    //         .map(|o| o.into_defence())
+    //         .collect()
+    // }
+
+    // pub fn has_effect(&self, e: &Effect) -> bool {
+    //     self.effects.contains(e)
+    // }
+
+    fn set_traits(self, traits: Vec<Trait>) -> Self {
+        let effects = traits.iter().flat_map(|t| t.effects.to_vec()).collect();
+
+        Self { traits, effects, ..self }
     }
 
-    pub fn has_effect(&self, e: &Effect) -> bool {
-        self.effects.contains(e)
+    pub fn is_dying(&self) -> bool {
+        self.effects.contains(&Effect::Dying())
     }
 
+    fn wound(self, w: Wound) -> Condition {
+        let wounds_modifer = self.effects.iter().map(|e| {
+            match e {
+                Effect::AttributeModifier(Attribute::Wound, modifier) => *modifier,
+                _ => 0,
+            }
+        }).sum::<i8>();
+        let default_wounds_num = 3;
+        let min_wounds_num = 1;
+        let max_wounds = max(min_wounds_num, default_wounds_num + wounds_modifer) as u8;
+        let wounds = self.wounds + w.wound;
+        
+        if wounds < max_wounds {
+            Condition::Alive(Self{ wounds, ..self })
+        } else {
+            Condition::Dead(
+                self.pos,
+                Item {
+                    name: format!("Corpse of {}", self.name),
+                    look: vec![("corpses", 1)],
+                },
+            )
+        }
+    }
+        
     pub fn num_wounds(&self) -> usize {
-        self.wounds.len()
+        self.wounds as usize
     }
 
     pub fn look(&self) -> &Look {
         &self.armor.look
     }
 
-    pub fn protection(&self) -> i8 {
-        self.armor.protection as i8 + self.attributes().power - 3
+    pub fn defence(&self) -> i8 {
+        3
     }
+
+    pub fn protection(&self) -> i8 {
+        self.armor.protection as i8
+    }
+
+    // pub fn activations(&self) -> std::slice::Iter<Activation> {
+    //     self.activations.iter()
+    // }
 }
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
+pub struct Activation {
+    pub val: D6,
+    pub is_used: bool,
+}
+
+// fn roll_activations(num: usize) -> Vec<Activation> {
+//     let mut result: Vec<Activation> = (1..=num)
+//         .map(|_| Activation {
+//             val: D6::roll(),
+//             is_used: false,
+//         })
+//         .collect();
+//     result.sort();
+//     result
+// }
+
+// fn use_activation(d6: D6, mut activations: Vec<Activation>) -> Vec<Activation> {
+//     // let mut i: Option<Activation> = None;
+//     // let mut val =
+
+//     for a in activations.iter_mut() {
+//         if !a.is_used && a.val >= d6 {
+//             a.is_used = true;
+//             return activations;
+//         }
+//     }
+
+//     panic!("Cannot finde {:?} in {:?}", d6, activations);
+// }
 
 #[derive(Debug, Clone)]
 pub struct Weapon {
@@ -302,14 +422,26 @@ pub struct AttackOption {
 }
 
 impl AttackOption {
-    pub fn into_attack(self, w: &Weapon) -> Attack {
-        Attack {
-            name: self.name,
-            roll: Roll::new(self.dice, w.to_hit),
-            damage: self.damage,
-            costs: self.costs,
+    // fn into_attack(self, w: &Weapon) -> Attack {
+    //     Attack {
+    //         name: self.name,
+    //         roll: Roll::new(self.dice, w.to_hit),
+    //         damage: self.damage,
+    //         costs: self.costs,
+    //     }
+    // }
+
+    fn into_attack2(self, a: &Actor) -> Attack2 {
+        Attack2 {
+            to_hit: 3,
+            to_wound: 3,
         }
     }
+}
+
+pub struct Attack2 {
+    to_hit: i8,
+    to_wound: i8,
 }
 
 #[derive(Debug, Clone)]
@@ -340,20 +472,55 @@ pub struct Defence {
 #[derive(Hash, PartialEq, Eq, Debug, Clone, Copy)]
 pub struct Tag(pub &'static str);
 
+#[derive(Debug, Clone)]
+pub struct Trait {
+    name: DisplayStr,
+    effects: Vec<Effect>,
+    source: TraitSource,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum TraitSource {
+    IntrinsicProperty,
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Effect {
+    AttributeModifier(Attribute, i8),
     Dying(),
-    Dead(),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Attribute {
+    Wound,
+    ToHit,
+    ToWound,
+    Defence,
+    Protection,
 }
 
 #[derive(Debug, Clone)]
-pub struct Wound {}
+struct Wound {
+    pain: u8,
+    wound: u8,
+}
+
+impl Wound {
+    fn from_roll(rr: &RR) -> Self {
+        match rr {
+            RR::Fail | RR::CritFail => Self { pain: 0, wound: 0 },
+            RR::SuccessBut => Self { pain: 1, wound: 0 },
+            RR::Success => Self { pain: 1, wound: 1 },
+            RR::CritSuccess => Self { pain: 2, wound: 2 },
+        }
+    }
+}
 
 /// The result of a combat
 #[derive(Debug, Clone)]
 pub enum CombatResult {
-    Strike(Actor),
+    Miss(Actor),
+    Block(),
     Hit(Condition),
 }
 
@@ -363,70 +530,94 @@ pub enum Condition {
     Dead(WorldPos, Item),
 }
 
-pub fn combat(attack: Attack, defence: Defence, target: Actor) -> CombatResult {
-    let hits = attack.roll.successes as i8 - defence.roll.successes as i8;
-    let dmg = hits * attack.damage as i8 - target.protection();
-    let target = target.done(defence.costs);
+pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> CombatResult {
+    let attack = attack.into_attack2(&attacker);
+    let to_hit_result = D6::roll().result(target.defence() - attack.to_hit);
 
-    if dmg <= 0 {
-        // TODO bonus for very good defence
-        CombatResult::Strike(target)
-    } else {
-        if target.has_effect(&Effect::Dying()) {
-            CombatResult::Hit(Condition::Dead(target.pos, Item {
-                name: format!("Corpse of {}", target.name),
-                look: vec!(("corpses", 1))
-            }))
-        } else {
-            let mut wounds = target.wounds.clone();
-            let new_wound = Wound {}; // TODO consider attack (e.g. to cause bleeding)
+    match to_hit_result {
+        RR::CritFail | RR::Fail => CombatResult::Miss(target),
 
-            wounds.push(new_wound);
+        RR::SuccessBut | RR::Success | RR::CritSuccess => {
+            let to_wound_result = D6::roll().result(target.protection() - attack.to_wound);
 
-            if dmg <= 5 {
-                // minor wound
-                // => no save required
-                CombatResult::Hit(Condition::Alive(Actor {
-                    wounds,
-                    ..target.clone()
-                }))
-            } else {
-                // critical wound
-                // => additional save roll required
-                let tries = save_roll(wounds.len());
-                let remaining_energy = min(
-                    target.energy(),
-                    target.attributes().power + target.energy() - tries as i8,
-                );
+            match to_wound_result {
+                RR::CritFail | RR::Fail =>
+                    CombatResult::Block(),
 
-                let mut effects = target.effects.clone();
-
-                if remaining_energy < 0 {
-                    effects.push(Effect::Dying());
-                }
-
-                CombatResult::Hit(Condition::Alive(Actor {
-                    wounds,
-                    effects,
-                    energy: (remaining_energy, target.energy.1),
-                    ..target.clone()
-                }))
+                RR::SuccessBut | RR::Success | RR::CritSuccess =>
+                    CombatResult::Hit(target.wound(Wound::from_roll(&to_wound_result))),
             }
         }
     }
 }
 
-fn save_roll(to_save: usize) -> usize {
-    let mut tries = 0;
-    let mut successes = 0;
-    while successes < to_save {
-        tries += 1;
-        if Roll::new(1, Dice::new(4)).successes > 0 {
-            successes += 1;
-        }
-    }
-    tries
-}
+// pub fn combat(attack: Attack, defence: Defence, target: Actor) -> CombatResult {
+//     let hits = attack.roll.successes as i8 - defence.roll.successes as i8;
+//     let dmg = hits * attack.damage as i8 - target.protection();
+//     let target = target.done(defence.costs);
+
+//     if dmg <= 0 {
+//         // TODO bonus for very good defence
+//         CombatResult::Strike(target)
+//     } else {
+//         if target.has_effect(&Effect::Dying()) {
+//             CombatResult::Hit(Condition::Dead(
+//                 target.pos,
+//                 Item {
+//                     name: format!("Corpse of {}", target.name),
+//                     look: vec![("corpses", 1)],
+//                 },
+//             ))
+//         } else {
+//             let mut wounds = target.wounds.clone();
+//             let new_wound = Wound {}; // TODO consider attack (e.g. to cause bleeding)
+
+//             wounds.push(new_wound);
+
+//             if dmg <= 5 {
+//                 // minor wound
+//                 // => no save required
+//                 CombatResult::Hit(Condition::Alive(Actor {
+//                     wounds,
+//                     ..target.clone()
+//                 }))
+//             } else {
+//                 // critical wound
+//                 // => additional save roll required
+//                 let tries = save_roll(wounds.len());
+//                 let remaining_energy = min(
+//                     target.energy(),
+//                     target.attributes().power + target.energy() - tries as i8,
+//                 );
+
+//                 let mut effects = target.effects.clone();
+
+//                 if remaining_energy < 0 {
+//                     effects.push(Effect::Dying());
+//                 }
+
+//                 CombatResult::Hit(Condition::Alive(Actor {
+//                     wounds,
+//                     effects,
+//                     energy: (remaining_energy, target.energy.1),
+//                     ..target.clone()
+//                 }))
+//             }
+//         }
+//     }
+// }
+
+// fn save_roll(to_save: usize) -> usize {
+//     let mut tries = 0;
+//     let mut successes = 0;
+//     while successes < to_save {
+//         tries += 1;
+//         if Roll::new(1, Dice::new(4)).successes > 0 {
+//             successes += 1;
+//         }
+//     }
+//     tries
+// }
 
 fn generate_name() -> String {
     extern crate rand;
@@ -485,20 +676,46 @@ pub fn generate_player(pos: WorldPos, t: Team) -> Actor {
     let range = rand::distributions::Uniform::from(1..=100);
     let mut rng = rand::thread_rng();
 
-    ActorBuilder::new(pos, Attributes::new(4, 4, 4), t)
-        .armor(Armor { look: vec!(("player", rng.sample(range))), protection: 2 })
+    ActorBuilder::new(pos, t)
+    // ActorBuilder::new(pos, Attributes::new(4, 4, 4), t)
+        .armor(Armor {
+            look: vec![("player", rng.sample(range))],
+            protection: 2,
+        })
         .build()
 }
 
-pub fn generate_enemy(pos: WorldPos, t: Team) -> Actor {
-    extern crate rand;
-    use rand::prelude::*;
-    let range = rand::distributions::Uniform::from(1..=1216);
-    let mut rng = rand::thread_rng();
+// pub fn generate_enemy(pos: WorldPos, t: Team) -> Actor {
+//     extern crate rand;
+//     use rand::prelude::*;
+//     let range = rand::distributions::Uniform::from(1..=1216);
+//     let mut rng = rand::thread_rng();
 
-    ActorBuilder::new(pos, Attributes::new(3, 3, 3), t)
-        .armor(Armor { look: vec!(("enemy", rng.sample(range))), protection: 0 })
+//     ActorBuilder::new(pos, Attributes::new(3, 3, 3), t)
+//         .armor(Armor {
+//             look: vec![("enemy", rng.sample(range))],
+//             protection: 0,
+//         })
+//         .behaviour(AiBehaviour::Default)
+//         .build()
+// }
+
+fn one_of<'a, T>(v: &'a Vec<T>) -> &'a T {
+    use rand::seq::SliceRandom;
+    v.choose(&mut rand::thread_rng()).unwrap()
+}
+
+pub fn generate_enemy_easy(pos: WorldPos, t: Team) -> Actor {
+    ActorBuilder::new(pos, t)
+        .armor(Armor {
+            look: vec![("tile", 3965), ("tile", *one_of(&vec!(5747, 5748, 5749)))],
+            protection: 0,
+        })
         .behaviour(AiBehaviour::Default)
+        .traits(vec!(Trait {
+            name: DisplayStr("Fragile physiology"),
+            effects: vec!(Effect::AttributeModifier(Attribute::Wound, -2)),
+            source: TraitSource::IntrinsicProperty,
+        }))
         .build()
 }
-

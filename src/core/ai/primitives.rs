@@ -73,6 +73,10 @@ pub fn can_move_towards(
     map: &Read<Map>,
     objects: &ReadStorage<GameObjectCmp>,
 ) -> Option<(u8, Tile)> {
+    if !actor.can_move() {
+        return None
+    }
+
     let st = map.find_tile(actor.pos);
     let tt = map.find_tile(target.pos);
 
@@ -107,7 +111,7 @@ pub fn can_move_towards(
 }
 
 
-pub fn can_attack(actor: &Actor, target: &Actor) -> Option<Attack> {
+pub fn can_attack(actor: &Actor, target: &Actor) -> Option<AttackOption> {
     actor.attacks(target).iter().cloned().next()
 }
 // fn flatten<T>(oot: Option<Option<T>>) -> Option<T> {

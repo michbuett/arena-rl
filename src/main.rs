@@ -7,7 +7,6 @@ extern crate sdl2;
 use std::path::Path;
 use std::time::Duration;
 
-use specs::prelude::*;
 use sdl2::image::InitFlag;
 use sdl2::rect::{Rect};
 use sdl2::render::TextureCreator;
@@ -39,7 +38,6 @@ fn main() -> Result<(), String> {
 
     let texture_creator = canvas.texture_creator();
     let assets = init_assets(&texture_creator, &ttf_context)?;
-    // let (dispatcher, world) = init_ecs();
     let mut click_areas = vec!();
     let mut sdl_events = sdl_context.event_pump()?;
     let mut game = Game::Start;
@@ -85,29 +83,13 @@ fn init_assets<'a>(
 ) -> Result<AssetRepo<'a>, String> {
     let p = Path::new("./assets/fonts/font.ttf");
     let mut assets = AssetRepo::new( &texture_creator );
-
+    
     assets.load_textures_from_path(Path::new("./assets/images"))?;
     assets.add_font("normal", ttf_context.load_font(p, 28)?)?;
     assets.add_font("big", ttf_context.load_font(p, 48)?)?;
     assets.add_font("very big", ttf_context.load_font(p, 96)?)?;
 
     Ok(assets)
-}
-
-fn init_ecs<'a, 'b>() -> (Dispatcher<'a, 'b>, World) {
-    let dispatcher = DispatcherBuilder::new()
-        .with(components::Animation, "Animaton", &[])
-        .with(components::EndOfLiveSystem, "EOL", &[])
-        .build();
-
-    let mut world = World::new();
-    let map = dummy();
-
-    components::register(&mut world);
-
-    world.add_resource(map);
-
-    (dispatcher, world)
 }
 
 /// opengl, opengles2, metal, software, ...

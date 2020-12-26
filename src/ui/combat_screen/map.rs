@@ -8,8 +8,8 @@ use crate::components::*;
 use crate::core::*;
 use crate::ui::*;
 
-pub const TILE_WIDTH: u32 = 128;
-pub const TILE_HEIGHT: u32 = 128;
+pub const TILE_WIDTH: u32 = 96;
+pub const TILE_HEIGHT: u32 = 96;
 
 pub type SystemData<'a> = (
     ReadStorage<'a, Position>,

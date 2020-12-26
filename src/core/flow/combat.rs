@@ -2,88 +2,101 @@ use std::time::Instant;
 
 use specs::prelude::*;
 
-use super::super::actors::{GameObject, Actor, Team, generate_player, generate_enemy};
-use super::super::action::{Action, Reaction, Change, run_action};
-use super::super::ai::{action, actions_at, reaction, select_action};
+use super::super::action::{act, Action, Change};
+use super::super::actors::{generate_enemy_easy, generate_player, Actor, GameObject, Team};
+// use super::super::ai::{action, actions_at, reaction, select_action};
+use super::super::ai::{action, actions_at};
 use super::types::*;
 use crate::components::*;
-use crate::core::{WorldPos};
+use crate::core::WorldPos;
 
-const TEAM_PLAYER: Team = Team("Player", 1);
-const TEAM_CPU: Team = Team("Computer", 2);
+const TEAM_PLAYER: Team = Team("Player", 1, true);
+const TEAM_CPU: Team = Team("Computer", 2, false);
+
+pub fn init_combat_data<'a, 'b>(
+    game_objects: Vec<GameObject>,
+    world: World,
+    dispatcher: Dispatcher<'a, 'b>,
+) -> CombatData<'a, 'b> {
+    CombatData {
+        turn: 0,
+        active_team_idx: 0,
+        teams: vec![TEAM_PLAYER, TEAM_CPU],
+        world,
+        dispatcher,
+        state: CombatState::Init(game_objects),
+    }
+}
 
 /// Steps the game one tick forward using the given user input
 pub fn step<'a, 'b>(g: CombatData<'a, 'b>, i: &Option<UserInput>) -> CombatData<'a, 'b> {
     let CombatData {
         turn,
+        active_team_idx,
+        teams,
         state,
         mut dispatcher,
         mut world,
     } = g;
 
-    let (next_turn, next_state) = next_state(turn, &state, i, &world);
+    let (next_turn, next_active_team, next_state) =
+        next_state(turn, &state, active_team_idx, &teams, i, &world);
 
     dispatcher.dispatch(&mut world.res);
     world.maintain();
 
     return CombatData {
         turn: next_turn,
+        active_team_idx: next_active_team,
+        teams,
         state: next_state.unwrap_or(state),
         dispatcher,
         world,
     };
 }
 
-fn next_ready_entity(world: &World, turn: u64) -> Option<(Entity, Actor)> {
+fn find_active_actor(world: &World) -> Option<(Entity, Actor)> {
     let (entities, actors): (Entities, ReadStorage<GameObjectCmp>) = world.system_data();
-    let mut result = None;
-    let mut max_initiative = 0;
 
     for (e, o) in (&entities, &actors).join() {
-        if let GameObject::Actor(actor) = o.0.clone() {
-            let initiative = actor.initiative();
-            if actor.turn <= turn && initiative > max_initiative {
-                result = Some((e, actor.clone()));
-                max_initiative = initiative;
+        if let GameObject::Actor(actor) = &o.0 {
+            if actor.active {
+                return Some((e, actor.clone()));
             }
         }
-    }
-
-    if let Some((e, mut a)) = result {
-        // TODO there may be a nicer way to mark the active actor
-        a.active = true;
-        update_components(e, GameObject::Actor(a.clone()), world);
-
-        return Some((e, a));
     }
 
     None
 }
 
-fn handle_wait_until(
-    t: &Instant,
-    ol: &Vec<Reaction>,
-    w: &World,
-) -> Option<CombatState> {
+fn next_ready_entity(world: &World, active_team: &Team) -> Option<(Entity, Actor)> {
+    let (entities, actors): (Entities, ReadStorage<GameObjectCmp>) = world.system_data();
+
+    for (e, o) in (&entities, &actors).join() {
+        if let GameObject::Actor(actor) = o.0.clone() {
+            if &actor.team == active_team && actor.pending_action.is_none() {
+                return Some((e, actor));
+            }
+        }
+    }
+
+    None
+}
+
+fn handle_wait_until(t: &Instant, ol: &Vec<EntityAction>) -> Option<CombatState> {
     if *t > Instant::now() {
         // now is not the time!
         // => do nothing and wait some more
         return None;
     }
 
-    if let Some(((e, o), tail)) = ol.split_first() {
-        let tail = tail.to_vec();
-        let actions = reaction(e, o.clone());
-
-        if e.1.is_pc() {
-            let reaction = InputContext::Opportunity(o.clone(), actions.to_vec());
-
-            Some(CombatState::WaitForUserAction(e.clone(), Some(reaction), tail))
-        } else {
-            let action = select_action(e.clone(), o, &actions, w);
-
-            Some(CombatState::ResolveAction(e.clone(), action, tail))
-        }
+    if let Some((entity_action, tail)) = ol.split_first() {
+        // wait time is up but there are more action queued up
+        // => continue with next action in queue
+        Some(CombatState::ResolveAction(
+            entity_action.clone(),
+            tail.to_vec(),
+        ))
     } else {
         // wait time is up and no further reactions to handle
         // => continue with next actor
@@ -91,11 +104,9 @@ fn handle_wait_until(
     }
 }
 
-
 fn handle_wait_for_user_action(
     e: &(Entity, Actor),
     ctxt: &Option<InputContext>,
-    rl: &Vec<Reaction>,
     i: &Option<UserInput>,
     w: &World,
 ) -> Option<CombatState> {
@@ -120,7 +131,7 @@ fn handle_wait_for_user_action(
                 let actions = actions_at(e, pos, &w);
                 let ui = InputContext::SelectedArea(pos, objects, actions);
 
-                Some(CombatState::WaitForUserAction(e.clone(), Some(ui), rl.to_vec()))
+                Some(CombatState::WaitForUserAction(e.clone(), Some(ui)))
             } else {
                 // user tries to select a new area but is not allowed to
                 // change it (e.g. when handling an reaction)
@@ -129,10 +140,13 @@ fn handle_wait_for_user_action(
             }
         }
 
-        Some(UserInput::SelectAction(a)) => {
+        Some(UserInput::SelectAction((action, delay))) => {
             // user has selected an action
             // => resolve that action
-            Some(CombatState::ResolveAction(e.clone(), a.clone(), rl.to_vec()))
+            Some(CombatState::ResolveAction(
+                (e.0.clone(), e.1.clone(), action.clone(), *delay),
+                Vec::new(),
+            ))
         }
 
         // no user input
@@ -141,26 +155,26 @@ fn handle_wait_for_user_action(
     }
 }
 
-fn find_winning_team(world: &World) -> Option<Team> {
-    let actors: ReadStorage<GameObjectCmp> = world.system_data();
-    let mut winning_team = None;
+// fn find_winning_team(world: &World) -> Option<Team> {
+//     let actors: ReadStorage<GameObjectCmp> = world.system_data();
+//     let mut winning_team = None;
 
-    for GameObjectCmp(o) in (&actors).join() {
-        if let GameObject::Actor(a) = o {
-            if let Some(candidate) = winning_team {
-                if candidate != a.team {
-                    // there are two actors of different team
-                    // => no winning team so far (exit)
-                    return None;
-                }
-            }
+//     for GameObjectCmp(o) in (&actors).join() {
+//         if let GameObject::Actor(a) = o {
+//             if let Some(candidate) = winning_team {
+//                 if candidate != a.team {
+//                     // there are two actors of different team
+//                     // => no winning team so far (exit)
+//                     return None;
+//                 }
+//             }
 
-            winning_team = Some(a.team.clone());
-        }
-    }
+//             winning_team = Some(a.team.clone());
+//         }
+//     }
 
-    winning_team
-}
+//     winning_team
+// }
 
 fn find_objects_at(pos: &WorldPos, world: &World) -> Vec<GameObject> {
     let game_objects: ReadStorage<GameObjectCmp> = world.system_data();
@@ -187,109 +201,128 @@ fn find_objects_at(pos: &WorldPos, world: &World) -> Vec<GameObject> {
     result
 }
 
-fn find_last_turn_entity(turn: u64, w: &World) -> Option<(Entity, Actor)> {
-    let (entities, objects): (Entities, ReadStorage<GameObjectCmp>) = w.system_data();
-
-    for (e, GameObjectCmp(o)) in (&entities, &objects).join() {
-        match o {
-            GameObject::Actor(a) => {
-                if a.turn <= turn {
-                    return Some((e, a.clone()));
-                }
-            }
-            _ => {}
-        }
-    }
-
-    None
-}
-
 fn next_state<'a, 'b>(
-    turn: u64,
+    round: u64,
     state: &CombatState,
+    active_team_idx: usize,
+    teams: &Vec<Team>,
     i: &Option<UserInput>,
     w: &World,
-) -> (u64, Option<CombatState>) {
+) -> (u64, usize, Option<CombatState>) {
     match state {
         CombatState::Init(_game_objects) => {
             // TODO use configured characters
             // -> find way to inject team and pos
 
-            let game_objects = vec!(
+            let game_objects = vec![
                 GameObject::Actor(generate_player(WorldPos(7.0, 6.0), TEAM_PLAYER)),
                 GameObject::Actor(generate_player(WorldPos(8.0, 6.0), TEAM_PLAYER)),
                 GameObject::Actor(generate_player(WorldPos(7.0, 7.0), TEAM_PLAYER)),
                 GameObject::Actor(generate_player(WorldPos(8.0, 7.0), TEAM_PLAYER)),
-            );
+            ];
 
             for o in game_objects {
                 insert_game_object_components(o.clone(), w);
             }
 
-            spawn_enemies(turn, w);
+            spawn_enemies(round, w);
 
-            (turn, Some(CombatState::FindActor()))
+            (round, active_team_idx, Some(CombatState::StartTurn()))
         }
 
-        CombatState::FindActor() => {
-            if let Some(team) = find_winning_team(w) {
-                if team == TEAM_CPU {
-                    return (turn, Some(CombatState::Win(team)));
+        CombatState::StartTurn() => {
+            let mut entity_actions = Vec::new();
+            let (entities, objects): (Entities, ReadStorage<GameObjectCmp>) = w.system_data();
+
+            let active_team: &Team = teams.get(active_team_idx).unwrap();
+            for (e, GameObjectCmp(o)) in (&entities, &objects).join() {
+                if let GameObject::Actor(a) = o {
+                    if &a.team == active_team {
+                        entity_actions.push((e, a.clone(), Action::StartTurn(), 0));
+                    }
                 }
             }
 
-            if let Some(ea) = next_ready_entity(w, turn) {
-                // println!("[next actor] {:?}", ea.0);
-                if ea.1.is_pc() {
-                    // the next ready actor is a player controlled entity
-                    // => wait for user input;
-                    //    so far we have no context for the input (e.g. selected
-                    //    world position, ...) and no reactions
-                    (turn, Some(CombatState::WaitForUserAction(ea, None, Vec::new())))
-                } else {
-                    // the next ready actor is a player controlled entity
-                    // => let the AI compute an action and resolve it
-                    //    so far we have no reactions
-                    let action = action(&ea, w);
-
-                    (turn, Some(CombatState::ResolveAction(ea, action, Vec::new())))
-                }
-            } else {
-                // there are no more entities with a turn left
-                // => end current turn
-                (turn, Some(CombatState::EndTurn()))
-            }
-        }
-
-        CombatState::EndTurn() => {
-            if let Some(game_object) = find_last_turn_entity(turn, w) {
+            if let Some((entity_action, tail)) = entity_actions.split_first() {
+                // wait time is up but there are more action queued up
+                // => continue with next action in queue
                 (
-                    turn,
+                    round,
+                    active_team_idx,
                     Some(CombatState::ResolveAction(
-                        game_object,
-                        Action::EndTurn(turn + 1),
-                        vec![],
+                        entity_action.clone(),
+                        tail.to_vec(),
                     )),
                 )
             } else {
-                // no further in the current turn
-                // => step the game one turn forward
-                let new_turn = turn + 1;
-
-                if new_turn % 10 == 0 {
-                    spawn_enemies(new_turn, w);
-                }
-                
-                (new_turn, Some(CombatState::FindActor()))
+                // wait time is up and no further reactions to handle
+                // => continue with next actor
+                (round, active_team_idx, Some(CombatState::FindActor()))
             }
         }
 
-        CombatState::ResolveAction(ea, action, remaining_reactions) => {
-            // println!("[resolve action] {:?}", ea.0);
-            let (change, durr, new_reactions) = run_action(ea.clone(), action.clone());
-            let mut reactions = remaining_reactions.to_vec();
+        CombatState::FindActor() => {
+            // TODO handle WIN/LOSE condition
+            // if let Some(team) = find_winning_team(w) {
+            //     if team == TEAM_CPU {
+            //         return (round, Some(CombatState::Win(team)));
+            //     }
+            // }
 
-            reactions.extend(new_reactions);
+            if let Some(ea) = find_active_actor(w) {
+                // there is an active actor
+                // -> check if it can do some action
+                return (round, active_team_idx, Some(CombatState::SelectAction(ea)));
+            }
+
+            let active_team: &Team = teams.get(active_team_idx).unwrap();
+            if let Some(ea) = next_ready_entity(w, active_team) {
+                let next_state =
+                    CombatState::ResolveAction((ea.0, ea.1, Action::Activate(), 0), vec![]);
+
+                (round, active_team_idx, Some(next_state))
+            } else {
+                // there are no more entities with a turn left...
+                if active_team_idx < teams.len() - 1 {
+                    // ... then continue with next team
+                    (round, active_team_idx + 1, Some(CombatState::StartTurn()))
+                } else {
+                    // ... or start a new round beginning with the first team
+                    (round + 1, 0, Some(CombatState::StartTurn()))
+                }
+            }
+        }
+
+        CombatState::SelectAction(ea) => {
+            if ea.1.is_pc() {
+                // the next ready actor is a player controlled entity
+                // => wait for user input;
+                //    so far we have no context for the input (e.g. selected
+                //    world position, ...) and no reactions
+                (
+                    round,
+                    active_team_idx,
+                    Some(CombatState::WaitForUserAction(ea.clone(), None)),
+                )
+            } else {
+                // the next ready actor is a player controlled entity
+                // => let the AI compute an action and resolve it
+                //    so far we have no reactions
+                let (action, delay) = action(&ea, w);
+
+                (
+                    round,
+                    active_team_idx,
+                    Some(CombatState::ResolveAction(
+                        (ea.0, ea.1.clone(), action, delay),
+                        Vec::new(),
+                    )),
+                )
+            }
+        }
+
+        CombatState::ResolveAction(entity_action, remaining_actions) => {
+            let (change, durr) = act(entity_action.clone());
 
             for c in change {
                 match c {
@@ -301,31 +334,37 @@ fn next_state<'a, 'b>(
             }
 
             (
-                turn,
-                Some(CombatState::WaitUntil(Instant::now() + durr, reactions)),
+                round,
+                active_team_idx,
+                Some(CombatState::WaitUntil(
+                    Instant::now() + durr,
+                    remaining_actions.to_vec(),
+                )),
             )
         }
 
-        CombatState::WaitForUserAction(e, ctxt, rl) => {
-            (turn, handle_wait_for_user_action(&e, &ctxt, &rl, i, w))
-        }
+        CombatState::WaitForUserAction(e, ctxt) => (
+            round,
+            active_team_idx,
+            handle_wait_for_user_action(&e, &ctxt, i, w),
+        ),
 
-        CombatState::WaitUntil(t, ol) => {
-            (turn, handle_wait_until(t, ol, w))
-        }
+        CombatState::WaitUntil(t, ol) => (round, active_team_idx, handle_wait_until(t, ol)),
 
         CombatState::Win(_) => {
             // ignore
-            (turn, None)
+            (round, active_team_idx, None)
         }
     }
 }
 
 fn spawn_enemies(_turn: u64, w: &World) {
-    vec!(
-        GameObject::Actor(generate_enemy(WorldPos(1.0, 6.0), TEAM_CPU)),
-        GameObject::Actor(generate_enemy(WorldPos(1.0, 5.0), TEAM_CPU)),
-        GameObject::Actor(generate_enemy(WorldPos(6.0, 0.0), TEAM_CPU)),
-        GameObject::Actor(generate_enemy(WorldPos(7.0, 0.0), TEAM_CPU)),
-    ).drain(..).for_each(move |enemy| insert_game_object_components(enemy, w));
+    vec![
+        GameObject::Actor(generate_enemy_easy(WorldPos(1.0, 6.0), TEAM_CPU)),
+        GameObject::Actor(generate_enemy_easy(WorldPos(1.0, 5.0), TEAM_CPU)),
+        GameObject::Actor(generate_enemy_easy(WorldPos(6.0, 0.0), TEAM_CPU)),
+        GameObject::Actor(generate_enemy_easy(WorldPos(7.0, 0.0), TEAM_CPU)),
+    ]
+    .drain(..)
+    .for_each(move |enemy| insert_game_object_components(enemy, w));
 }

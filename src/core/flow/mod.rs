@@ -6,7 +6,10 @@ use specs::prelude::*;
 use crate::components::{register, Animation, EndOfLiveSystem};
 use crate::core::map::dummy;
 
+use combat::{init_combat_data};
+
 pub use types::*;
+
 
 pub fn step<'a, 'b>(g: Game<'a, 'b>, i: &Option<UserInput>) -> Game<'a, 'b> {
     match g {
@@ -41,12 +44,7 @@ fn teams_step<'a, 'b>(i: &Option<UserInput>) -> Option<Game<'a, 'b>> {
 
             world.add_resource(map);
 
-            Some(Game::Combat(CombatData {
-                turn: 0,
-                world,
-                dispatcher,
-                state: CombatState::Init(game_objects.clone()),
-            }))
+            Some(Game::Combat(init_combat_data(game_objects.clone(), world, dispatcher)))
         }
         _ => None,
     }

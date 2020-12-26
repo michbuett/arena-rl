@@ -1,0 +1,32 @@
+digraph G {
+  S [label="Start"];
+  AT [label="Activate team"];
+
+  S -> AT;
+  AT -> sel_actor_in;
+
+  subgraph cluster_selActor {
+    label="Select actor for given team";
+
+    sel_actor_in [shape=component label="Input: Team"];
+    has_actor [shape=diamond label="current team has actors\nwith activations?" ];
+    u_sel_actor [shape=diamond label="selection by user or ai?" ];
+
+    sel_actor_in -> has_actor;
+    has_actor -> u_sel_actor [label="Y"];
+  }
+
+  has_actor -> AT [label="no actors left:\ncontinue with next team"];
+  u_sel_actor -> w4ua_in [label="selection by user"];
+  u_sel_actor -> sel_action_in [label="selection by ai"];
+
+  subgraph cluster_selAction {
+    label="Select action for given actor";
+    sel_action_in [shape=component label="Input: Actor"];
+  }
+
+  subgraph cluster_w4ua {
+    label="Wait until user selects an actor";
+    w4ua_in [shape=component label="Input: (none)"];
+  }
+}

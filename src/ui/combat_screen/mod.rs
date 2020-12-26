@@ -49,7 +49,7 @@ fn render_screen_texts(
         .prepare()
         .draw(cvs, (10, 10))?;
 
-    if let CombatState::Win(Team(_, num)) = game.state {
+    if let CombatState::Win(Team(_, num, ..)) = game.state {
         let text = assets
             .font("very big")?
             .text(format!("Team #{} wins!", num))
@@ -69,9 +69,9 @@ fn render_screen_texts(
 
 fn get_focus_pos<'a>(game_state: &CombatState) -> Option<WorldPos> {
     match game_state {
-        CombatState::WaitForUserAction(_, Some(InputContext::SelectedArea(p, _, _)), _) => Some(*p),
+        CombatState::WaitForUserAction(_, Some(InputContext::SelectedArea(p, _, _))) => Some(*p),
 
-        CombatState::WaitForUserAction((_, a), Some(InputContext::Opportunity(..)), _) => Some(a.pos),
+        CombatState::WaitForUserAction((_, a), Some(InputContext::Opportunity(..))) => Some(a.pos),
 
         _ => None,
     }

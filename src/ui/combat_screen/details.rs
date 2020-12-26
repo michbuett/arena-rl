@@ -15,7 +15,7 @@ pub fn render(
     game: &CombatData,
     assets: &AssetRepo,
 ) -> Result<ClickAreas, String> {
-    let click_areas = if let CombatState::WaitForUserAction(_, ctxt, _) = &game.state {
+    let click_areas = if let CombatState::WaitForUserAction(_, ctxt) = &game.state {
         match ctxt {
             Some(InputContext::SelectedArea(p, objects, actions)) => 
                 draw_area_details(cvs, assets, focus_pos, viewport, *p, objects, actions)?,
@@ -39,7 +39,7 @@ fn draw_area_details(
     viewport: &Rect,
     pos: WorldPos,
     objects: &Vec<GameObject>,
-    actions: &Vec<Action>,
+    actions: &Vec<(Action, u8)>,
 ) -> Result<ClickAreas, String> {
     
     let mut txt = format!("You look at ({}, {}).", pos.0, pos.1);
@@ -77,7 +77,7 @@ fn draw_reaction_details(
     focus_pos: ScreenPos,
     viewport: &Rect,
     _o: &Opportunity,
-    actions: &Vec<Action>,
+    actions: &Vec<(Action, u8)>,
 ) -> Result<ClickAreas, String> {
     let txt = format!("This is a dummy description for a reaction opportunity");
 
@@ -87,7 +87,7 @@ fn draw_reaction_details(
 fn draw_dialog(
     cvs: &mut WindowCanvas,
     assets: &AssetRepo,
-    content: (String, &Vec<Action>),
+    content: (String, &Vec<(Action, u8)>),
     ScreenPos(focus_x, focus_y): ScreenPos,
     viewport: &Rect,
 ) -> Result<ClickAreas, String> {
@@ -124,7 +124,7 @@ fn draw_actions(
     assets: &AssetRepo,
     (x, y): (i32, i32),
     max_width: u32,
-    actions: &Vec<Action>,
+    actions: &Vec<(Action, u8)>,
 ) -> Result<ClickAreas, String> {
     let (mut button_x, mut button_y) = (x, y + 10);
     let mut line_height = 0;
@@ -170,12 +170,14 @@ fn draw_actions(
 // PRIVATE HELPER
 //
 
-fn display_text(action: &Action) -> String {
+fn display_text((action, delay): &(Action, u8)) -> String {
     match action {
-        Action::Wait(costs) => format!("Wait ({})", costs),
-        Action::MoveTo(costs, ..) => format!("Move Here ({})", costs),
-        Action::Attack(_, a) => format!("{} ({})", a.name.0, a.costs),
-        Action::Defence(_, _, _, d) => format!("{} ({})", d.name.0, d.costs),
-        Action::EndTurn(..) => format!("End Turn"),
+        Action::StartTurn() => "".to_string(),
+        Action::Wait(_) => format!("Wait ({})", delay),
+        Action::MoveTo(..) => format!("Move Here ({})", delay),
+        Action::Activate() => format!("Activate"),
+        Action::Attack(_, a) => format!("{} ({})", a.name.0, delay),
+        // Action::Defence(_, _, _, d) => format!("{} ({})", d.name.0, delay),
+        // Action::EndTurn(..) => format!("End Turn"),
     }
 }

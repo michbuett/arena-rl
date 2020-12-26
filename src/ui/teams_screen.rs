@@ -2,7 +2,7 @@ use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
 
-use crate::core::{GameObject, UserInput, WorldPos, Team, Armor, Attributes};
+use crate::core::{GameObject, UserInput, WorldPos, Team, Armor};
 use crate::ui::{AssetRepo, ClickArea, ClickAreas};
 
 pub fn render(

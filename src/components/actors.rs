@@ -1,7 +1,7 @@
 use specs::prelude::*;
 
 use crate::components::*;
-use crate::core::{Effect, GameObject};
+use crate::core::{Effect, GameObject, Action};
 
 pub fn insert_game_object_components(obj: GameObject, world: &World) {
     let (updater, positions, entities): (Read<LazyUpdate>, ReadStorage<Position>, Entities) =
@@ -82,7 +82,11 @@ fn get_sprites(obj: &GameObject) -> Option<Sprites> {
 
             for l in a.look().iter() {
                 sprites.push(map_sprite(l));
+            }
 
+            if let Some(pending_action) = &a.pending_action {
+                let (action, _) = pending_action.as_ref();
+                sprites.push(map_action_to_sprite(&action));
             }
 
             Some(Sprites(sprites))
@@ -98,18 +102,10 @@ fn map_sprite((s, num): &(&str, u16)) -> Sprite {
     // dbg!(s);
     match *s {
         "player" => from_tiles(5125 + num),
-        // "player" => Sprite {
-        //     texture: "tiles".to_string(),
-        //     region: (160, 2592, 32, 32),
-        //     offset: (0, -32),
-        // },
 
         "enemy" => from_tiles(3840 + num),
-        // "enemy" => Sprite {
-        //     texture: "tiles".to_string(),
-        //     region: (0 + offset_x, 1888 + offset_y, 32, 32),
-        //     offset: (0, -32),
-        // },
+
+        "tile" => from_tiles(*num),
 
         _ => Sprite {
             texture: s.to_string(),
@@ -119,10 +115,20 @@ fn map_sprite((s, num): &(&str, u16)) -> Sprite {
     }
 }
 
+fn map_action_to_sprite(a: &Action) -> Sprite {
+    // dbg!(s);
+    match a {
+        Action::MoveTo(_) => from_tiles(3641),
+        Action::Attack(..) => from_tiles(3620),
+        Action::Wait(..) => from_tiles(3638),
+        _ => from_tiles(3508),
+    }
+}
+
 fn get_txt(obj: &GameObject) -> Option<Text> {
     match obj {
         GameObject::Actor(a) => {
-            if a.has_effect(&Effect::Dying()) {
+            if a.is_dying() {
                 return Some(
                     Text::new("Dying\nbreaths...".to_string(), "normal")
                         .background(252, 134, 31, 200)
@@ -132,7 +138,7 @@ fn get_txt(obj: &GameObject) -> Option<Text> {
             }
 
             return Some(
-                Text::new(format!("{}/{}", a.energy(), a.num_wounds(),), "normal").offset(39, 95),
+                Text::new(format!("{}", a.num_wounds()), "normal").offset(39, 95),
             );
         }
 

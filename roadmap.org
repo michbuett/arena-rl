@@ -9,9 +9,9 @@
    - [X] turn based movement on map tiles
    - [X] add enemies and let them follow the player
    - [X] combat (with insuries, deaths, ...)
-   - [X] winning conditions
+   - [ ] winning conditions
    - [X] allow different major states (e.g. start screen, team selection, combat)
-   - [X] clean (dead) code
+   - [ ] clean (dead) code
    - [ ] implement start screen
    - [ ] implement (basic) team/player selection screen
 
