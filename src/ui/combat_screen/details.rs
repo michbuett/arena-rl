@@ -20,8 +20,8 @@ pub fn render(
             Some(InputContext::SelectedArea(p, objects, actions)) => 
                 draw_area_details(cvs, assets, focus_pos, viewport, *p, objects, actions)?,
 
-            Some(InputContext::Opportunity(o, actions)) => 
-                draw_reaction_details(cvs, assets, focus_pos, viewport, o, actions)?,
+            // Some(InputContext::Opportunity(o, actions)) => 
+            //     draw_reaction_details(cvs, assets, focus_pos, viewport, o, actions)?,
 
             _ => vec!(),
         }
@@ -71,18 +71,18 @@ fn draw_area_details(
     draw_dialog(cvs, assets, (txt, actions), focus_pos, viewport)
 }
 
-fn draw_reaction_details(
-    cvs: &mut WindowCanvas,
-    assets: &AssetRepo,
-    focus_pos: ScreenPos,
-    viewport: &Rect,
-    _o: &Opportunity,
-    actions: &Vec<(Action, u8)>,
-) -> Result<ClickAreas, String> {
-    let txt = format!("This is a dummy description for a reaction opportunity");
+// fn draw_reaction_details(
+//     cvs: &mut WindowCanvas,
+//     assets: &AssetRepo,
+//     focus_pos: ScreenPos,
+//     viewport: &Rect,
+//     _o: &Opportunity,
+//     actions: &Vec<(Action, u8)>,
+// ) -> Result<ClickAreas, String> {
+//     let txt = format!("This is a dummy description for a reaction opportunity");
 
-    draw_dialog(cvs, assets, (txt, actions), focus_pos, viewport)
-}
+//     draw_dialog(cvs, assets, (txt, actions), focus_pos, viewport)
+// }
 
 fn draw_dialog(
     cvs: &mut WindowCanvas,
@@ -172,12 +172,10 @@ fn draw_actions(
 
 fn display_text((action, delay): &(Action, u8)) -> String {
     match action {
-        Action::StartTurn() => "".to_string(),
         Action::Wait(_) => format!("Wait ({})", delay),
         Action::MoveTo(..) => format!("Move Here ({})", delay),
-        Action::Activate() => format!("Activate"),
-        Action::Attack(_, a) => format!("{} ({})", a.name.0, delay),
-        // Action::Defence(_, _, _, d) => format!("{} ({})", d.name.0, delay),
-        // Action::EndTurn(..) => format!("End Turn"),
+        Action::Activate(_) => format!("Activate"),
+        Action::MeleeAttack(_, a) => format!("{} ({})", a.name.0, delay),
+        _ => format!("Unnamed action: {:?}", action),
     }
 }

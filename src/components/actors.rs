@@ -1,7 +1,7 @@
 use specs::prelude::*;
 
 use crate::components::*;
-use crate::core::{Effect, GameObject, Action};
+use crate::core::{GameObject, Action};
 
 pub fn insert_game_object_components(obj: GameObject, world: &World) {
     let (updater, positions, entities): (Read<LazyUpdate>, ReadStorage<Position>, Entities) =
@@ -84,8 +84,10 @@ fn get_sprites(obj: &GameObject) -> Option<Sprites> {
                 sprites.push(map_sprite(l));
             }
 
-            if let Some(pending_action) = &a.pending_action {
-                let (action, _) = pending_action.as_ref();
+            if let Some((action, _)) = &a.pending_action {
+            // if let Some(pending_action) = &a.pending_action {
+                // let (action, _) = pending_action.as_ref();
+                // let (action, _) = pending_action;
                 sprites.push(map_action_to_sprite(&action));
             }
 
@@ -119,7 +121,7 @@ fn map_action_to_sprite(a: &Action) -> Sprite {
     // dbg!(s);
     match a {
         Action::MoveTo(_) => from_tiles(3641),
-        Action::Attack(..) => from_tiles(3620),
+        Action::MeleeAttack(..) => from_tiles(3620),
         Action::Wait(..) => from_tiles(3638),
         _ => from_tiles(3508),
     }

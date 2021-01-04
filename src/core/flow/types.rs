@@ -3,7 +3,7 @@ use std::time::Instant;
 use specs::prelude::*;
 
 use super::super::actors::GameObject;
-use crate::core::{Actor, Team, Action, Reaction, WorldPos, Opportunity};
+use crate::core::{Actor, Team, Action, WorldPos};
 
 #[derive(Debug)]
 pub enum UserInput {
@@ -20,7 +20,7 @@ pub enum UserInput {
 #[derive(Debug)]
 pub enum InputContext {
     SelectedArea(WorldPos, Vec<GameObject>, Vec<(Action, u8)>),
-    Opportunity(Opportunity, Vec<(Action, u8)>),
+    // Opportunity(Opportunity, Vec<(Action, u8)>),
 }
 
 pub enum Game<'a, 'b> {
@@ -38,6 +38,12 @@ pub struct CombatData<'a, 'b> {
     pub dispatcher: Dispatcher<'a, 'b>,
 }
 
+impl<'a, 'b> CombatData<'a, 'b> {
+    pub fn active_team(&self) -> Team {
+        self.teams.get(self.active_team_idx).unwrap().clone()
+    }
+}
+
 #[derive(Debug)]
 pub enum CombatState {
     Init(Vec<GameObject>),
@@ -47,7 +53,7 @@ pub enum CombatState {
     WaitUntil(Instant, Vec<EntityAction>),
     ResolveAction(EntityAction, Vec<EntityAction>),
     StartTurn(),
-    Win(Team),
+    // Win(Team),
 }
 
 pub type EntityAction = (Entity, Actor, Action, u8);

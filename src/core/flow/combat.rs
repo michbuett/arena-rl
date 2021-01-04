@@ -42,7 +42,7 @@ pub fn step<'a, 'b>(g: CombatData<'a, 'b>, i: &Option<UserInput>) -> CombatData<
     let (next_turn, next_active_team, next_state) =
         next_state(turn, &state, active_team_idx, &teams, i, &world);
 
-    dispatcher.dispatch(&mut world.res);
+    dispatcher.dispatch(&mut world);
     world.maintain();
 
     return CombatData {
@@ -119,7 +119,7 @@ fn handle_wait_for_user_action(
 
             let can_change_selected_area = match ctxt {
                 None | Some(InputContext::SelectedArea(..)) => true,
-                _ => false,
+                // _ => false,
             };
 
             if can_change_selected_area {
@@ -278,7 +278,7 @@ fn next_state<'a, 'b>(
             let active_team: &Team = teams.get(active_team_idx).unwrap();
             if let Some(ea) = next_ready_entity(w, active_team) {
                 let next_state =
-                    CombatState::ResolveAction((ea.0, ea.1, Action::Activate(), 0), vec![]);
+                    CombatState::ResolveAction((ea.0, ea.1, Action::Activate(ea.0), 0), vec![]);
 
                 (round, active_team_idx, Some(next_state))
             } else {
@@ -322,7 +322,7 @@ fn next_state<'a, 'b>(
         }
 
         CombatState::ResolveAction(entity_action, remaining_actions) => {
-            let (change, durr) = act(entity_action.clone());
+            let (change, durr) = act(entity_action.clone(), w);
 
             for c in change {
                 match c {
@@ -351,10 +351,10 @@ fn next_state<'a, 'b>(
 
         CombatState::WaitUntil(t, ol) => (round, active_team_idx, handle_wait_until(t, ol)),
 
-        CombatState::Win(_) => {
-            // ignore
-            (round, active_team_idx, None)
-        }
+        // CombatState::Win(_) => {
+        //     // ignore
+        //     (round, active_team_idx, None)
+        // }
     }
 }
 

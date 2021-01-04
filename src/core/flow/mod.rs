@@ -42,7 +42,7 @@ fn teams_step<'a, 'b>(i: &Option<UserInput>) -> Option<Game<'a, 'b>> {
 
             register(&mut world);
 
-            world.add_resource(map);
+            world.insert(map);
 
             Some(Game::Combat(init_combat_data(game_objects.clone(), world, dispatcher)))
         }

@@ -1,14 +1,14 @@
 use std::cmp::Ordering;
-use std::iter::FromIterator;
+use std::collections::{BinaryHeap, HashMap};
 use std::hash::{Hash, Hasher};
-use std::collections::{HashMap, BinaryHeap};
+use std::iter::FromIterator;
 
 use crate::core::model::*;
 
 #[derive(Debug, Clone, Copy)]
 pub enum TileType {
     Floor,
-    Void
+    Void,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -43,35 +43,65 @@ impl PartialEq for Tile {
 }
 
 impl Hash for Tile {
-    fn hash<H>(&self, state: &mut H) where H: Hasher {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
         self.0.hash(state);
         self.1.hash(state);
     }
 }
 
-impl Eq for Tile { }
+impl Eq for Tile {}
 
-#[derive(Debug)]
-pub struct Path(Vec<Tile>);
+pub type Path = Vec<Tile>;
 
-impl Path {
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
+// impl Path {
+//     pub fn len(&self) -> usize {
+//         self.0.len()
+//     }
 
-    pub fn take_step(mut self) -> Option<(Tile, Path)> {
-        if self.0.is_empty() {
-            return None
-        }
+//     // pub fn take_step(mut self) -> Option<(Tile, Path)> {
+//     //     if self.0.is_empty() {
+//     //         return None;
+//     //     }
 
-        let t = self.0.remove(0);
-        Some((t, self))
-    }
+//     //     let t = self.0.remove(0);
+//     //     Some((t, self))
+//     // }
 
-    // pub fn iter(&self) -> std::slice::Iter<Tile> {
-    //     self.0.iter()
-    // }
-}
+//     pub fn iter(&self) -> std::slice::Iter<Tile> {
+//          self.0.iter()
+//     }
+// }
+
+// impl Iterator for Path {
+//     type Item = Tile;
+
+//     fn next(&mut self) -> Option<Tile> {
+//         if self.0.is_empty() {
+//             return None;
+//         }
+
+//         Some(self.0.remove(0))
+//     }
+// }
+
+// #[derive(Debug)]
+// pub struct PathIter(Vec<Tile>);
+
+
+// impl Iterator for PathIter {
+//     type Item = Tile;
+
+//     fn next(&mut self) -> Option<Tile> {
+//         if self.0.is_empty() {
+//             return None;
+//         }
+
+//         Some(self.0.remove(0))
+//     }
+// }
 
 #[derive(Default)]
 pub struct Map(Vec<Vec<TileType>>);
@@ -95,7 +125,7 @@ impl Map {
 
             if i >= 0 && i < cols.len() as i32 {
                 let tt = cols[i as usize].clone();
-                return Some(Tile(i as u32, j as u32, tt))
+                return Some(Tile(i as u32, j as u32, tt));
             }
         }
 
@@ -103,16 +133,27 @@ impl Map {
     }
 
     pub fn tiles(&self) -> TileIter {
-        TileIter { map: self, cur_col: 0, cur_row: 0 }
+        TileIter {
+            map: self,
+            cur_col: 0,
+            cur_row: 0,
+        }
     }
-
 
     pub fn neighbors<'a>(
         &'a self,
         tile: Tile,
-        obstacles: &'a HashMap<Tile, Obstacle>
-) -> NeighborTileIter<'a> {
-        NeighborTileIter { map: self, center: tile, step: 0, obstacles: obstacles }
+        obstacles: &'a HashMap<Tile, Obstacle>,
+    ) -> NeighborTileIter<'a> {
+        NeighborTileIter {
+            map: self,
+            center: WorldPos(tile.column() as f32, tile.row() as f32),
+            step: 0,
+            obstacles: obstacles,
+            candiates: NEIGHBOR_CANDIDATES.to_vec(),
+            // min_distance: 1,
+            // max_distance: 1,
+        }
     }
 
     pub fn find_path(
@@ -136,6 +177,33 @@ impl Map {
 
         None
     }
+
+    // pub fn find_path_neighborhood(
+    //     &self,
+    //     from: WorldPos,
+    //     to: WorldPos,
+    //     min_distance: u8,
+    //     max_distance: u8,
+    //     obstacles: &HashMap<Tile, Obstacle>,
+    // ) -> Option<Path> {
+    //     let neighbors = NeighborTileIter::new(self, to, obstacles);
+    //     // let neighbors = NeighborTileIter::new(self, to, obstacles, min_distance, max_distance);
+    //     let mut result = None;
+    //     let mut length = usize::MAX;
+        
+    //     for n in neighbors {
+    //         let n_pos = WorldPos(n.column() as f32, n.row() as f32);
+    //         let p = self.find_path(from, n_pos, obstacles);
+    //         if let Some(p) = p {
+    //             if p.len() < length {
+    //                 length = p.len();
+    //                 result = Some(p);
+    //             }
+    //         }
+    //     }
+
+    //     result
+    // }
 }
 
 pub enum Obstacle {
@@ -161,11 +229,11 @@ impl<'a> Iterator for TileIter<'a> {
             if self.cur_col < cols.len() {
                 let tt = cols[self.cur_col].clone();
                 self.cur_col = self.cur_col + 1;
-                return Some(Tile(self.cur_col as u32, self.cur_row as u32, tt))
+                return Some(Tile(self.cur_col as u32, self.cur_row as u32, tt));
             } else {
                 self.cur_row = self.cur_row + 1;
                 self.cur_col = 0;
-                return self.next()
+                return self.next();
             }
         }
 
@@ -174,30 +242,49 @@ impl<'a> Iterator for TileIter<'a> {
 }
 
 const NEIGHBOR_CANDIDATES: [(i8, i8); 8] = [
-    (-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)
+    (-1, -1),
+    (0, -1),
+    (1, -1),
+    (-1, 0),
+    (1, 0),
+    (-1, 1),
+    (0, 1),
+    (1, 1),
 ];
 
 pub struct NeighborTileIter<'a> {
     map: &'a Map,
-    center: Tile,
-    step: u8,
-    obstacles: &'a HashMap::<Tile, Obstacle>,
+    center: WorldPos,
+    step: usize,
+    obstacles: &'a HashMap<Tile, Obstacle>,
+    candiates: Vec<(i8, i8)>,
+    // min_distance: u8,
+    // max_distance: u8,
+}
+
+impl<'a> NeighborTileIter<'a> {
+    // fn new(map: &'a Map, center: WorldPos, obstacles: &'a HashMap<Tile, Obstacle>,
+    //     // min_distance: u8,
+    //     // max_distance: u8,
+    // ) -> Self {
+    //     let step = 0;
+    //     let candiates = NEIGHBOR_CANDIDATES.to_vec();
+
+    //     Self { map, center, step, obstacles, candiates, }
+    //     // Self { map, center, step, obstacles, candiates, min_distance, max_distance }
+    // }
 }
 
 impl<'a> Iterator for NeighborTileIter<'a> {
     type Item = Tile;
 
     fn next(&mut self) -> Option<Tile> {
-        while self.step < 8 {
+        while self.step < self.candiates.len() {
             self.step += 1;
 
-            let (dc, dr) = NEIGHBOR_CANDIDATES[self.step as usize - 1];
-            let c = self.center;
-            let p = WorldPos (
-                c.column() as f32 + dc as f32,
-                c.row() as f32 + dr as f32,
-            );
-
+            let (dx, dy) = self.candiates[self.step - 1];
+            let WorldPos(x, y) = self.center;
+            let p = WorldPos(x + dx as f32, y + dy as f32);
 
             if let Some(t) = self.map.find_tile(p) {
                 if let TileType::Void = t.tile_type() {
@@ -210,7 +297,7 @@ impl<'a> Iterator for NeighborTileIter<'a> {
                     continue;
                 }
 
-                return Some(t)
+                return Some(t);
             }
         }
 
@@ -218,28 +305,51 @@ impl<'a> Iterator for NeighborTileIter<'a> {
     }
 }
 
+// #[test]
+// pub fn it_can_find_a_path_into_neigborhood() {
+//     let m = Map(vec![
+//         row(vec![1, 0, 1, 1, 1]),
+//         row(vec![1, 0, 1, 1, 1]),
+//         row(vec![1, 1, 1, 1, 1]),
+//     ]);
+     
+//     let from = WorldPos(0.0, 0.0);
+//     let to = WorldPos(3.0, 1.0);
+//     let p = m.find_path_neighborhood(from, to, 1, 1, &HashMap::new()).unwrap();
+
+//     // assert!(p.is_some());
+//     assert_eq!(p.len(), 3);
+//     let mut p = p.iter();
+//     assert_eq!(p.next(), Some(&Tile(0, 1, TileType::Floor)));
+//     assert_eq!(p.next(), Some(&Tile(1, 2, TileType::Floor)));
+//     assert_eq!(p.next(), Some(&Tile(2, 1, TileType::Floor)));
+// }
 
 pub fn dummy() -> Map {
-    Map(vec!(
-        row([0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]),
-        row([0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0]),
-        row([0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]),
-        row([0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]),
-        row([0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]),
-        row([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
-        row([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
-        row([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
-        row([0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]),
-        row([0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]),
-        row([0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]),
-        row([0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0]),
-        row([0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]),
-    ))
+    Map(vec![
+        row(vec![0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]),
+        row(vec![0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0]),
+        row(vec![0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]),
+        row(vec![0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]),
+        row(vec![0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]),
+        row(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
+        row(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
+        row(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
+        row(vec![0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]),
+        row(vec![0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]),
+        row(vec![0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]),
+        row(vec![0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0]),
+        row(vec![0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]),
+    ])
 }
 
-fn row(row_tiles: [u8; 13]) -> Vec<TileType> {
+fn row(row_tiles: Vec<u8>) -> Vec<TileType> {
     Vec::from_iter(row_tiles.iter().map(|&i| {
-        if i > 0 { TileType::Floor } else { TileType::Void }
+        if i > 0 {
+            TileType::Floor
+        } else {
+            TileType::Void
+        }
     }))
 }
 
@@ -251,12 +361,12 @@ impl PartialEq for Node {
     }
 }
 
-impl Eq for Node { }
+impl Eq for Node {}
 
 impl Ord for Node {
     fn cmp(&self, other: &Self) -> Ordering {
         if self.0 == other.0 {
-            return Ordering::Equal
+            return Ordering::Equal;
         }
 
         match self.1 > other.1 {
@@ -272,12 +382,11 @@ impl PartialOrd for Node {
     }
 }
 
-
 fn find_path_astar(
     m: &Map,
     start: Tile,
     goal: Tile,
-    obstacles: &HashMap::<Tile, Obstacle>
+    obstacles: &HashMap<Tile, Obstacle>,
 ) -> Option<Path> {
     let start_node = Node(start, 0.0);
     let mut costs_so_far: HashMap<Tile, (f32, Vec<Tile>)> = HashMap::new();
@@ -293,7 +402,7 @@ fn find_path_astar(
         if tile == goal {
             // the current candidat is the goal tile
             // -> return result
-            return Some(Path(path.clone()))
+            return Some(path.clone());
         } else {
             // the current candidate is not the goal
             // -> ... and look its at its neighbors
@@ -318,14 +427,13 @@ fn find_path_astar(
     None
 }
 
-
 fn find_path_straight(
     m: &Map,
     start: Tile,
     goal: Tile,
-    obstacles: &HashMap::<Tile, Obstacle>
+    obstacles: &HashMap<Tile, Obstacle>,
 ) -> Option<Path> {
-    let mut p = Vec::new();
+    let mut p = Path::new();
     let d = start.distance(&goal).floor() as i32;
 
     // let WorldPos(xs, ys) = start.to_world_pos();
@@ -343,21 +451,20 @@ fn find_path_straight(
 
         if let Some(next_tile) = m.find_tile(next_pos) {
             if let Tile(_, _, TileType::Void) = next_tile {
-                return None
+                return None;
             }
 
             if obstacles.get(&next_tile).is_some() {
-                return None
-
+                return None;
             } else {
                 p.push(next_tile);
             }
         } else {
-            return None
+            return None;
         }
     }
 
-    Some(Path(p))
+    Some(p)
 }
 
 const DP: f32 = 1.0; // distance for perpendicular (non-diaginal) steps
@@ -369,12 +476,13 @@ const DD: f32 = 1.0; // distance for diaginal steps; sqrt(2)
 fn distance(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
     let dx = (x1.floor() - x2.floor()).abs();
     let dy = (y1.floor() - y2.floor()).abs();
-    (DP * (dx + dy) + (DD - 2.0 * DP) * f32::min(dx, dy))
+
+    DP * (dx + dy) + (DD - 2.0 * DP) * f32::min(dx, dy)
 }
 
 fn costs(t: &Tile, obstacles: &HashMap<Tile, Obstacle>) -> f32 {
     if let Some(Obstacle::Impediment(i)) = obstacles.get(t) {
-        return *i
+        return *i;
     }
     1.0
 }

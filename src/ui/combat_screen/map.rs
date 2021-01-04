@@ -35,7 +35,7 @@ pub fn render(
 
     render_map(cvs, scroll_offset, focus_pos, assets, &map)?;
     render_character(cvs, scroll_offset, &pos, &sprites, &texts, assets)?;
-
+        
     cvs.set_viewport(None);
 
     Ok(vec!(ClickArea {

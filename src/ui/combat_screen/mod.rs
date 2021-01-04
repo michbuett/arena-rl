@@ -29,7 +29,9 @@ pub fn render(
     };
 
     render_screen_texts(cvs, assets, viewport, game)?;
+    let mut button_clicks = render_next_turn_btn(cvs, assets, viewport, game)?;
 
+    click_areas.append(&mut button_clicks);
     click_areas.append(&mut map_clicks);
     
     Ok(click_areas)
@@ -38,7 +40,7 @@ pub fn render(
 fn render_screen_texts(
     cvs: &mut WindowCanvas,
     assets: &AssetRepo,
-    viewport: &Rect,
+    _viewport: &Rect,
     game: &CombatData,
 ) -> Result<(), String> {
     assets
@@ -49,29 +51,55 @@ fn render_screen_texts(
         .prepare()
         .draw(cvs, (10, 10))?;
 
-    if let CombatState::Win(Team(_, num, ..)) = game.state {
-        let text = assets
-            .font("very big")?
-            .text(format!("Team #{} wins!", num))
-            .padding(50)
-            .background(Color::RGBA(252, 251, 250, 150))
-            .prepare();
+    // if let CombatState::Win(Team(_, num, ..)) = game.state {
+    //     let text = assets
+    //         .font("very big")?
+    //         .text(format!("Team #{} wins!", num))
+    //         .padding(50)
+    //         .background(Color::RGBA(252, 251, 250, 150))
+    //         .prepare();
 
-        let (w, h) = text.dimension();
-        let x = (viewport.width() - w) / 2;
-        let y = (viewport.height() - h) / 2;
+    //     let (w, h) = text.dimension();
+    //     let x = (viewport.width() - w) / 2;
+    //     let y = (viewport.height() - h) / 2;
 
-        text.draw(cvs, (x as i32, y as i32))?;
-    }
+    //     text.draw(cvs, (x as i32, y as i32))?;
+    // }
 
     Ok(())
+}
+
+fn render_next_turn_btn(
+    cvs: &mut WindowCanvas,
+    assets: &AssetRepo,
+    viewport: &Rect,
+    game: &CombatData,
+) -> Result<ClickAreas, String> {
+    let txt_box = &assets.font("normal")?
+        .text("Next Turn".to_string())
+        .padding(10)
+        .border(3, Color::RGB(23, 22, 21))
+        .background(Color::RGB(252, 251, 250))
+        .prepare();
+
+    let (w, h) = txt_box.dimension();
+    let x = viewport.width() as i32 - w as i32 - 10;
+    let y = viewport.height() as i32 - h as i32 - 10;
+    let active_team: Team = game.active_team();
+
+    txt_box.draw(cvs, (x, y))?;
+
+    Ok(vec![ClickArea {
+        clipping_area: Rect::new(x, y, w, h),
+        action: Box::new(move |_| UserInput::SelectAction(Action::end_turn(active_team.clone())))
+    }])
 }
 
 fn get_focus_pos<'a>(game_state: &CombatState) -> Option<WorldPos> {
     match game_state {
         CombatState::WaitForUserAction(_, Some(InputContext::SelectedArea(p, _, _))) => Some(*p),
 
-        CombatState::WaitForUserAction((_, a), Some(InputContext::Opportunity(..))) => Some(a.pos),
+        // CombatState::WaitForUserAction((_, a), Some(InputContext::Opportunity(..))) => Some(a.pos),
 
         _ => None,
     }

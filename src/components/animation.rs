@@ -34,11 +34,11 @@ pub struct MovementAnimation {
 //     }
 // }
 
-#[derive(Debug)]
-pub enum Easing {
-    Linear,
-    BounceBack,
-}
+// #[derive(Debug)]
+// pub enum Easing {
+//     Linear,
+//     BounceBack,
+// }
 
 pub struct Animation;
 

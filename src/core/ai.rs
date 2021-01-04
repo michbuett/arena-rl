@@ -1,7 +1,5 @@
 mod primitives;
 
-use std::cmp::Ordering;
-
 use specs::prelude::*;
 
 use crate::components::*;
@@ -12,44 +10,22 @@ pub fn action(e: &(Entity, Actor), w: &World) -> (Action, u8) {
     zombi_action(&e, w)
 }
 
-// pub fn reaction(e: &(Entity, Actor), o: Opportunity) -> Vec<Action> {
-//     match o {
-//         Opportunity::IncommingAttack(attacker, attack) => {
-//             // e.1.defences(&attack)
-//             //     .iter()
-//             //     .map(|d| Action::defence(attacker.clone(), e.clone(), attack.clone(), d.clone()))
-//             //     .collect()
-//             vec![]
-//         }
-//     }
-// }
-
 fn zombi_action((_, a): &(Entity, Actor), w: &World) -> (Action, u8) {
     let (entities, game_objects, map): (Entities, ReadStorage<GameObjectCmp>, Read<Map>) =
         w.system_data();
 
-    // let ActorCmp(actor) = actors.get(e).unwrap();
-    let pos = a.pos;
-    let mut enemies = find_enemies(a, &entities, &game_objects);
-    enemies.sort_by(|(_, a1), (_, a2)| {
-        let d1 = WorldPos::distance(&pos, &a1.pos);
-        let d2 = WorldPos::distance(&pos, &a2.pos);
-
-        if d1 <= d2 {
-            Ordering::Less
-        } else {
-            Ordering::Greater
-        }
-    });
-
-    for (te, ta) in enemies {
-        let movement = can_move_towards(a, &ta, &map, &game_objects);
-        if let Some((cost, tile)) = movement {
-            return Action::move_to(tile);
+    for (te, ta) in find_enemies(a, &entities, &game_objects) {
+        if let Some(attack) = can_attack_melee(a, &ta) {
+            return Action::melee_attack(te, attack);
         }
 
-        if let Some(attack) = can_attack(a, &ta) {
-            return Action::attack((te, ta), attack);
+        if a.can_move() {
+            if let Some(path) = can_move_towards(a, &ta, &map, &game_objects) {
+                let tile = path.iter().take(a.move_distance().into()).last();
+                if let Some(tile) = tile {
+                    return Action::move_to(tile.clone());
+                }
+            }
         }
     }
 
@@ -57,26 +33,36 @@ fn zombi_action((_, a): &(Entity, Actor), w: &World) -> (Action, u8) {
 }
 
 pub fn actions_at(
-    (_, actor): &(Entity, Actor),
+    (entity, actor): &(Entity, Actor),
     selected_pos: WorldPos,
     world: &World,
 ) -> Vec<(Action, u8)> {
     let (map, objects): (Read<Map>, ReadStorage<GameObjectCmp>) = world.system_data();
 
     let p = actor.pos;
-    let mut result = vec![Action::wait(2)];
+    let mut result = vec![];
 
-    if let Some(target_tile) = map.find_tile(selected_pos) {
-        if let Some(enemy) = find_enemy_at(world, &selected_pos, &actor.team) {
-            for attack in actor.attacks(&enemy.1) {
-                result.push(Action::attack(enemy.clone(), attack));
+    if let Some((other_entity, other_actor)) = find_actor_at(world, &selected_pos) {
+        if entity.id() == other_entity.id() {
+            result.push(Action::recover());
+        } else {
+            if actor.team == other_actor.team {
+                result.push(Action::activate(other_entity));
+            } else {
+                for attack in actor.attacks(&other_actor) {
+                    result.push(Action::melee_attack(other_entity.clone(), attack));
+                }
             }
         }
+    }
 
-        let obstacles = find_all_obstacles(&map, &objects);
-        if let Some(path) = map.find_path(p, selected_pos, &obstacles) {
-            if path.len() <= 2 && actor.can_move() {
-                result.push(Action::move_to(target_tile));
+    if let Some(target_tile) = map.find_tile(selected_pos) {
+        if actor.can_move() {
+            let obstacles = find_all_obstacles(&map, &objects);
+            if let Some(path) = map.find_path(p, selected_pos, &obstacles) {
+                if path.len() <= actor.move_distance().into() {
+                    result.push(Action::move_to(target_tile));
+                }
             }
         }
     }

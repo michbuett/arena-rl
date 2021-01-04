@@ -2,7 +2,7 @@ use std::cmp::max;
 use super::dice::*;
 use crate::core::{Action, DisplayStr, WorldPos, Tile};
 
-const STAT_AVERAGE: u8 = 4;
+// const STAT_AVERAGE: u8 = 4;
 
 /// Anything that exists in the world
 #[derive(Debug, Clone)]
@@ -164,7 +164,7 @@ pub struct Actor {
     effects: Vec<Effect>,
     traits: Vec<Trait>,
     wields: Weapon,
-    attacks: Vec<AttackOption>,
+    pub attacks: Vec<AttackOption>,
     defences: Vec<DefenceOption>,
     armor: Armor,
     // activations: Vec<Activation>,
@@ -174,7 +174,8 @@ pub struct Actor {
     pub active: bool,
     pub team: Team,
     pub pos: WorldPos,
-    pub pending_action: Option<Box<(Action, u8)>>,
+    pub pending_action: Option<(Action, u8)>,
+    // pub pending_action: Option<Box<(Action, u8)>>,
     pub behaviour: Option<AiBehaviour>,
 }
 
@@ -193,7 +194,11 @@ impl Actor {
     pub fn can_move(&self) -> bool {
         self.quick_action_available
     }
-    
+
+    pub fn move_distance(&self) -> u8 {
+        2
+    }
+
     pub fn is_pc(&self) -> bool {
         self.behaviour.is_none()
     }
@@ -205,16 +210,25 @@ impl Actor {
         }
     }
 
+    pub fn deactivate(self) -> Self {
+        Self {
+            active: false,
+            ..self
+        }
+    }
+
     pub fn prepare(self, action: (Action, u8)) -> Actor {
         Actor {
-            pending_action: Some(Box::new(action)),
+            pending_action: Some(action),
+            // pending_action: Some(Box::new(action)),
             quick_action_available: false,
             active: false,
             ..self
         }
     }
 
-    pub fn start_next_turn(self) -> (Actor, Option<Box<(Action, u8)>>) {
+    pub fn start_next_turn(self) -> (Actor, Option<(Action, u8)>) {
+    // pub fn start_next_turn(self) -> (Actor, Option<Box<(Action, u8)>>) {
         let pending_action = self.pending_action;
         let next_turn_actor = Self {
             pending_action: None,
@@ -418,7 +432,7 @@ pub struct AttackOption {
     pub dice: u8,
     pub damage: u8,
     pub costs: u8,
-    distance: (f32, f32), // (min, max)
+    pub distance: (f32, f32), // (min, max)
 }
 
 impl AttackOption {
@@ -431,7 +445,7 @@ impl AttackOption {
     //     }
     // }
 
-    fn into_attack2(self, a: &Actor) -> Attack2 {
+    fn into_attack2(self, _a: &Actor) -> Attack2 {
         Attack2 {
             to_hit: 3,
             to_wound: 3,
@@ -452,15 +466,15 @@ pub struct DefenceOption {
     costs: u8,
 }
 
-impl DefenceOption {
-    pub fn into_defence(self) -> Defence {
-        Defence {
-            name: self.name,
-            roll: Roll::new(self.dice, Dice::new(4)),
-            costs: self.costs,
-        }
-    }
-}
+// impl DefenceOption {
+//     pub fn into_defence(self) -> Defence {
+//         Defence {
+//             name: self.name,
+//             roll: Roll::new(self.dice, Dice::new(4)),
+//             costs: self.costs,
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub struct Defence {
@@ -493,10 +507,10 @@ pub enum Effect {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Attribute {
     Wound,
-    ToHit,
-    ToWound,
-    Defence,
-    Protection,
+    // ToHit,
+    // ToWound,
+    // Defence,
+    // Protection,
 }
 
 #[derive(Debug, Clone)]
@@ -530,22 +544,29 @@ pub enum Condition {
     Dead(WorldPos, Item),
 }
 
-pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> CombatResult {
+pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> (CombatResult, Vec<String>) {
     let attack = attack.into_attack2(&attacker);
     let to_hit_result = D6::roll().result(target.defence() - attack.to_hit);
+    let mut log = vec!(format!("{} attacks {}", attacker.name, target.name));
 
     match to_hit_result {
-        RR::CritFail | RR::Fail => CombatResult::Miss(target),
+        RR::CritFail | RR::Fail => {
+            log.push(format!("{} misses", attacker.name));
+                
+            (CombatResult::Miss(target), log)
+        }
 
         RR::SuccessBut | RR::Success | RR::CritSuccess => {
             let to_wound_result = D6::roll().result(target.protection() - attack.to_wound);
 
+            log.push(format!("{} hits", attacker.name));
+
             match to_wound_result {
                 RR::CritFail | RR::Fail =>
-                    CombatResult::Block(),
+                    (CombatResult::Block(), log),
 
                 RR::SuccessBut | RR::Success | RR::CritSuccess =>
-                    CombatResult::Hit(target.wound(Wound::from_roll(&to_wound_result))),
+                    (CombatResult::Hit(target.wound(Wound::from_roll(&to_wound_result))), log),
             }
         }
     }

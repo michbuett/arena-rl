@@ -1,11 +1,11 @@
-use std::collections::HashMap;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
 use specs::prelude::*;
 
+use super::super::actors::*;
 use crate::components::*;
 use crate::core::*;
-use super::super::actors::*;
 
 pub fn find_all_obstacles(
     map: &Read<Map>,
@@ -37,9 +37,7 @@ pub fn find_enemies(
     entities: &Entities,
     objects: &ReadStorage<GameObjectCmp>,
 ) -> Vec<(Entity, Actor)> {
-
     let mut result: Vec<(Entity, Actor)> = Vec::new();
-    // let Position(p) = positions.get(e).unwrap();
 
     for (te, GameObjectCmp(obj)) in (entities, objects).join() {
         if let GameObject::Actor(ta) = obj {
@@ -49,17 +47,28 @@ pub fn find_enemies(
         }
     }
 
+    result.sort_by(|(_, a1), (_, a2)| {
+        let d1 = WorldPos::distance(&actor.pos, &a1.pos);
+        let d2 = WorldPos::distance(&actor.pos, &a2.pos);
+
+        if d1 <= d2 {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        }
+    });
+
     result
 }
 
-pub fn find_enemy_at(w: &World, at: &WorldPos, team: &Team) -> Option<(Entity, Actor)> {
+pub fn find_actor_at(w: &World, at: &WorldPos) -> Option<(Entity, Actor)> {
     let (entities, objects): (Entities, ReadStorage<GameObjectCmp>) = w.system_data();
 
     for (e, GameObjectCmp(o)) in (&entities, &objects).join() {
         if let GameObject::Actor(a) = o {
             let WorldPos(x, y) = a.pos;
 
-            if x.floor() == at.0.floor() && y.floor() == at.1.floor() && &a.team != team {
+            if x.floor() == at.0.floor() && y.floor() == at.1.floor() {
                 return Some((e, a.clone()));
             }
         }
@@ -72,46 +81,71 @@ pub fn can_move_towards(
     target: &Actor,
     map: &Read<Map>,
     objects: &ReadStorage<GameObjectCmp>,
-) -> Option<(u8, Tile)> {
+) -> Option<Path> {
     if !actor.can_move() {
-        return None
+        return None;
     }
 
     let st = map.find_tile(actor.pos);
     let tt = map.find_tile(target.pos);
 
     if let (Some(source_tile), Some(target_tile)) = (st, tt) {
-        let distance = source_tile.distance(&target_tile);
-        if distance <= 1.0 {
-            // entity is already next to the target
-            return None
-        }
-
-        let obstacles = find_all_obstacles(&map, &objects);
-        let mut neighbors: Vec<Tile> = map.neighbors(target_tile, &obstacles).collect();
-
-        neighbors.sort_by(|t1, t2| {
-            let d1 = source_tile.distance(&t1);
-            let d2 = source_tile.distance(&t2);
-            if d1 <= d2 { Ordering::Less } else { Ordering::Greater }
-        });
-
-        for n in neighbors {
-            let result = map
-                .find_path(source_tile.to_world_pos(), n.to_world_pos(), &obstacles)
-                .and_then(|p| p.take_step());
-
-            if let Some((t, _)) = result {
-                return Some((1, t))
-            }
-        }
+        find_path_next_to_tile(&source_tile, &target_tile, map, objects)
+    } else {
+        None
     }
-
-    None
 }
 
+pub fn find_path_next_to_tile(
+    source_tile: &Tile,
+    target_tile: &Tile,
+    map: &Read<Map>,
+    objects: &ReadStorage<GameObjectCmp>,
+) -> Option<Path> {
+    let distance = source_tile.distance(&target_tile);
+    if distance <= 1.0 {
+        // entity is already next to the target
+        return None;
+    }
 
-pub fn can_attack(actor: &Actor, target: &Actor) -> Option<AttackOption> {
+    let mut obstacles = find_all_obstacles(&map, &objects);
+    if obstacles.contains_key(&target_tile) {
+        // ignore obstacles at target since we only want to move next to it
+        obstacles.remove(&target_tile);
+    }
+
+    map.find_path(
+        source_tile.to_world_pos(),
+        target_tile.to_world_pos(),
+        &obstacles,
+    )
+    .map(|p| p.iter().take(p.len() - 1).cloned().collect())
+}
+
+// pub fn find_attack_options(
+//     attacker: &Actor,
+//     target: &Actor,
+//     map: &Read<Map>,
+//     objects: &ReadStorage<GameObjectCmp>,
+// ) -> Vec<AttackOption> {
+//     let distance = WorldPos::distance(&attacker.pos, &target.pos);
+//     let source_tile = map.find_tile(attacker.pos).unwrap();
+//     let _target_tile = map.find_tile(target.pos).unwrap();
+
+//     for a in attacker.attacks.iter() {}
+
+//     attacker
+//         .attacks
+//         .iter()
+//         .filter(|o| o.distance.0 <= distance && distance <= o.distance.1)
+//         .cloned()
+//         .collect()
+
+//     // result
+// }
+
+pub fn can_attack_melee(actor: &Actor, target: &Actor) -> Option<AttackOption> {
+    // find_attack_options(actor, target).iter().cloned().next()
     actor.attacks(target).iter().cloned().next()
 }
 // fn flatten<T>(oot: Option<Option<T>>) -> Option<T> {

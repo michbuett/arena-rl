@@ -2,7 +2,8 @@ use std::string::ToString;
 
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
-use sdl2::render::{BlendMode, Texture, TextureCreator, WindowCanvas};
+use sdl2::render::{Texture, TextureCreator, WindowCanvas};
+// use sdl2::render::{BlendMode, Texture, TextureCreator, WindowCanvas};
 use sdl2::surface::Surface;
 use sdl2::ttf::Font as Sdl2Font;
 

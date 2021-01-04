@@ -6,10 +6,10 @@ use rand::prelude::*;
 pub struct D6(pub u8);
 
 impl D6 {
-    pub fn new(x: u8) -> Self {
-        assert!(1 <= x && x <= 6);
-        Self(x)
-    }
+    // pub fn new(x: u8) -> Self {
+    //     assert!(1 <= x && x <= 6);
+    //     Self(x)
+    // }
 
     pub fn roll() -> Self {
         let range = rand::distributions::Uniform::from(1..=6);
@@ -25,7 +25,6 @@ impl D6 {
         let result = SUCCESS_TABLE[d_idx][r_idx];
 
         // println!("Roll {}, difficulty: {}, result: {:?}", self.0, difficulty, result);
-
         result
     }
 }
@@ -66,26 +65,26 @@ pub struct Roll {
 }
 
 impl Roll {
-    pub fn new(dice: u8, threshold: Dice) -> Self {
-        let range = rand::distributions::Uniform::from(1..=6);
-        let mut rng = rand::thread_rng();
-        let mut dices: Vec<Dice> = Vec::new();
-        let mut successes = 0;
+    // pub fn new(dice: u8, threshold: Dice) -> Self {
+    //     let range = rand::distributions::Uniform::from(1..=6);
+    //     let mut rng = rand::thread_rng();
+    //     let mut dices: Vec<Dice> = Vec::new();
+    //     let mut successes = 0;
 
-        for _ in 1..=dice {
-            let d = Dice::new(rng.sample(range));
+    //     for _ in 1..=dice {
+    //         let d = Dice::new(rng.sample(range));
 
-            if d >= threshold {
-                successes += 1;
-            }
+    //         if d >= threshold {
+    //             successes += 1;
+    //         }
 
-            dices.push(d);
-        }
+    //         dices.push(d);
+    //     }
 
-        Self { dices, threshold, successes }
-    }
+    //     Self { dices, threshold, successes }
+    // }
 
-    pub fn total(&self) -> u32 {
-        self.dices.iter().map(|Dice(d)| *d as u32).sum()
-    }
+    // pub fn total(&self) -> u32 {
+    //     self.dices.iter().map(|Dice(d)| *d as u32).sum()
+    // }
 }

@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 rand = "0.7"
 shred = "0.9"
-specs = "0.14"
+specs = "0.16.1"
 specs-derive = "0.4"
 
 [dependencies.sdl2]
