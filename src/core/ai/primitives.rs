@@ -7,29 +7,22 @@ use super::super::actors::*;
 use crate::components::*;
 use crate::core::*;
 
-pub fn find_all_obstacles(
-    map: &Read<Map>,
-    objects: &ReadStorage<GameObjectCmp>,
-) -> HashMap<Tile, Obstacle> {
+pub fn find_movement_obstacles(objects: &ReadStorage<GameObjectCmp>) -> ObstacleSet {
     let mut obstacles = HashMap::new();
 
     for GameObjectCmp(obj) in objects.join() {
         match obj {
             GameObject::Actor(a) => {
-                if let Some(t) = map.find_tile(a.pos) {
-                    obstacles.insert(t, Obstacle::Inaccessible());
-                }
+                obstacles.insert(MapPos::from_world_pos(a.pos), Obstacle::Inaccessible());
             }
 
-            GameObject::Item(pos, _item) => {
-                if let Some(t) = map.find_tile(*pos) {
-                    obstacles.insert(t, Obstacle::Impediment(1.5));
-                }
+            GameObject::Item(pos, _) => {
+                obstacles.insert(MapPos::from_world_pos(*pos), Obstacle::Impediment(1.5));
             }
         }
     }
 
-    obstacles
+    ObstacleSet(obstacles)
 }
 
 pub fn find_enemies(
@@ -73,6 +66,63 @@ pub fn find_actor_at(w: &World, at: &WorldPos) -> Option<(Entity, Actor)> {
             }
         }
     }
+
+    None
+}
+
+pub fn can_attack_melee(
+    actor: &Actor,
+    target: &Actor,
+    map: &Read<Map>,
+    objects: &ReadStorage<GameObjectCmp>,
+) -> Option<AttackOption> {
+    let attack = actor.melee_attack();
+    let from = MapPos::from_world_pos(actor.pos);
+    let to = MapPos::from_world_pos(target.pos);
+    let d = from.distance(to);
+
+    if d == 1 {
+        return Some(attack);
+    }  else if d <= attack.reach.into() {
+        let obstacles = find_movement_obstacles(&objects).ignore(to);
+        if let Some(_) = map.find_straight_path(from, to, &obstacles) {
+            return Some(attack);
+        }
+    }
+
+    
+    // let from = MapPos::from_world_pos(actor.pos);
+    // let to = MapPos::from_world_pos(target.pos);
+    // let obstacles = find_movement_obstacles(&objects).ignore(to);
+    // if let Some(path) = map.find_straight_path(from, to, &obstacles) {
+    //     if path.len() < actor.melee_attack().reach.into() {
+    //         return Some(actor.melee_attack());
+    //     }
+    // }
+
+    None
+}
+
+pub fn can_charge(
+    actor: &Actor,
+    target: &Actor,
+    map: &Read<Map>,
+    objects: &ReadStorage<GameObjectCmp>,
+) -> Option<AttackOption> {
+    let attack = actor.melee_attack();
+    let from = MapPos::from_world_pos(actor.pos);
+    let to = MapPos::from_world_pos(target.pos);
+    let d = from.distance(to);
+    let reach: usize = attack.reach.into();
+    let move_distance: usize = actor.move_distance().into();
+
+    if actor.can_move() && 1 < d && d <= 1 + move_distance {
+        let obstacles = find_movement_obstacles(&objects).ignore(to);
+        if let Some(_) = map.find_straight_path(from, to, &obstacles) {
+            return Some(attack);
+        }
+    }
+    
     None
 }
 
@@ -96,7 +146,7 @@ pub fn can_move_towards(
     }
 }
 
-pub fn find_path_next_to_tile(
+fn find_path_next_to_tile(
     source_tile: &Tile,
     target_tile: &Tile,
     map: &Read<Map>,
@@ -108,15 +158,13 @@ pub fn find_path_next_to_tile(
         return None;
     }
 
-    let mut obstacles = find_all_obstacles(&map, &objects);
-    if obstacles.contains_key(&target_tile) {
+    let obstacles = find_movement_obstacles(&objects)
         // ignore obstacles at target since we only want to move next to it
-        obstacles.remove(&target_tile);
-    }
+        .ignore(target_tile.to_map_pos());
 
     map.find_path(
-        source_tile.to_world_pos(),
-        target_tile.to_world_pos(),
+        source_tile.to_map_pos(),
+        target_tile.to_map_pos(),
         &obstacles,
     )
     .map(|p| p.iter().take(p.len() - 1).cloned().collect())
@@ -144,10 +192,6 @@ pub fn find_path_next_to_tile(
 //     // result
 // }
 
-pub fn can_attack_melee(actor: &Actor, target: &Actor) -> Option<AttackOption> {
-    // find_attack_options(actor, target).iter().cloned().next()
-    actor.attacks(target).iter().cloned().next()
-}
 // fn flatten<T>(oot: Option<Option<T>>) -> Option<T> {
 //     oot.and_then(std::convert::identity)
 // }

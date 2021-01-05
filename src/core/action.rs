@@ -1,10 +1,12 @@
+// use std::cmp::max;
 use std::time::Duration;
 
 // use specs::prelude::Entity;
 use specs::prelude::*;
 
 use crate::components::{Fx, GameObjectCmp};
-use crate::core::Tile;
+use crate::core::ai::find_movement_obstacles;
+use crate::core::{Map, Tile,MapPos};
 // use crate::core::{Tile, WorldPos};
 
 use super::actors::{Actor, AttackOption, CombatResult, Condition, GameObject, Team};
@@ -12,13 +14,12 @@ use super::actors::{Actor, AttackOption, CombatResult, Condition, GameObject, Te
 #[derive(Debug, Clone)]
 pub enum Action {
     StartTurn(),
-    Wait(u8),
+    Wait(),
     MoveTo(Tile),
     Activate(Entity),
-    // Attack(EA, AttackOption),
     MeleeAttack(Entity, AttackOption),
-    // Defence(EA, EA, Attack, Defence),
-    EndTurn(Team), // next turn
+    Charge(Entity, AttackOption),
+    EndTurn(Team),
 }
 
 impl Action {
@@ -26,12 +27,12 @@ impl Action {
         (Self::EndTurn(t), 0)
     }
 
-    pub fn wait(costs: u8) -> Act {
-        (Self::Wait(costs), 1)
-    }
+    // pub fn wait() -> Act {
+    //     (Self::Wait(), 1)
+    // }
 
     pub fn recover() -> Act {
-        (Self::Wait(0), 1)
+        (Self::Wait(), 1)
     }
 
     pub fn activate(e: Entity) -> Act {
@@ -42,23 +43,14 @@ impl Action {
         (Self::MoveTo(to), 0)
     }
 
-    // pub fn attack(target: EA, attack: AttackOption) -> Act {
-    //     (Self::Attack(target, attack), 1)
-    // }
-
     pub fn melee_attack(target: Entity, attack: AttackOption) -> Act {
         (Self::MeleeAttack(target, attack), 1)
     }
 
-    // pub fn defence(attacker: EA, target: EA, a: Attack, d: Defence) -> Act {
-    //     (Self::Defence(attacker, target, a, d), 0)
-    // }
+    pub fn charge(target: Entity, attack: AttackOption) -> Act {
+        (Self::Charge(target, attack), 1)
+    }
 }
-
-// #[derive(Debug, Clone)]
-// pub enum Opportunity {
-//     IncommingAttack(),
-// }
 
 pub enum Change {
     Fx(Fx),
@@ -104,7 +96,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             for (e, o) in (&entities, &actors).join() {
                 if let GameObject::Actor(a) = &o.0 {
                     if a.team == team && a.pending_action.is_none() {
-                        updates.push(update_actor(e, a.clone().prepare((Action::Wait(0), 0))));
+                        updates.push(update_actor(e, a.clone().prepare((Action::Wait(), 0))));
                     }
                 }
             }
@@ -112,7 +104,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             (updates, millis(0))
         }
 
-        Action::Wait(_) => no_op(),
+        Action::Wait() => no_op(),
 
         Action::MoveTo(to) => single_update(entity, actor.move_to(to), 200),
 
@@ -135,9 +127,73 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             if let Some(target_actor) = get_actor(target_entity, w) {
                 handle_attack((entity, actor), (target_entity, target_actor), attack)
             } else {
-                // println!("Target aleady eliminated");
                 no_op()
             }
+        }
+
+        Action::Charge(target_entity, attack) => {
+            if let Some(target_actor) = get_actor(target_entity, w) {
+                // let attack = actor.melee_attack();
+                let from = MapPos::from_world_pos(actor.pos);
+                let to = MapPos::from_world_pos(target_actor.pos);
+                let steps_needed = from.distance(to) - 1;
+                let move_distance: usize = actor.move_distance().into();
+
+                if steps_needed <= 0 || steps_needed > move_distance {
+                    // cannot reach opponent
+                    // => cancel charge
+                    return no_op();
+                }
+                
+                let (map, game_objects): (Read<Map>, ReadStorage<GameObjectCmp>) = w.system_data();
+                let obstacles = find_movement_obstacles(&game_objects).ignore(to);
+
+                if let Some(p) = map.find_straight_path(from, to, &obstacles) {
+                    let tile = p[steps_needed - 1];
+                    // println!("Charge from {:?} to {:?}", from, to);
+                    // println!(" - steps needed: {}", steps_needed);
+                    // println!(" - path: {:?}", p);
+                    // println!(" - move to: {:?}", tile);
+                    let actor = actor.move_to(tile);
+                    let mut updates = vec![update_actor(entity, actor.clone())];
+                    let (mut combat_updates, delay) = handle_attack((entity, actor), (target_entity, target_actor), attack);
+
+                    updates.append(&mut combat_updates);
+
+                    return (updates, delay);
+                }
+
+
+                // if d >= reach {
+                //     return handle_attack(
+                //         (entity, actor.move_to(*tile)),
+                //         (target_entity, target_actor),
+                //         attack,
+                //     );
+                // } else if reach < d && d <= reach + move_distance {
+                //     let obstacles = find_movement_obstacles(&objects).ignore(to);
+                //     if let Some(_) = map.find_straight_path(from, to, &obstacles) {
+                //     }
+                // }
+
+                // if attack.distance.0 <= distance && distance <= attack.distance.1 {
+                //     // target already within reaching distance
+                //     return handle_attack((entity, actor), (target_entity, target_actor), attack);
+                // }
+
+                // if let Some(path) = can_move_towards(&actor, &target_actor, &map, &game_objects) {
+                //     let l = max(path.len(), actor.move_distance().into());
+                //     if let Some(tile) = path.iter().take(l).last() {
+                //         return handle_attack(
+                //             (entity, actor.move_to(*tile)),
+                //             (target_entity, target_actor),
+                //             attack,
+                //         );
+                //     }
+                // }
+            }
+
+            return no_op();
         }
     }
 }

@@ -1,8 +1,8 @@
-use std::cmp::max;
 use super::dice::*;
-use crate::core::{Action, DisplayStr, WorldPos, Tile};
+use crate::core::{Action, DisplayStr, Tile, WorldPos};
+use std::cmp::max;
 
-// const STAT_AVERAGE: u8 = 4;
+const STAT_AVERAGE: u8 = 4;
 
 /// Anything that exists in the world
 #[derive(Debug, Clone)]
@@ -64,7 +64,7 @@ pub struct ActorBuilder {
 
 impl ActorBuilder {
     pub fn new(pos: WorldPos, team: Team) -> Self {
-    // pub fn new(pos: WorldPos, attributes: Attributes, team: Team) -> Self {
+        // pub fn new(pos: WorldPos, attributes: Attributes, team: Team) -> Self {
         Self {
             pos,
             // attributes,
@@ -102,15 +102,14 @@ impl ActorBuilder {
             turn: 0,
             quick_action_available: true,
             // activations: roll_activations(3),
-            attacks: vec![
-                AttackOption {
-                    name: DisplayStr("Swing"),
-                    dice: 3,
-                    distance: (0.0, 1.42),
-                    damage: 4,
-                    costs: 3,
-                },
-            ],
+            attacks: vec![AttackOption {
+                name: DisplayStr("Swing"),
+                reach: 2,
+                // dice: 3,
+                // distance: (0.0, 1.42),
+                // damage: 4,
+                // costs: 3,
+            }],
             defences: vec![DefenceOption {
                 name: DisplayStr("Dodge"),
                 dice: 3,
@@ -122,7 +121,8 @@ impl ActorBuilder {
                 tags: Vec::new(),
                 to_hit: Dice::new(4),
             },
-        }.set_traits(self.traits)
+        }
+        .set_traits(self.traits)
     }
 
     pub fn behaviour(self, b: AiBehaviour) -> Self {
@@ -182,7 +182,7 @@ pub struct Actor {
 impl Actor {
     pub fn move_to(self, to: Tile) -> Self {
         assert!(self.can_move(), "Actor cannot move: {:?}", self);
-        
+
         Self {
             pos: to.to_world_pos(),
             quick_action_available: false,
@@ -193,6 +193,10 @@ impl Actor {
 
     pub fn can_move(&self) -> bool {
         self.quick_action_available
+    }
+
+    pub fn has_charged(&self) -> bool {
+        !self.quick_action_available
     }
 
     pub fn move_distance(&self) -> u8 {
@@ -228,17 +232,17 @@ impl Actor {
     }
 
     pub fn start_next_turn(self) -> (Actor, Option<(Action, u8)>) {
-    // pub fn start_next_turn(self) -> (Actor, Option<Box<(Action, u8)>>) {
+        // pub fn start_next_turn(self) -> (Actor, Option<Box<(Action, u8)>>) {
         let pending_action = self.pending_action;
         let next_turn_actor = Self {
             pending_action: None,
             quick_action_available: true,
             ..self
         };
-        
+
         (next_turn_actor, pending_action)
     }
-    
+
     // pub fn next_turn(self, turn: u64) -> Condition {
     //     let (e_current, e_max) = self.energy;
     //     let mut e_new = min(e_max, e_current + e_max);
@@ -301,14 +305,21 @@ impl Actor {
     //     &self.attributes.1
     // }
 
-    pub fn attacks(&self, target: &Actor) -> Vec<AttackOption> {
-        let distance = WorldPos::distance(&self.pos, &target.pos);
-        self.attacks
-            .iter()
-            .filter(|o| o.distance.0 <= distance && distance <= o.distance.1)
-            .cloned()
-            // .map(|o| o.into_attack(&self.wields))
-            .collect()
+    // pub fn attacks(&self, target: &Actor) -> Vec<AttackOption> {
+    //     let distance = WorldPos::distance(&self.pos, &target.pos);
+    //     self.attacks
+    //         .iter()
+    //         // .filter(|o| o.distance.0 <= distance && distance <= o.distance.1)
+    //         .cloned()
+    //         // .map(|o| o.into_attack(&self.wields))
+    //         .collect()
+    // }
+
+    pub fn melee_attack(&self) -> AttackOption {
+        AttackOption {
+            name: DisplayStr("Melee Attack"),
+            reach: 1,
+        }
     }
 
     // pub fn defences(&self, _: &Attack) -> Vec<Defence> {
@@ -327,7 +338,11 @@ impl Actor {
     fn set_traits(self, traits: Vec<Trait>) -> Self {
         let effects = traits.iter().flat_map(|t| t.effects.to_vec()).collect();
 
-        Self { traits, effects, ..self }
+        Self {
+            traits,
+            effects,
+            ..self
+        }
     }
 
     pub fn is_dying(&self) -> bool {
@@ -335,19 +350,21 @@ impl Actor {
     }
 
     fn wound(self, w: Wound) -> Condition {
-        let wounds_modifer = self.effects.iter().map(|e| {
-            match e {
+        let wounds_modifer = self
+            .effects
+            .iter()
+            .map(|e| match e {
                 Effect::AttributeModifier(Attribute::Wound, modifier) => *modifier,
                 _ => 0,
-            }
-        }).sum::<i8>();
+            })
+            .sum::<i8>();
         let default_wounds_num = 3;
         let min_wounds_num = 1;
         let max_wounds = max(min_wounds_num, default_wounds_num + wounds_modifer) as u8;
         let wounds = self.wounds + w.wound;
-        
+
         if wounds < max_wounds {
-            Condition::Alive(Self{ wounds, ..self })
+            Condition::Alive(Self { wounds, ..self })
         } else {
             Condition::Dead(
                 self.pos,
@@ -358,7 +375,7 @@ impl Actor {
             )
         }
     }
-        
+
     pub fn num_wounds(&self) -> usize {
         self.wounds as usize
     }
@@ -368,7 +385,7 @@ impl Actor {
     }
 
     pub fn defence(&self) -> i8 {
-        3
+        STAT_AVERAGE as i8
     }
 
     pub fn protection(&self) -> i8 {
@@ -418,21 +435,22 @@ pub struct Weapon {
     to_hit: Dice,
 }
 
-#[derive(Debug, Clone)]
-pub struct Attack {
-    pub name: DisplayStr,
-    pub roll: Roll,
-    pub damage: u8,
-    pub costs: u8,
-}
+// #[derive(Debug, Clone)]
+// pub struct Attack {
+//     pub name: DisplayStr,
+//     pub roll: Roll,
+//     pub damage: u8,
+//     pub costs: u8,
+// }
 
 #[derive(Debug, Clone)]
 pub struct AttackOption {
     pub name: DisplayStr,
-    pub dice: u8,
-    pub damage: u8,
-    pub costs: u8,
-    pub distance: (f32, f32), // (min, max)
+    pub reach: u8,
+    // pub dice: u8,
+    // pub damage: u8,
+    // pub costs: u8,
+    // pub distance: (f32, f32), // (min, max)
 }
 
 impl AttackOption {
@@ -445,15 +463,22 @@ impl AttackOption {
     //     }
     // }
 
-    fn into_attack2(self, _a: &Actor) -> Attack2 {
-        Attack2 {
-            to_hit: 3,
-            to_wound: 3,
+    fn into_attack(self, a: &Actor) -> Attack {
+        let (mut to_hit, mut to_wound) = (STAT_AVERAGE, STAT_AVERAGE);
+
+        if a.has_charged() {
+            to_hit -= 1;
+            to_wound += 1;
+        }
+
+        Attack {
+            to_hit: to_hit as i8,
+            to_wound: to_wound as i8,
         }
     }
 }
 
-pub struct Attack2 {
+pub struct Attack {
     to_hit: i8,
     to_wound: i8,
 }
@@ -545,14 +570,18 @@ pub enum Condition {
 }
 
 pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> (CombatResult, Vec<String>) {
-    let attack = attack.into_attack2(&attacker);
-    let to_hit_result = D6::roll().result(target.defence() - attack.to_hit);
-    let mut log = vec!(format!("{} attacks {}", attacker.name, target.name));
+    let attack = attack.into_attack(&attacker);
+    let attack_difficulty = target.defence() - attack.to_hit;
+    let to_hit_result = D6::roll().result(attack_difficulty);
+    let mut log = vec![format!(
+        "{} attacks {} (difficulty: {})",
+        attacker.name, target.name, attack_difficulty
+    )];
 
     match to_hit_result {
         RR::CritFail | RR::Fail => {
             log.push(format!("{} misses", attacker.name));
-                
+
             (CombatResult::Miss(target), log)
         }
 
@@ -562,11 +591,12 @@ pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> (CombatRe
             log.push(format!("{} hits", attacker.name));
 
             match to_wound_result {
-                RR::CritFail | RR::Fail =>
-                    (CombatResult::Block(), log),
+                RR::CritFail | RR::Fail => (CombatResult::Block(), log),
 
-                RR::SuccessBut | RR::Success | RR::CritSuccess =>
-                    (CombatResult::Hit(target.wound(Wound::from_roll(&to_wound_result))), log),
+                RR::SuccessBut | RR::Success | RR::CritSuccess => (
+                    CombatResult::Hit(target.wound(Wound::from_roll(&to_wound_result))),
+                    log,
+                ),
             }
         }
     }
@@ -698,7 +728,7 @@ pub fn generate_player(pos: WorldPos, t: Team) -> Actor {
     let mut rng = rand::thread_rng();
 
     ActorBuilder::new(pos, t)
-    // ActorBuilder::new(pos, Attributes::new(4, 4, 4), t)
+        // ActorBuilder::new(pos, Attributes::new(4, 4, 4), t)
         .armor(Armor {
             look: vec![("player", rng.sample(range))],
             protection: 2,
@@ -729,14 +759,14 @@ fn one_of<'a, T>(v: &'a Vec<T>) -> &'a T {
 pub fn generate_enemy_easy(pos: WorldPos, t: Team) -> Actor {
     ActorBuilder::new(pos, t)
         .armor(Armor {
-            look: vec![("tile", 3965), ("tile", *one_of(&vec!(5747, 5748, 5749)))],
+            look: vec![("tile", 3965), ("tile", *one_of(&vec![5747, 5748, 5749]))],
             protection: 0,
         })
         .behaviour(AiBehaviour::Default)
-        .traits(vec!(Trait {
+        .traits(vec![Trait {
             name: DisplayStr("Fragile physiology"),
-            effects: vec!(Effect::AttributeModifier(Attribute::Wound, -2)),
+            effects: vec![Effect::AttributeModifier(Attribute::Wound, -2)],
             source: TraitSource::IntrinsicProperty,
-        }))
+        }])
         .build()
 }

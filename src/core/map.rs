@@ -31,8 +31,13 @@ impl Tile {
         WorldPos(self.0 as f32, self.1 as f32)
     }
 
+    pub fn to_map_pos(self: &Self) -> MapPos {
+        MapPos(self.0 as i32, self.1 as i32)
+    }
+
     pub fn distance(&self, o: &Self) -> f32 {
-        distance(self.0 as f32, self.1 as f32, o.0 as f32, o.1 as f32)
+        distance(self.to_map_pos(), o.to_map_pos())
+        // distance(self.0 as f32, self.1 as f32, o.0 as f32, o.1 as f32)
     }
 }
 
@@ -115,9 +120,11 @@ impl Map {
         self.0.len() as u32
     }
 
-    pub fn find_tile(self: &Self, WorldPos(x, y): WorldPos) -> Option<Tile> {
-        let i = x.floor() as i32;
-        let j = y.floor() as i32;
+    pub fn find_tile(self: &Self, wpos: WorldPos) -> Option<Tile> {
+        self.get_tile(MapPos::from_world_pos(wpos))
+    }
+
+    pub fn get_tile(self: &Self, MapPos(i, j): MapPos) -> Option<Tile> {
         let rows = &self.0;
 
         if j >= 0 && j < rows.len() as i32 {
@@ -143,39 +150,64 @@ impl Map {
     pub fn neighbors<'a>(
         &'a self,
         tile: Tile,
-        obstacles: &'a HashMap<Tile, Obstacle>,
+        obstacles: &'a ObstacleSet,
     ) -> NeighborTileIter<'a> {
         NeighborTileIter {
             map: self,
-            center: WorldPos(tile.column() as f32, tile.row() as f32),
+            center_col: tile.column() as i32,
+            center_row: tile.row() as i32,
             step: 0,
             obstacles: obstacles,
-            candiates: NEIGHBOR_CANDIDATES.to_vec(),
-            // min_distance: 1,
-            // max_distance: 1,
         }
     }
 
     pub fn find_path(
         &self,
-        from: WorldPos,
-        to: WorldPos,
-        obstacles: &HashMap<Tile, Obstacle>,
+        from: MapPos,
+        to: MapPos,
+        obstacles: &ObstacleSet,
     ) -> Option<Path> {
-        if let (Some(s), Some(g)) = (self.find_tile(from), self.find_tile(to)) {
-            let straight_path = find_path_straight(self, s, g, obstacles);
-            // println!("  - use straight line: {:?}", straight_path);
+        let straight_path = self.find_straight_path(from, to, obstacles);
+        if straight_path.is_some() {
+            return straight_path;
+        }
 
-            if straight_path.is_some() {
-                return straight_path;
-            }
-
-            let astar_path = find_path_astar(self, s, g, obstacles);
-            // println!("  - use A*: {:?}", astar_path);
-            return astar_path;
+        if let (Some(s), Some(g)) = (self.get_tile(from), self.get_tile(to)) {
+            return find_path_astar(self, s, g, obstacles);
         }
 
         None
+    }
+
+    pub fn find_straight_path(
+        &self,
+        start: MapPos,
+        goal: MapPos,
+        obstacles: &ObstacleSet,
+    ) -> Option<Path> {
+        let mut p = Path::new();
+        let d = distance(start, goal).floor() as i32;
+
+        for i in 1..=d {
+            let delta = i as f32 / d as f32;
+            let next_pos = MapPos::lerp(&start, &goal, delta);
+
+            if let Some(next_tile) = self.get_tile(next_pos) {
+                if let Tile(_, _, TileType::Void) = next_tile {
+                    return None;
+                }
+
+                if obstacles.0.get(&next_tile.to_map_pos()).is_some() {
+                    return None;
+                } else {
+                    p.push(next_tile);
+                }
+            } else {
+                return None;
+            }
+        }
+
+        Some(p)
     }
 
     // pub fn find_path_neighborhood(
@@ -211,6 +243,38 @@ pub enum Obstacle {
     Impediment(f32),
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Hash)]
+pub struct MapPos(pub i32, pub i32);
+
+impl MapPos {
+    pub fn from_world_pos(WorldPos(x, y): WorldPos) -> Self {
+        Self(x.floor() as i32, y.floor() as i32)
+    }
+
+    pub fn distance(self, other: MapPos) -> usize {
+        let dx = i32::abs(other.0 - self.0) as usize;
+        let dy = i32::abs(other.1 - self.1) as usize;
+        usize::max(dx, dy)
+    }
+
+    pub fn lerp(Self(x1, y1): &Self, Self(x2, y2): &Self, t: f32) -> Self {
+        let xn = *x1 as f32 + t * (x2 - x1) as f32;
+        let yn = *y1 as f32 + t * (y2 - y1) as f32;
+        Self(xn.round() as i32, yn.round() as i32)
+    }
+}
+                          
+
+pub struct ObstacleSet(pub HashMap<MapPos, Obstacle>);
+
+impl ObstacleSet {
+    pub fn ignore(self, pos: MapPos) -> Self {
+        let mut hm = self.0;
+        hm.remove(&pos);
+        Self(hm)
+    }
+}
+
 pub struct TileIter<'a> {
     map: &'a Map,
     cur_col: usize,
@@ -241,7 +305,7 @@ impl<'a> Iterator for TileIter<'a> {
     }
 }
 
-const NEIGHBOR_CANDIDATES: [(i8, i8); 8] = [
+const NEIGHBOR_CANDIDATES: [(i32, i32); 8] = [
     (-1, -1),
     (0, -1),
     (1, -1),
@@ -254,45 +318,29 @@ const NEIGHBOR_CANDIDATES: [(i8, i8); 8] = [
 
 pub struct NeighborTileIter<'a> {
     map: &'a Map,
-    center: WorldPos,
+    center_col: i32,
+    center_row: i32,
     step: usize,
-    obstacles: &'a HashMap<Tile, Obstacle>,
-    candiates: Vec<(i8, i8)>,
-    // min_distance: u8,
-    // max_distance: u8,
-}
-
-impl<'a> NeighborTileIter<'a> {
-    // fn new(map: &'a Map, center: WorldPos, obstacles: &'a HashMap<Tile, Obstacle>,
-    //     // min_distance: u8,
-    //     // max_distance: u8,
-    // ) -> Self {
-    //     let step = 0;
-    //     let candiates = NEIGHBOR_CANDIDATES.to_vec();
-
-    //     Self { map, center, step, obstacles, candiates, }
-    //     // Self { map, center, step, obstacles, candiates, min_distance, max_distance }
-    // }
+    obstacles: &'a ObstacleSet,
 }
 
 impl<'a> Iterator for NeighborTileIter<'a> {
     type Item = Tile;
 
     fn next(&mut self) -> Option<Tile> {
-        while self.step < self.candiates.len() {
+        while self.step < NEIGHBOR_CANDIDATES.len() {
             self.step += 1;
 
-            let (dx, dy) = self.candiates[self.step - 1];
-            let WorldPos(x, y) = self.center;
-            let p = WorldPos(x + dx as f32, y + dy as f32);
+            let (dx, dy) = NEIGHBOR_CANDIDATES[self.step - 1];
+            let p = MapPos(self.center_col + dx, self.center_row + dy);
 
-            if let Some(t) = self.map.find_tile(p) {
+            if let Some(t) = self.map.get_tile(p) {
                 if let TileType::Void = t.tile_type() {
                     // you cannot pass the void
                     continue;
                 }
 
-                if let Some(Obstacle::Inaccessible()) = self.obstacles.get(&t) {
+                if let Some(Obstacle::Inaccessible()) = self.obstacles.0.get(&p) {
                     // the way is blocked by an inpenetrable obstacle
                     continue;
                 }
@@ -305,25 +353,52 @@ impl<'a> Iterator for NeighborTileIter<'a> {
     }
 }
 
-// #[test]
-// pub fn it_can_find_a_path_into_neigborhood() {
-//     let m = Map(vec![
-//         row(vec![1, 0, 1, 1, 1]),
-//         row(vec![1, 0, 1, 1, 1]),
-//         row(vec![1, 1, 1, 1, 1]),
-//     ]);
+#[test]
+fn it_can_find_a_path() {
+    let m = Map(vec![
+        row(vec![1, 0, 1, 1, 1]),
+        row(vec![1, 0, 1, 1, 1]),
+        row(vec![1, 1, 1, 1, 1]),
+    ]);
      
-//     let from = WorldPos(0.0, 0.0);
-//     let to = WorldPos(3.0, 1.0);
-//     let p = m.find_path_neighborhood(from, to, 1, 1, &HashMap::new()).unwrap();
+    let obstacles = ObstacleSet(HashMap::new());
+    let from = MapPos(0, 0);
+    let to = MapPos(3, 1);
+    let p = m.find_path(from, to, &obstacles).unwrap();
+    let p2 = m.find_straight_path(from, to, &obstacles);
 
-//     // assert!(p.is_some());
-//     assert_eq!(p.len(), 3);
-//     let mut p = p.iter();
-//     assert_eq!(p.next(), Some(&Tile(0, 1, TileType::Floor)));
-//     assert_eq!(p.next(), Some(&Tile(1, 2, TileType::Floor)));
-//     assert_eq!(p.next(), Some(&Tile(2, 1, TileType::Floor)));
-// }
+    // assert!(p.is_some());
+    assert_eq!(p.len(), 4);
+    assert_eq!(p2, None);
+    let mut p = p.iter();
+    assert_eq!(p.next(), Some(&Tile(0, 1, TileType::Floor)));
+    assert_eq!(p.next(), Some(&Tile(1, 2, TileType::Floor)));
+    assert_eq!(p.next(), Some(&Tile(2, 2, TileType::Floor)));
+    assert_eq!(p.next(), Some(&Tile(3, 1, TileType::Floor)));
+}
+
+#[test]
+fn it_can_find_a_staight_path() {
+    let m = Map(vec![
+        row(vec![1, 1, 1, 1, 1, 1]),
+        row(vec![1, 1, 1, 1, 1, 1]),
+        row(vec![1, 1, 1, 1, 1, 1]),
+    ]);
+     
+    let from = MapPos(0, 0);
+    let to = MapPos(5, 2);
+    let p = m.find_path(from, to, &ObstacleSet(HashMap::new())).unwrap();
+    println!("{:?}", p);
+
+    // assert!(p.is_some());
+    assert_eq!(p.len(), 5);
+    let mut p = p.iter();
+    assert_eq!(p.next(), Some(&Tile(1, 0, TileType::Floor)));
+    assert_eq!(p.next(), Some(&Tile(2, 1, TileType::Floor)));
+    assert_eq!(p.next(), Some(&Tile(3, 1, TileType::Floor)));
+    assert_eq!(p.next(), Some(&Tile(4, 2, TileType::Floor)));
+    assert_eq!(p.next(), Some(&Tile(5, 2, TileType::Floor)));
+}
 
 pub fn dummy() -> Map {
     Map(vec![
@@ -386,10 +461,10 @@ fn find_path_astar(
     m: &Map,
     start: Tile,
     goal: Tile,
-    obstacles: &HashMap<Tile, Obstacle>,
+    obstacles: &ObstacleSet,
 ) -> Option<Path> {
     let start_node = Node(start, 0.0);
-    let mut costs_so_far: HashMap<Tile, (f32, Vec<Tile>)> = HashMap::new();
+    let mut costs_so_far: HashMap<Tile, (f32, Path)> = HashMap::new();
     let mut open: BinaryHeap<Node> = BinaryHeap::new();
 
     open.push(start_node);
@@ -427,61 +502,21 @@ fn find_path_astar(
     None
 }
 
-fn find_path_straight(
-    m: &Map,
-    start: Tile,
-    goal: Tile,
-    obstacles: &HashMap<Tile, Obstacle>,
-) -> Option<Path> {
-    let mut p = Path::new();
-    let d = start.distance(&goal).floor() as i32;
-
-    // let WorldPos(xs, ys) = start.to_world_pos();
-    // let WorldPos(xg, yg) = goal.to_world_pos();
-    // let start_pos = WorldPos(xs + 0.5, ys + 0.5);
-    // let goal_pos = WorldPos(xg + 0.5, yg + 0.5);
-    let start_pos = start.to_world_pos();
-    let goal_pos = goal.to_world_pos();
-
-    for i in 1..=d {
-        let delta = i as f32 / d as f32;
-        // let next_pos = WorldPos::lerp(&start_pos, &goal_pos, delta);
-        let WorldPos(xn, yn) = WorldPos::lerp(&start_pos, &goal_pos, delta);
-        let next_pos = WorldPos(xn.round(), yn.round());
-
-        if let Some(next_tile) = m.find_tile(next_pos) {
-            if let Tile(_, _, TileType::Void) = next_tile {
-                return None;
-            }
-
-            if obstacles.get(&next_tile).is_some() {
-                return None;
-            } else {
-                p.push(next_tile);
-            }
-        } else {
-            return None;
-        }
-    }
-
-    Some(p)
-}
-
 const DP: f32 = 1.0; // distance for perpendicular (non-diaginal) steps
 const DD: f32 = 1.0; // distance for diaginal steps; sqrt(2)
 
 /// Estimates the distance between two map points (tiles) A and B ignoring
 /// possible obstacles
 /// (based on http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html#heuristics-for-grid-maps)
-fn distance(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
-    let dx = (x1.floor() - x2.floor()).abs();
-    let dy = (y1.floor() - y2.floor()).abs();
+fn distance(MapPos(x1, y1): MapPos, MapPos(x2, y2): MapPos) -> f32 {
+    let dx = (x1 - x2).abs() as f32;
+    let dy = (y1 - y2).abs() as f32;
 
     DP * (dx + dy) + (DD - 2.0 * DP) * f32::min(dx, dy)
 }
 
-fn costs(t: &Tile, obstacles: &HashMap<Tile, Obstacle>) -> f32 {
-    if let Some(Obstacle::Impediment(i)) = obstacles.get(t) {
+fn costs(t: &Tile, obstacles: &ObstacleSet) -> f32 {
+    if let Some(Obstacle::Impediment(i)) = obstacles.0.get(&t.to_map_pos()) {
         return *i;
     }
     1.0

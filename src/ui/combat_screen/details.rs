@@ -172,7 +172,7 @@ fn draw_actions(
 
 fn display_text((action, delay): &(Action, u8)) -> String {
     match action {
-        Action::Wait(_) => format!("Wait ({})", delay),
+        Action::Wait() => format!("Wait"),
         Action::MoveTo(..) => format!("Move Here ({})", delay),
         Action::Activate(_) => format!("Activate"),
         Action::MeleeAttack(_, a) => format!("{} ({})", a.name.0, delay),
