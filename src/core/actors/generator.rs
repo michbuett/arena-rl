@@ -19,7 +19,7 @@ pub fn generate_enemy_easy(pos: WorldPos, t: Team) -> Actor {
         .behaviour(AiBehaviour::Default)
         .traits(vec![Trait {
             name: DisplayStr("Fragile physiology"),
-            effects: vec![Effect::AttributeModifier(Attribute::Wound, -2)],
+            effects: vec![Effect::StatModifier(Stat::Wound, -2)],
             source: TraitSource::IntrinsicProperty,
         }])
         .build()

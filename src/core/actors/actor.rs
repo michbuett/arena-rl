@@ -2,7 +2,7 @@ use crate::core::dice::*;
 use crate::core::{Action, DisplayStr, Tile, WorldPos};
 use std::cmp::max;
 
-const STAT_AVERAGE: u8 = 4;
+const STAT_AVERAGE: i8 = 0;
 
 #[derive(Debug, Clone)]
 pub struct Item {
@@ -10,17 +10,6 @@ pub struct Item {
     pub look: Look,
 }
 
-///  0 => -3 => None
-///  1 => -2 => Puny
-///  2 => -1 => Low — rusty
-///  3 =>  0 => Average
-///  4 =>  1 => Good — trained
-///  5 =>  2 => Elite (only the best have elite stats)
-///  6 =>  3 => Exceptional (once per generagion; the best of the best)
-///  7 =>  4 => Legendary (once per era)
-///  8 =>  5 => Supernatural
-///  9 =>  6 => ? (Ultra, Marvelous)
-/// 10 =>  7 => Godlike (unlimited power)
 
 #[derive(Debug, Clone)]
 pub enum AiBehaviour {
@@ -127,10 +116,6 @@ impl Actor {
         self.quick_action_available
     }
 
-    pub fn has_charged(&self) -> bool {
-        !self.quick_action_available
-    }
-
     pub fn move_distance(&self) -> u8 {
         2
     }
@@ -177,6 +162,8 @@ impl Actor {
         AttackOption {
             name: DisplayStr("Melee Attack"),
             reach: 1,
+            to_hit: STAT_AVERAGE,
+            to_wound: STAT_AVERAGE,
         }
     }
 
@@ -195,17 +182,8 @@ impl Actor {
     }
 
     fn wound(self, w: Wound) -> Condition {
-        let wounds_modifer = self
-            .effects
-            .iter()
-            .map(|e| match e {
-                Effect::AttributeModifier(Attribute::Wound, modifier) => *modifier,
-                _ => 0,
-            })
-            .sum::<i8>();
-        let default_wounds_num = 3;
-        let min_wounds_num = 1;
-        let max_wounds = max(min_wounds_num, default_wounds_num + wounds_modifer) as u8;
+        let default_wounds_num = 3 + self.stat(Stat::Wound);
+        let max_wounds = max(1, default_wounds_num) as u8;
         let wounds = self.wounds + w.wound;
 
         if wounds < max_wounds {
@@ -229,12 +207,19 @@ impl Actor {
         &self.look
     }
 
-    pub fn defence(&self) -> i8 {
-        STAT_AVERAGE as i8
-    }
-
-    pub fn protection(&self) -> i8 {
-        0
+    /// -3 => None
+    /// -2 => Puny
+    /// -1 => Low — rusty
+    ///  0 => Average
+    ///  1 => Good — trained (decent)
+    ///  2 => Elite (only the best have elite stats)
+    ///  3 => Exceptional (once per generagion; the best of the best)
+    ///  4 => Legendary (once per era)
+    ///  5 => Supernatural
+    ///  6 => ? (Ultra, Marvelous)
+    ///  7 => Godlike (unlimited power)
+    pub fn stat(&self, stat: Stat) -> i8 {
+        stat_mod(&self.effects, stat)
     }
 }
 
@@ -248,20 +233,15 @@ pub struct Activation {
 pub struct AttackOption {
     pub name: DisplayStr,
     pub reach: u8,
+    pub to_hit: i8,
+    pub to_wound: i8,
 }
 
 impl AttackOption {
     fn into_attack(self, a: &Actor) -> Attack {
-        let (mut to_hit, mut to_wound) = (STAT_AVERAGE, STAT_AVERAGE);
-
-        if a.has_charged() {
-            to_hit -= 1;
-            to_wound += 1;
-        }
-
         Attack {
-            to_hit: to_hit as i8,
-            to_wound: to_wound as i8,
+            to_hit: self.to_hit + a.stat(Stat::ToHit),
+            to_wound: self.to_wound + a.stat(Stat::ToWound),
         }
     }
 }
@@ -285,17 +265,17 @@ pub enum TraitSource {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Effect {
-    AttributeModifier(Attribute, i8),
+    StatModifier(Stat, i8),
     Dying(),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Attribute {
+pub enum Stat {
     Wound,
-    // ToHit,
-    // ToWound,
-    // Defence,
-    // Protection,
+    ToHit,
+    ToWound,
+    Defence,
+    Protection,
 }
 
 #[derive(Debug, Clone)]
@@ -307,10 +287,10 @@ struct Wound {
 impl Wound {
     fn from_roll(rr: &RR) -> Self {
         match rr {
-            RR::Fail | RR::CritFail => Self { pain: 0, wound: 0 },
-            RR::SuccessBut => Self { pain: 1, wound: 0 },
-            RR::Success => Self { pain: 1, wound: 1 },
-            RR::CritSuccess => Self { pain: 2, wound: 2 },
+            RR::F_ | RR::FF => Self { pain: 0, wound: 0 },
+            RR::SF => Self { pain: 1, wound: 0 },
+            RR::S_ => Self { pain: 1, wound: 1 },
+            RR::SS => Self { pain: 2, wound: 2 },
         }
     }
 }
@@ -331,33 +311,49 @@ pub enum Condition {
 
 pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> (CombatResult, Vec<String>) {
     let attack = attack.into_attack(&attacker);
-    let attack_difficulty = target.defence() - attack.to_hit;
+    let attack_difficulty = attack.to_hit - target.stat(Stat::Defence);
     let to_hit_result = D6::roll().result(attack_difficulty);
     let mut log = vec![format!(
-        "{} attacks {} (difficulty: {})",
+        "{} attacks {} (difficulty: {:?})",
         attacker.name, target.name, attack_difficulty
     )];
 
     match to_hit_result {
-        RR::CritFail | RR::Fail => {
+        RR::FF | RR::F_ => {
             log.push(format!("{} misses", attacker.name));
-
             (CombatResult::Miss(target), log)
         }
 
-        RR::SuccessBut | RR::Success | RR::CritSuccess => {
-            let to_wound_result = D6::roll().result(target.protection() - attack.to_wound);
+        RR::SF | RR::S_ | RR::SS => {
+            let to_wound_difficulty = attack.to_wound - target.stat(Stat::Protection);
+            let to_wound_result = D6::roll().result(to_wound_difficulty);
 
             log.push(format!("{} hits", attacker.name));
 
             match to_wound_result {
-                RR::CritFail | RR::Fail => (CombatResult::Block(), log),
+                RR::FF | RR::F_ => (CombatResult::Block(), log),
 
-                RR::SuccessBut | RR::Success | RR::CritSuccess => (
+                RR::SF | RR::S_ | RR::SS => (
                     CombatResult::Hit(target.wound(Wound::from_roll(&to_wound_result))),
                     log,
                 ),
             }
         }
     }
+}
+
+fn stat_mod(effects: &Vec<Effect>, stat: Stat) -> i8 {
+    effects
+        .iter()
+        .map(|e| match e {
+            Effect::StatModifier(s, modifier) => {
+                if *s == stat {
+                    *modifier
+                } else {
+                    0
+                }
+            }
+            _ => 0,
+        })
+        .sum::<i8>()
 }
