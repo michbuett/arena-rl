@@ -1,6 +1,7 @@
 use sdl2::rect::{Rect, Point};
 use crate::core::{UserInput};
 
+#[derive(Clone, Copy, Debug)]
 pub struct ScreenPos(pub i32, pub i32);
 
 impl ScreenPos {

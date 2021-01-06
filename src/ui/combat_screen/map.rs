@@ -38,9 +38,22 @@ pub fn render(
         
     cvs.set_viewport(None);
 
+    let default_action = if let CombatState::WaitForUserAction(_, Some(InputContext::SelectedArea(pos, _, actions_at))) = &game.state {
+        actions_at.iter().cloned().next().map(|(action, cost)| (*pos, action, cost))
+    } else {
+        None
+    };
+
     Ok(vec!(ClickArea {
         clipping_area: viewport.clone(),
         action: Box::new(move |screen_pos| {
+            let clicked_pos = screen_pos_to_map_pos(screen_pos, scroll_offset);
+
+            if let Some((wp, action, cost)) = &default_action {
+                if clicked_pos.0.floor() == wp.0.floor() && clicked_pos.1.floor() == wp.1.floor() {
+                    return UserInput::SelectAction((action.clone(), *cost));
+                }
+            }
             UserInput::SelectWorldPos(screen_pos_to_map_pos(screen_pos, scroll_offset))
         })
     }))
