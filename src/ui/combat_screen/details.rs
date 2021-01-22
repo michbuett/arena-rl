@@ -51,14 +51,7 @@ fn draw_area_details(
         for o in objects {
             match o {
                 GameObject::Actor(a) => {
-                    let condition = match a.num_wounds() {
-                        0 => "perfect condition",
-                        1 => "scratched",
-                        2..=4 => "wounded",
-                        _ => "critically wounded",
-                    };
-
-                    txt += &format!("\n{} ({})\n", a.name, condition);
+                    txt += &describe_actor(a);
                 }
 
                 GameObject::Item(_, i) => {
@@ -178,4 +171,35 @@ fn display_text((action, delay): &(Action, u8)) -> String {
         Action::MeleeAttack(_, a) => format!("{} ({})", a.name.0, delay),
         _ => format!("Unnamed action: {:?}", action),
     }
+}
+
+
+fn describe_actor(a: &Actor) -> String {
+    let condition = match a.num_wounds() {
+        0 => "perfect condition",
+        1 => "scratched",
+        2..=4 => "wounded",
+        _ => "critically wounded",
+    };
+
+    // let mut active_effect: String = "".to_string();
+    // for (DisplayStr(eff_name), eff) in a.effects.iter() {
+    //     active_effect += "\n";
+    //     active_effect += eff_name;
+    // }
+
+    let traits_str: String = a.active_traits().map(describe_trait).collect::<Vec<_>>().join("\n");
+
+    format!("\n{} ({})\n{}", a.name, condition, traits_str)
+}
+
+fn describe_trait(t: &Trait) -> String {
+    let Trait { name, source, .. } = t;
+
+    let source_str = match source {
+        TraitSource::IntrinsicProperty => "initrinsic".to_string(),
+        TraitSource::Temporary(rounds_left) => format!("temporary, {} left", rounds_left),
+    };
+    
+    format!("{} ({})", name.0, source_str)
 }

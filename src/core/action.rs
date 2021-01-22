@@ -6,10 +6,11 @@ use specs::prelude::*;
 
 use crate::components::{Fx, GameObjectCmp};
 use crate::core::ai::find_movement_obstacles;
-use crate::core::{Map, Tile,MapPos};
+use crate::core::{DisplayStr, Map, MapPos, Tile};
 // use crate::core::{Tile, WorldPos};
 
-use super::actors::{Actor, AttackOption, CombatResult, Condition, GameObject, Team};
+use super::actors::*;
+// use super::actors::{Actor, AttackOption, CombatResult, Condition, GameObject, Team};
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -19,6 +20,7 @@ pub enum Action {
     Activate(Entity),
     MeleeAttack(Entity, AttackOption),
     Charge(Entity, AttackOption),
+    UseAbility(Entity, DisplayStr, Trait),
     EndTurn(Team),
 }
 
@@ -30,6 +32,10 @@ impl Action {
     // pub fn wait() -> Act {
     //     (Self::Wait(), 1)
     // }
+
+    pub fn done() -> Act {
+        (Self::Wait(), 0)
+    }
 
     pub fn recover() -> Act {
         (Self::Wait(), 1)
@@ -49,6 +55,10 @@ impl Action {
 
     pub fn charge(target: Entity, attack: AttackOption) -> Act {
         (Self::Charge(target, attack), 1)
+    }
+
+    pub fn use_ability(target: Entity, name: DisplayStr, t: Trait, delay: u8) -> Act {
+        (Self::UseAbility(target, name, t), delay)
     }
 }
 
@@ -96,7 +106,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             for (e, o) in (&entities, &actors).join() {
                 if let GameObject::Actor(a) = &o.0 {
                     if a.team == team && a.pending_action.is_none() {
-                        updates.push(update_actor(e, a.clone().prepare((Action::Wait(), 0))));
+                        updates.push(update_actor(e, a.clone().prepare(Action::done())));
                     }
                 }
             }
@@ -106,15 +116,36 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
 
         Action::Wait() => no_op(),
 
-        Action::MoveTo(to) => single_update(entity, actor.move_to(to), 200),
+        Action::UseAbility(target_entity, _, t) => {
+            if let Some(target_actor) = get_actor(target_entity, w) {
+                let fx_pos = target_actor.pos.clone();
+                let fx_str = t.name.0.to_string();
 
-        Action::Activate(e) => {
-            let storage = w.read_storage::<GameObjectCmp>();
-            if let Some(GameObjectCmp(GameObject::Actor(a))) = storage.get(e) {
                 (
                     vec![
-                        update_actor(entity, actor.clone().deactivate()),
-                        update_actor(e, a.clone().activate()),
+                        update_actor(
+                            target_entity,
+                            target_actor
+                                .add_traits(&mut vec![t])
+                                .prepare(Action::done()),
+                        ),
+                        Change::Fx(Fx::text(fx_str, &fx_pos, 100)),
+                    ],
+                    millis(100),
+                )
+            } else {
+                no_op()
+            }
+        }
+
+        Action::MoveTo(to) => single_update(entity, actor.move_to(to).prepare(Action::done()), 200),
+
+        Action::Activate(target_e) => {
+            if let Some(target_a) = get_actor(target_e, w) {
+                (
+                    vec![
+                        update_actor(entity, actor.deactivate()),
+                        update_actor(target_e, target_a.activate()),
                     ],
                     millis(0),
                 )
@@ -133,7 +164,6 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
 
         Action::Charge(target_entity, attack) => {
             if let Some(target_actor) = get_actor(target_entity, w) {
-                // let attack = actor.melee_attack();
                 let from = MapPos::from_world_pos(actor.pos);
                 let to = MapPos::from_world_pos(target_actor.pos);
                 let steps_needed = from.distance(to) - 1;
@@ -144,7 +174,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     // => cancel charge
                     return no_op();
                 }
-                
+
                 let (map, game_objects): (Read<Map>, ReadStorage<GameObjectCmp>) = w.system_data();
                 let obstacles = find_movement_obstacles(&game_objects).ignore(to);
 
@@ -154,43 +184,23 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     // println!(" - steps needed: {}", steps_needed);
                     // println!(" - path: {:?}", p);
                     // println!(" - move to: {:?}", tile);
-                    let actor = actor.move_to(tile);
+                    let actor = actor.move_to(tile).add_traits(&mut vec![Trait {
+                        name: DisplayStr("Charging"),
+                        effects: vec![
+                            Effect::AttrMod(Attr::ToHit, 1),
+                            Effect::AttrMod(Attr::ToWound, 1),
+                            Effect::AttrMod(Attr::Defence, 1),
+                        ],
+                        source: TraitSource::Temporary(1),
+                    }]);
                     let mut updates = vec![update_actor(entity, actor.clone())];
-                    let (mut combat_updates, delay) = handle_attack((entity, actor), (target_entity, target_actor), attack);
+                    let (mut combat_updates, delay) =
+                        handle_attack((entity, actor), (target_entity, target_actor), attack);
 
                     updates.append(&mut combat_updates);
 
                     return (updates, delay);
                 }
-
-
-                // if d >= reach {
-                //     return handle_attack(
-                //         (entity, actor.move_to(*tile)),
-                //         (target_entity, target_actor),
-                //         attack,
-                //     );
-                // } else if reach < d && d <= reach + move_distance {
-                //     let obstacles = find_movement_obstacles(&objects).ignore(to);
-                //     if let Some(_) = map.find_straight_path(from, to, &obstacles) {
-                //     }
-                // }
-
-                // if attack.distance.0 <= distance && distance <= attack.distance.1 {
-                //     // target already within reaching distance
-                //     return handle_attack((entity, actor), (target_entity, target_actor), attack);
-                // }
-
-                // if let Some(path) = can_move_towards(&actor, &target_actor, &map, &game_objects) {
-                //     let l = max(path.len(), actor.move_distance().into());
-                //     if let Some(tile) = path.iter().take(l).last() {
-                //         return handle_attack(
-                //             (entity, actor.move_to(*tile)),
-                //             (target_entity, target_actor),
-                //             attack,
-                //         );
-                //     }
-                // }
             }
 
             return no_op();
@@ -245,13 +255,12 @@ fn update_actor(e: Entity, a: Actor) -> Change {
 }
 
 fn get_actor(e: Entity, w: &World) -> Option<Actor> {
-    let game_objects = w.read_storage::<GameObjectCmp>();
-
-    if let Some(GameObjectCmp(GameObject::Actor(a))) = game_objects.get(e) {
-        return Some(a.clone());
-    }
-
-    None
+    w.read_storage::<GameObjectCmp>()
+        .get(e)
+        .and_then(|o| match o {
+            GameObjectCmp(GameObject::Actor(a)) => Some(a.clone()),
+            _ => None,
+        })
 }
 
 fn no_op() -> ActionResult {

@@ -1,15 +1,15 @@
-use crate::core::dice::*;
-use crate::core::{Action, DisplayStr, Tile, WorldPos};
 use std::cmp::max;
 
-const STAT_AVERAGE: i8 = 0;
+pub use super::traits::*;
+
+use crate::core::dice::*;
+use crate::core::{Action, DisplayStr, Tile, WorldPos};
 
 #[derive(Debug, Clone)]
 pub struct Item {
     pub name: String,
     pub look: Look,
 }
-
 
 #[derive(Debug, Clone)]
 pub enum AiBehaviour {
@@ -40,7 +40,7 @@ impl ActorBuilder {
         }
     }
 
-    pub fn build(self) -> Actor {
+    pub fn build(mut self) -> Actor {
         Actor {
             name: self.name,
             active: false,
@@ -56,7 +56,7 @@ impl ActorBuilder {
             turn: 0,
             quick_action_available: true,
         }
-        .set_traits(self.traits)
+        .add_traits(&mut self.traits)
     }
 
     pub fn behaviour(self, b: AiBehaviour) -> Self {
@@ -87,7 +87,7 @@ pub type Look = Vec<(&'static str, u16)>;
 pub struct Actor {
     pain: u8,
     wounds: u8,
-    effects: Vec<Effect>,
+    pub effects: Vec<(DisplayStr, Effect)>,
     traits: Vec<Trait>,
     look: Look,
     quick_action_available: bool,
@@ -108,6 +108,7 @@ impl Actor {
         Self {
             pos: to.to_world_pos(),
             quick_action_available: false,
+            // active: false,
             ..self
         }
     }
@@ -124,6 +125,11 @@ impl Actor {
         self.behaviour.is_none()
     }
 
+    pub fn can_activate(&self) -> bool {
+        // self.pending_action.is_none() && self.quick_action_available
+        self.pending_action.is_none()
+    }
+    
     pub fn activate(self) -> Self {
         Self {
             active: true,
@@ -148,27 +154,73 @@ impl Actor {
     }
 
     pub fn start_next_turn(self) -> (Actor, Option<(Action, u8)>) {
+        let mut new_traits = Vec::new();
+
+        for t in self.traits.iter() {
+            if let Trait {
+                source: TraitSource::Temporary(time),
+                ..
+            } = t
+            {
+                if *time > 1 {
+                    new_traits.push(t.clone());
+                }
+            } else {
+                new_traits.push(t.clone());
+            }
+        }
+
         let pending_action = self.pending_action;
         let next_turn_actor = Self {
             pending_action: None,
             quick_action_available: true,
+            traits: Vec::new(),
             ..self
-        };
+        }
+        .add_traits(&mut new_traits);
 
         (next_turn_actor, pending_action)
     }
 
+    pub fn ability_self(&self) -> Vec<(DisplayStr, Trait, u8)> {
+        let mut result = vec!();
+        
+        for e in self.effects.iter() {
+            if let (_, Effect::GiveTrait(name, AbilityTarget::OnSelf, t)) = e {
+                result.push((name.clone(), t.clone(), 0));
+            }
+        }
+
+        result.push((DisplayStr("Recover"), Trait {
+            name: DisplayStr("Recovering"),
+            effects: vec!(Effect::Recovering),
+            source: TraitSource::Temporary(1),
+        }, 0));
+
+        result
+    }
+
     pub fn melee_attack(&self) -> AttackOption {
         AttackOption {
-            name: DisplayStr("Melee Attack"),
+            name: DisplayStr("Unarmed attack"),
             reach: 1,
-            to_hit: STAT_AVERAGE,
-            to_wound: STAT_AVERAGE,
+            to_hit: 0,
+            to_wound: 0,
         }
     }
 
-    fn set_traits(self, traits: Vec<Trait>) -> Self {
-        let effects = traits.iter().flat_map(|t| t.effects.to_vec()).collect();
+    pub fn add_traits(self, new_traits: &mut Vec<Trait>) -> Self {
+        let mut traits = self.traits;
+        traits.append(new_traits);
+        let effects = traits
+            .iter()
+            .flat_map(|t| {
+                t.effects
+                    .iter()
+                    .map(|e| (t.name.clone(), e.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
 
         Self {
             traits,
@@ -177,12 +229,25 @@ impl Actor {
         }
     }
 
-    pub fn is_dying(&self) -> bool {
-        self.effects.contains(&Effect::Dying())
-    }
+    // fn set_traits(self, traits: Vec<Trait>) -> Self {
+    //     let effects = traits.iter().flat_map(|t| t.effects.to_vec()).collect();
 
+    //     Self {
+    //         traits,
+    //         effects,
+    //         ..self
+    //     }
+    // }
+
+    pub fn is_dying(&self) -> bool {
+        self.effects.iter().any(|(_, e)| match e {
+            Effect::Dying => true,
+            _ => false,
+        })
+    }
+ 
     fn wound(self, w: Wound) -> Condition {
-        let default_wounds_num = 3 + self.stat(Stat::Wound);
+        let default_wounds_num = 3 + self.attr(Attr::Wound).val();
         let max_wounds = max(1, default_wounds_num) as u8;
         let wounds = self.wounds + w.wound;
 
@@ -199,6 +264,14 @@ impl Actor {
         }
     }
 
+    // pub fn wounds(&self) -> (u8, u8) {
+    //     let default_wounds_num = 3 + self.attr(Attr::Wound).val();
+    //     let max_wounds = max(1, default_wounds_num) as u8;
+
+    //     (self.wounds, max_wounds)
+    // }
+
+    #[deprecated]
     pub fn num_wounds(&self) -> usize {
         self.wounds as usize
     }
@@ -218,8 +291,22 @@ impl Actor {
     ///  5 => Supernatural
     ///  6 => ? (Ultra, Marvelous)
     ///  7 => Godlike (unlimited power)
-    pub fn stat(&self, stat: Stat) -> i8 {
-        stat_mod(&self.effects, stat)
+    pub fn attr(&self, s: Attr) -> AttrVal {
+        AttrVal::new(s, &self.effects)
+    }
+
+    pub fn active_traits(&self) -> ActiveTraitIter {
+        ActiveTraitIter(self.traits.iter())
+    }
+}
+
+pub struct ActiveTraitIter<'a> (std::slice::Iter<'a, Trait>);
+
+impl<'a> Iterator for ActiveTraitIter<'a> {
+    type Item = &'a Trait;
+
+    fn next(&mut self) -> Option<&'a Trait> {
+        self.0.next() // TODO consider conditions
     }
 }
 
@@ -240,42 +327,16 @@ pub struct AttackOption {
 impl AttackOption {
     fn into_attack(self, a: &Actor) -> Attack {
         Attack {
-            to_hit: self.to_hit + a.stat(Stat::ToHit),
-            to_wound: self.to_wound + a.stat(Stat::ToWound),
+            to_hit: a.attr(Attr::ToHit).modify(self.name.clone(), self.to_hit),
+            to_wound: a.attr(Attr::ToWound).modify(self.name.clone(), self.to_wound),
         }
     }
 }
 
-pub struct Attack {
-    to_hit: i8,
-    to_wound: i8,
-}
-
 #[derive(Debug, Clone)]
-pub struct Trait {
-    pub name: DisplayStr,
-    pub effects: Vec<Effect>,
-    pub source: TraitSource,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum TraitSource {
-    IntrinsicProperty,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Effect {
-    StatModifier(Stat, i8),
-    Dying(),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Stat {
-    Wound,
-    ToHit,
-    ToWound,
-    Defence,
-    Protection,
+pub struct Attack {
+    to_hit: AttrVal,
+    to_wound: AttrVal,
 }
 
 #[derive(Debug, Clone)]
@@ -304,14 +365,29 @@ pub enum CombatResult {
 }
 
 #[derive(Debug, Clone)]
+pub struct CombatResult2 {
+    attacker: Actor,
+    defender: Actor,
+    log: Vec<String>,
+}
+
+// pub enum CombatEffect {
+//     Miss,
+//     Hit,
+//     Scratch,
+//     Wound,
+//     Kill,
+// }
+
+#[derive(Debug, Clone)]
 pub enum Condition {
     Alive(Actor),
     Dead(WorldPos, Item),
 }
 
 pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> (CombatResult, Vec<String>) {
-    let attack = attack.into_attack(&attacker);
-    let attack_difficulty = attack.to_hit - target.stat(Stat::Defence);
+    let mut attack = attack.into_attack(&attacker);
+    let attack_difficulty = attack.to_hit.val() - target.attr(Attr::Defence).val();
     let to_hit_result = D6::roll().result(attack_difficulty);
     let mut log = vec![format!(
         "{} attacks {} (difficulty: {:?})",
@@ -325,10 +401,18 @@ pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> (CombatRe
         }
 
         RR::SF | RR::S_ | RR::SS => {
-            let to_wound_difficulty = attack.to_wound - target.stat(Stat::Protection);
+            if let RR::SF = to_hit_result {
+                attack.to_wound = attack.to_wound.modify(DisplayStr("Scratch hit"), -1);
+            }
+
+            if let RR::SS = to_hit_result {
+                attack.to_wound = attack.to_wound.modify(DisplayStr("Critical hit"), 1);
+            }
+        
+            let to_wound_difficulty = target.attr(Attr::Protection).val() - attack.to_wound.val();
             let to_wound_result = D6::roll().result(to_wound_difficulty);
 
-            log.push(format!("{} hits", attacker.name));
+            log.push(format!("{} hits with {:?}", attacker.name, attack));
 
             match to_wound_result {
                 RR::FF | RR::F_ => (CombatResult::Block(), log),
@@ -342,18 +426,3 @@ pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> (CombatRe
     }
 }
 
-fn stat_mod(effects: &Vec<Effect>, stat: Stat) -> i8 {
-    effects
-        .iter()
-        .map(|e| match e {
-            Effect::StatModifier(s, modifier) => {
-                if *s == stat {
-                    *modifier
-                } else {
-                    0
-                }
-            }
-            _ => 0,
-        })
-        .sum::<i8>()
-}

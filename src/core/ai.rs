@@ -47,9 +47,11 @@ pub fn actions_at(
 
     if let Some((other_entity, other_actor)) = find_actor_at(world, &selected_pos) {
         if entity.id() == other_entity.id() {
-            result.push(Action::recover());
+            for (n, t, d) in actor.ability_self() {
+                result.push(Action::use_ability(*entity, n, t, d));
+            }
         } else {
-            if actor.team == other_actor.team {
+            if actor.team == other_actor.team && other_actor.can_activate() {
                 result.push(Action::activate(other_entity));
             } else {
                 if let Some(attack) = can_attack_melee(actor, &other_actor, &map, &objects) {

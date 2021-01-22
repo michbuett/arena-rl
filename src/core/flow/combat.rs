@@ -74,7 +74,7 @@ fn next_ready_entity(world: &World, active_team: &Team) -> Option<(Entity, Actor
 
     for (e, o) in (&entities, &actors).join() {
         if let GameObject::Actor(actor) = o.0.clone() {
-            if &actor.team == active_team && actor.pending_action.is_none() {
+            if &actor.team == active_team && actor.can_activate() {
                 return Some((e, actor));
             }
         }

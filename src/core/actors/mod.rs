@@ -1,10 +1,14 @@
 mod actor;
 mod generator;
+mod traits;
 
-pub use generator::{generate_player, generate_enemy_easy};
-pub use actor::{ActorBuilder, Actor, AiBehaviour, Team, Look, AttackOption, Attack, CombatResult, Condition, Item, combat, };
+pub use actor::{
+    combat, Actor, ActorBuilder, AiBehaviour, Attack, AttackOption, CombatResult, Condition,
+    Effect, Item, Look, Attr, Team, Trait, TraitSource,
+};
+pub use generator::{generate_enemy_easy, generate_player};
 
-use crate::core::{WorldPos};
+use crate::core::WorldPos;
 
 /// Anything that exists in the world
 #[derive(Debug, Clone)]

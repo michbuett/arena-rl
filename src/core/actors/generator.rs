@@ -1,6 +1,7 @@
 use crate::core::{DisplayStr, WorldPos};
 
 use super::actor::*;
+// use super::traits::*;
 
 pub fn generate_player(pos: WorldPos, t: Team) -> Actor {
     extern crate rand;
@@ -10,6 +11,18 @@ pub fn generate_player(pos: WorldPos, t: Team) -> Actor {
 
     ActorBuilder::new(generate_name(), pos, t)
         .look(vec![("player", rng.sample(range))])
+        .traits(vec!(
+            Trait {
+                name: DisplayStr("Defensiv combat training"),
+                effects: vec!(Effect::GiveTrait(DisplayStr("Defensiv stance"), AbilityTarget::OnSelf, Trait {
+                // effects: vec!(Effect::Ability(DisplayStr("Defensiv stance"), AbilityTarget::OnSelf, Ability::GiveTrait(Trait {
+                    name: DisplayStr("Defensiv stance"),
+                    effects: vec!(Effect::AttrMod(Attr::Defence, 1)),
+                    source: TraitSource::Temporary(1),
+                })),
+                source: TraitSource::IntrinsicProperty,
+            }
+        ))
         .build()
 }
 
@@ -19,7 +32,7 @@ pub fn generate_enemy_easy(pos: WorldPos, t: Team) -> Actor {
         .behaviour(AiBehaviour::Default)
         .traits(vec![Trait {
             name: DisplayStr("Fragile physiology"),
-            effects: vec![Effect::StatModifier(Stat::Wound, -2)],
+            effects: vec![Effect::AttrMod(Attr::Wound, -2)],
             source: TraitSource::IntrinsicProperty,
         }])
         .build()

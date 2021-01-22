@@ -122,6 +122,7 @@ fn map_action_to_sprite(a: &Action) -> Sprite {
     match a {
         Action::MoveTo(_) => from_tiles(3641),
         Action::MeleeAttack(..) => from_tiles(3620),
+        Action::Charge(..) => from_tiles(3640),
         Action::Wait(..) => from_tiles(3638),
         _ => from_tiles(3508),
     }
