@@ -41,19 +41,6 @@ fn main() -> Result<(), String> {
     let mut click_areas = vec!();
     let mut sdl_events = sdl_context.event_pump()?;
     let mut game = Game::Start;
-    // let mut game = Game::Combat(CombatData {
-    //     turn: 0,
-    //     world,
-    //     dispatcher,
-    //     state: CombatState::Init (vec!(
-    //         create_player(WorldPos(6.0, 6.0)),
-    //         create_player(WorldPos(6.0, 5.0)),
-    //         create_player(WorldPos(5.0, 6.0)),
-    //         create_enemy(WorldPos(4.0, 3.0)),
-    //         create_enemy(WorldPos(6.0, 0.0)),
-    //     )),
-    // });
-
     let mut ui = init_ui(&game, canvas.viewport(), pixel_ratio);
 
     'main: loop {

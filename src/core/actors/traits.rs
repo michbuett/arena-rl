@@ -19,6 +19,7 @@ pub enum TraitSource {
 pub enum Effect {
     AttrMod(Attr, i8),
     MeleeAttack(DisplayStr, u8, i8, i8),
+    MeleeDefence(DisplayStr, i8),
     GiveTrait(DisplayStr, AbilityTarget, Trait),
     // Ability(DisplayStr, AbilityTarget, Ability),
     Recovering,
@@ -43,9 +44,13 @@ pub enum Ability {
     // Aura(Box<Trait>),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Attr {
     Wound,
+    MeleeAttack,
+    MeleeDefence,
+    RangeAttack,
+    RangeDefence,
     ToHit,
     ToWound,
     Defence,

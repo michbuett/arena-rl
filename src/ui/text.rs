@@ -2,10 +2,12 @@ use std::string::ToString;
 
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
-use sdl2::render::{Texture, TextureCreator, WindowCanvas};
-// use sdl2::render::{BlendMode, Texture, TextureCreator, WindowCanvas};
+// use sdl2::render::{Texture, TextureCreator, WindowCanvas};
+use sdl2::render::{BlendMode, Texture, TextureCreator, WindowCanvas};
 use sdl2::surface::Surface;
 use sdl2::ttf::Font as Sdl2Font;
+
+use crate::core::DisplayStr;
 
 const ASCII: &str = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
 
@@ -109,7 +111,7 @@ impl<'a> Font<'a> {
         })
     }
 
-    pub fn text(&self, txt: String) -> TextBuilder {
+    pub fn text(&self, txt: DisplayStr) -> TextBuilder {
         TextBuilder::new(&self, txt)
     }
 }
@@ -124,10 +126,11 @@ pub struct TextBuilder<'a> {
 }
 
 impl<'a> TextBuilder<'a> {
-    fn new(font: &'a Font<'a>, text: String) -> Self {
+    fn new(font: &'a Font<'a>, text: DisplayStr) -> Self {
+    // fn new(font: &'a Font<'a>, text: String) -> Self {
         Self {
             font,
-            text,
+            text: text.into_string(),
             background: None,
             padding: 0,
             border: None,
@@ -267,8 +270,12 @@ impl<'a> PreparedText<'a> {
         let (w, h) = self.dimension();
 
         if let Some(color) = self.background {
-            // enable BlendMode::Blend to allow (half) transparent backgrounds
-            // cvs.set_blend_mode(BlendMode::Blend); // TODO test performance impact
+            if color.a < 255 {
+                cvs.set_blend_mode(BlendMode::Blend); // TODO test performance impact
+            } else {
+                cvs.set_blend_mode(BlendMode::None);
+            }
+                
             cvs.set_draw_color(color);
             cvs.fill_rect(Rect::new(pos.0, pos.1, w, h))?;
         }

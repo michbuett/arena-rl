@@ -70,6 +70,29 @@ pub fn find_actor_at(w: &World, at: &WorldPos) -> Option<(Entity, Actor)> {
     None
 }
 
+pub fn can_attack_with(
+    actor: &Actor,
+    target: &Actor,
+    attack: &AttackOption,
+    map: &Read<Map>,
+    objects: &ReadStorage<GameObjectCmp>,
+) -> bool {
+    let from = MapPos::from_world_pos(actor.pos);
+    let to = MapPos::from_world_pos(target.pos);
+    let d = from.distance(to);
+
+    if d == 1 {
+        return true;
+    }  else if d <= attack.reach.into() {
+        let obstacles = find_movement_obstacles(&objects).ignore(to);
+        if let Some(_) = map.find_straight_path(from, to, &obstacles) {
+            return true;
+        }
+    }
+    
+    false
+}
+
 pub fn can_attack_melee(
     actor: &Actor,
     target: &Actor,
@@ -77,30 +100,11 @@ pub fn can_attack_melee(
     objects: &ReadStorage<GameObjectCmp>,
 ) -> Option<AttackOption> {
     let attack = actor.melee_attack();
-    let from = MapPos::from_world_pos(actor.pos);
-    let to = MapPos::from_world_pos(target.pos);
-    let d = from.distance(to);
-
-    if d == 1 {
-        return Some(attack);
-    }  else if d <= attack.reach.into() {
-        let obstacles = find_movement_obstacles(&objects).ignore(to);
-        if let Some(_) = map.find_straight_path(from, to, &obstacles) {
-            return Some(attack);
-        }
+    if can_attack_with(actor, target, &attack, map, objects) {
+        Some(attack)
+    } else {
+        None
     }
-
-    
-    // let from = MapPos::from_world_pos(actor.pos);
-    // let to = MapPos::from_world_pos(target.pos);
-    // let obstacles = find_movement_obstacles(&objects).ignore(to);
-    // if let Some(path) = map.find_straight_path(from, to, &obstacles) {
-    //     if path.len() < actor.melee_attack().reach.into() {
-    //         return Some(actor.melee_attack());
-    //     }
-    // }
-
-    None
 }
 
 pub fn can_charge(
@@ -113,7 +117,7 @@ pub fn can_charge(
     let from = MapPos::from_world_pos(actor.pos);
     let to = MapPos::from_world_pos(target.pos);
     let d = from.distance(to);
-    let reach: usize = attack.reach.into();
+    // let reach: usize = attack.reach.into();
     let move_distance: usize = actor.move_distance().into();
 
     if actor.can_move() && 1 < d && d <= 1 + move_distance {

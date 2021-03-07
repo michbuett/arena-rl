@@ -71,7 +71,7 @@ pub enum Change {
 
 pub type Act = (Action, u8);
 pub type EA = (Entity, Actor);
-pub type ActionResult = (Vec<Change>, Duration);
+pub type ActionResult = (Vec<Change>, Duration, Option<DisplayStr>);
 
 pub fn act((entity, actor, action, delay): (Entity, Actor, Action, u8), w: &World) -> ActionResult {
     if delay > 0 {
@@ -87,16 +87,18 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             let (actor, pending_action) = actor.start_next_turn();
             let mut updates = vec![update_actor(entity, actor.clone())];
             let mut wait_time = millis(0);
+            let mut log = None;
 
             if let Some(pending_action) = pending_action {
                 let (action, delay) = pending_action;
-                let (mut more_updates, more_wait_time) = act((entity, actor, action, delay), w);
+                let (mut more_updates, more_wait_time, log_entry) = act((entity, actor, action, delay), w);
 
                 updates.append(&mut more_updates);
                 wait_time += more_wait_time;
+                log = log_entry;
             }
 
-            (updates, wait_time)
+            (updates, wait_time, log)
         }
 
         Action::EndTurn(team) => {
@@ -111,15 +113,16 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                 }
             }
 
-            (updates, millis(0))
+            (updates, millis(0), None)
         }
 
         Action::Wait() => no_op(),
 
-        Action::UseAbility(target_entity, _, t) => {
+        Action::UseAbility(target_entity, ability_name, t) => {
             if let Some(target_actor) = get_actor(target_entity, w) {
                 let fx_pos = target_actor.pos.clone();
-                let fx_str = t.name.0.to_string();
+                let fx_str = t.name.to_string();
+                let actor_name = target_actor.name.clone();
 
                 (
                     vec![
@@ -132,6 +135,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                         Change::Fx(Fx::text(fx_str, &fx_pos, 100)),
                     ],
                     millis(100),
+                    Some(DisplayStr::new(format!("{} used ability: {}", actor_name, ability_name))),
                 )
             } else {
                 no_op()
@@ -148,6 +152,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                         update_actor(target_e, target_a.activate()),
                     ],
                     millis(0),
+                    None,
                 )
             } else {
                 no_op()
@@ -156,6 +161,14 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
 
         Action::MeleeAttack(target_entity, attack) => {
             if let Some(target_actor) = get_actor(target_entity, w) {
+                let from = MapPos::from_world_pos(actor.pos);
+                let to = MapPos::from_world_pos(target_actor.pos);
+
+                if from.distance(to) > attack.reach.into() {
+                    // attacker cannot reach target => cancel attack
+                    return no_op();
+                }
+
                 handle_attack((entity, actor), (target_entity, target_actor), attack)
             } else {
                 no_op()
@@ -185,7 +198,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     // println!(" - path: {:?}", p);
                     // println!(" - move to: {:?}", tile);
                     let actor = actor.move_to(tile).add_traits(&mut vec![Trait {
-                        name: DisplayStr("Charging"),
+                        name: DisplayStr::new("Charging"),
                         effects: vec![
                             Effect::AttrMod(Attr::ToHit, 1),
                             Effect::AttrMod(Attr::ToWound, 1),
@@ -194,12 +207,12 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                         source: TraitSource::Temporary(1),
                     }]);
                     let mut updates = vec![update_actor(entity, actor.clone())];
-                    let (mut combat_updates, delay) =
+                    let (mut combat_updates, delay, log) =
                         handle_attack((entity, actor), (target_entity, target_actor), attack);
 
                     updates.append(&mut combat_updates);
 
-                    return (updates, delay);
+                    return (updates, delay, log);
                 }
             }
 
@@ -237,13 +250,7 @@ fn handle_attack<'a>(
         },
     };
 
-    println!("\n");
-    for entry in log.iter() {
-        println!("{}", entry);
-    }
-    println!("\n");
-
-    (changes, millis(1000))
+    (changes, millis(1000), Some(log))
 }
 
 fn millis(ms: u64) -> Duration {
@@ -264,9 +271,10 @@ fn get_actor(e: Entity, w: &World) -> Option<Actor> {
 }
 
 fn no_op() -> ActionResult {
-    (vec![], millis(0))
+    (vec![], millis(0), None)
 }
 
+/// Create an action result with a single update of the actor component
 fn single_update(e: Entity, a: Actor, ms: u64) -> ActionResult {
-    (vec![update_actor(e, a)], millis(ms))
+    (vec![update_actor(e, a)], millis(ms), None)
 }

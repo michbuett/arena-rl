@@ -18,7 +18,7 @@ use sdl2::render::WindowCanvas;
 use std::time::Instant;
 // use specs::prelude::*;
 
-use crate::core::{Game, UserInput};
+use crate::core::{Game, UserInput, DisplayStr};
 // use specs::prelude::*;
 
 pub fn render(
@@ -43,7 +43,7 @@ pub fn render(
 
     assets
         .font("normal")?
-        .text(format!("FPS: {}", ui.fps))
+        .text(DisplayStr::new(format!("FPS: {}", ui.fps)))
         .padding(10)
         .background(Color::RGB(252, 251, 250))
         .prepare()

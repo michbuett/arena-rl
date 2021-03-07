@@ -82,7 +82,7 @@ fn render_text<'a>(
     text: &Text,
 ) -> Result<(), String> {
     let mut target_pos = screen_pos;
-    let mut txt = assets.font(text.font)?.text(text.txt.to_owned());
+    let mut txt = assets.font(text.font)?.text(DisplayStr::new(text.txt.clone()));
 
     if let Some(offset) = text.offset {
         target_pos = (target_pos.0 + offset.0, target_pos.1 + offset.1);

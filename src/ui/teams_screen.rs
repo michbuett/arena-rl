@@ -2,7 +2,7 @@ use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
 
-use crate::core::{GameObject, UserInput};
+use crate::core::{GameObject, UserInput, DisplayStr};
 // use crate::core::{GameObject, UserInput, WorldPos, Team, Armor};
 use crate::ui::{AssetRepo, ClickArea, ClickAreas};
 
@@ -14,7 +14,7 @@ pub fn render(
 ) -> Result<ClickAreas, String> {
     let text = assets
         .font("big")?
-        .text("Your team".to_string())
+        .text(DisplayStr::new("Your team"))
         .prepare();
 
     text.draw(
@@ -36,7 +36,7 @@ pub fn render_start_btn(
 ) -> Result<ClickArea, String> {
     let start_btn = assets
         .font("normal")?
-        .text("Enter the arena ...".to_string())
+        .text(DisplayStr::new("Enter the arena ..."))
         .padding(20)
         .border(3, Color::RGB(23, 22, 21))
         .background(Color::RGB(252, 251, 250))

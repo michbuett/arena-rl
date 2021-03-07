@@ -29,6 +29,7 @@ pub fn render(
     };
 
     render_screen_texts(cvs, assets, viewport, game)?;
+
     let mut button_clicks = render_next_turn_btn(cvs, assets, viewport, game)?;
 
     click_areas.append(&mut button_clicks);
@@ -45,11 +46,25 @@ fn render_screen_texts(
 ) -> Result<(), String> {
     assets
         .font("normal")?
-        .text(format!("Turn: {}", game.turn))
+        .text(DisplayStr::new(format!("Turn: {}", game.turn)))
         .padding(10)
         .background(Color::RGB(252, 251, 250))
         .prepare()
         .draw(cvs, (10, 10))?;
+
+    let mut y = 75;
+    for s in &game.log {
+        let msg = assets
+            .font("normal")?
+            .text(s.clone())
+            .max_width(500)
+            .background(Color::RGBA(252, 251, 250, 100))
+            .prepare();
+
+        msg.draw(cvs, (10, y))?;
+
+        y += 10 + msg.dimension().1 as i32;
+    }
 
     // if let CombatState::Win(Team(_, num, ..)) = game.state {
     //     let text = assets
@@ -76,7 +91,7 @@ fn render_next_turn_btn(
     game: &CombatData,
 ) -> Result<ClickAreas, String> {
     let txt_box = &assets.font("normal")?
-        .text("Next Turn".to_string())
+        .text(DisplayStr::new("Next Turn"))
         .padding(10)
         .border(3, Color::RGB(23, 22, 21))
         .background(Color::RGB(252, 251, 250))

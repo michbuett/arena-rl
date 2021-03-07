@@ -13,13 +13,41 @@ pub fn generate_player(pos: WorldPos, t: Team) -> Actor {
         .look(vec![("player", rng.sample(range))])
         .traits(vec!(
             Trait {
-                name: DisplayStr("Defensiv combat training"),
-                effects: vec!(Effect::GiveTrait(DisplayStr("Defensiv stance"), AbilityTarget::OnSelf, Trait {
-                // effects: vec!(Effect::Ability(DisplayStr("Defensiv stance"), AbilityTarget::OnSelf, Ability::GiveTrait(Trait {
-                    name: DisplayStr("Defensiv stance"),
+                name: DisplayStr::new("Defensiv combat training"),
+                effects: vec!(Effect::GiveTrait(DisplayStr::new("Defensiv stance"), AbilityTarget::OnSelf, Trait {
+                    name: DisplayStr::new("Defensiv stance"),
                     effects: vec!(Effect::AttrMod(Attr::Defence, 1)),
                     source: TraitSource::Temporary(1),
                 })),
+                source: TraitSource::IntrinsicProperty,
+            }
+        ))
+        .build()
+}
+
+pub fn generate_player2(pos: WorldPos, t: Team) -> Actor {
+    ActorBuilder::new(generate_name(), pos, t)
+        .look(tiles(vec![5125, 5982, 5302, 5509, 5633, 5950]))
+        .traits(vec!(
+            Trait {
+                name: DisplayStr::new("Towershield"),
+                effects: vec!(
+                    Effect::AttrMod(Attr::MeleeDefence, 2),
+                    Effect::AttrMod(Attr::RangeDefence, 1),
+                    Effect::GiveTrait(DisplayStr::new("Block with Shield"), AbilityTarget::OnSelf, Trait {
+                        name: DisplayStr::new("Shield raised"),
+                        effects: vec!(Effect::MeleeDefence(DisplayStr::new("Block with shield"), 1)),
+                        source: TraitSource::Temporary(1),
+                    })
+                ),
+                source: TraitSource::IntrinsicProperty,
+            },
+
+            Trait {
+                name: DisplayStr::new("Flail"),
+                effects: vec!(
+                    Effect::MeleeAttack(DisplayStr::new("Swing Flail"), 2, 0, 2),
+                ),
                 source: TraitSource::IntrinsicProperty,
             }
         ))
@@ -31,7 +59,7 @@ pub fn generate_enemy_easy(pos: WorldPos, t: Team) -> Actor {
         .look(vec![("tile", 3965), ("tile", *one_of(&vec![5747, 5748, 5749]))],)
         .behaviour(AiBehaviour::Default)
         .traits(vec![Trait {
-            name: DisplayStr("Fragile physiology"),
+            name: DisplayStr::new("Fragile physiology"),
             effects: vec![Effect::AttrMod(Attr::Wound, -2)],
             source: TraitSource::IntrinsicProperty,
         }])
@@ -87,4 +115,8 @@ fn generate_name() -> String {
         "Zug The Ugly",
         "Zuvrog Sorrow Gouger",
     ]).to_string()
+}
+
+fn tiles(tiles: Vec<u16>) -> Look {
+    tiles.iter().map(|t| ("tile", *t)).collect()
 }

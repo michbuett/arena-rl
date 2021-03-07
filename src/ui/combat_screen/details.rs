@@ -87,7 +87,7 @@ fn draw_dialog(
     let (text, actions) = content;
     let txt_box = &assets
         .font("normal")?
-        .text(text)
+        .text(DisplayStr::new(text))
         .max_width(DLG_WIDTH)
         .padding(10)
         .background(Color::RGB(252, 251, 250))
@@ -130,6 +130,7 @@ fn draw_actions(
             .padding(10)
             .border(3, Color::RGB(23, 22, 21))
             .background(Color::RGB(252, 251, 250))
+            .max_width(DLG_WIDTH)
             .prepare();
 
         let (w, h) = txt_box.dimension();
@@ -163,14 +164,18 @@ fn draw_actions(
 // PRIVATE HELPER
 //
 
-fn display_text((action, delay): &(Action, u8)) -> String {
-    match action {
+fn display_text((action, delay): &(Action, u8)) -> DisplayStr {
+    let str = match action {
         Action::Wait() => format!("Wait"),
-        Action::MoveTo(..) => format!("Move Here ({})", delay),
+        Action::MoveTo(..) => format!("Move Here"),
         Action::Activate(_) => format!("Activate"),
-        Action::MeleeAttack(_, a) => format!("{} ({})", a.name.0, delay),
+        Action::MeleeAttack(_, a) => format!("{} ({})", a.name, delay),
+        Action::Charge(_, _) => "Charge!".to_string(),
+        Action::UseAbility(_, name, _) => format!("Use ability: {}", name),
         _ => format!("Unnamed action: {:?}", action),
-    }
+    };
+
+    DisplayStr::new(str)
 }
 
 
@@ -201,5 +206,5 @@ fn describe_trait(t: &Trait) -> String {
         TraitSource::Temporary(rounds_left) => format!("temporary, {} left", rounds_left),
     };
     
-    format!("{} ({})", name.0, source_str)
+    format!("{} ({})", name.clone().into_string(), source_str)
 }

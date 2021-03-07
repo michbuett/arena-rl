@@ -3,7 +3,7 @@ use std::time::Instant;
 use specs::prelude::*;
 
 use super::super::actors::GameObject;
-use crate::core::{Actor, Team, Action, WorldPos};
+use crate::core::{Actor, Team, Action, WorldPos, DisplayStr};
 
 #[derive(Debug)]
 pub enum UserInput {
@@ -36,6 +36,7 @@ pub struct CombatData<'a, 'b> {
     pub state: CombatState,
     pub world: World,
     pub dispatcher: Dispatcher<'a, 'b>,
+    pub log: Vec<DisplayStr>,
 }
 
 impl<'a, 'b> CombatData<'a, 'b> {

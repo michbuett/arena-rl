@@ -2,7 +2,7 @@ use sdl2::rect::Rect;
 use sdl2::render::{TextureQuery, WindowCanvas};
 
 use crate::ui::{ClickArea, ClickAreas, AssetRepo};
-use crate::core::UserInput;
+use crate::core::{UserInput, DisplayStr};
 
 pub fn render(
     cvs: &mut WindowCanvas,
@@ -17,7 +17,7 @@ pub fn render(
     cvs.copy(&logo, None, Rect::new(xpos, ypos, width, height))?;
 
     let text = assets.font("normal")?
-        .text("Click somewhere to continue ...".to_string())
+        .text(DisplayStr::new("Click somewhere to continue ..."))
         .prepare();
 
     text.draw(cvs, (

@@ -191,8 +191,8 @@ impl Actor {
             }
         }
 
-        result.push((DisplayStr("Recover"), Trait {
-            name: DisplayStr("Recovering"),
+        result.push((DisplayStr::new("Recover"), Trait {
+            name: DisplayStr::new("Recovering"),
             effects: vec!(Effect::Recovering),
             source: TraitSource::Temporary(1),
         }, 0));
@@ -202,11 +202,34 @@ impl Actor {
 
     pub fn melee_attack(&self) -> AttackOption {
         AttackOption {
-            name: DisplayStr("Unarmed attack"),
+            name: DisplayStr::new("Unarmed attack"),
             reach: 1,
             to_hit: 0,
             to_wound: 0,
+            // used_skill: Attr::ToHit,
+            // counter_skill: Attr::Defence,
         }
+    }
+
+    pub fn melee_defence(&self) -> Option<Defence> {
+    // pub fn melee_defence(&self) -> Option<DefenceOption> {
+        for (_, eff) in self.effects.iter() {
+            match eff {
+                Effect::MeleeDefence(name, modifier) => {
+                    return Some(Defence {
+                        name: name.clone(),
+                        defence: self.attr(Attr::MeleeDefence).modify(name.clone(), *modifier),
+                    })
+                    // return Some(DefenceOption {
+                    //     name: name.clone(),
+                    //     modifier: *modifier,
+                    // })
+                }
+                _ => {}
+            }
+        }
+
+        None
     }
 
     pub fn add_traits(self, new_traits: &mut Vec<Trait>) -> Self {
@@ -250,9 +273,10 @@ impl Actor {
         let default_wounds_num = 3 + self.attr(Attr::Wound).val();
         let max_wounds = max(1, default_wounds_num) as u8;
         let wounds = self.wounds + w.wound;
+        let pain = self.pain + w.pain;
 
         if wounds < max_wounds {
-            Condition::Alive(Self { wounds, ..self })
+            Condition::Alive(Self { wounds, pain, ..self })
         } else {
             Condition::Dead(
                 self.pos,
@@ -322,6 +346,8 @@ pub struct AttackOption {
     pub reach: u8,
     pub to_hit: i8,
     pub to_wound: i8,
+    // pub used_skill: Attr,
+    // pub counter_skill: Attr,
 }
 
 impl AttackOption {
@@ -329,14 +355,41 @@ impl AttackOption {
         Attack {
             to_hit: a.attr(Attr::ToHit).modify(self.name.clone(), self.to_hit),
             to_wound: a.attr(Attr::ToWound).modify(self.name.clone(), self.to_wound),
+            name: self.name,
+            // used_skill: self.used_skill,
+            // counter_skill: self.counter_skill,
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Attack {
+    name: DisplayStr,
     to_hit: AttrVal,
     to_wound: AttrVal,
+    // used_skill: Attr,
+    // counter_skill: Attr,
+}
+
+// #[derive(Debug, Clone)]
+// pub struct DefenceOption {
+//     pub name: DisplayStr,
+//     pub modifier: i8 // TODO: support skill modifier like "Big Shield", ...
+// }
+
+// impl DefenceOption {
+//     fn into_defence(self, a: &Actor) -> Defence {
+//         Defence {
+//             defence: a.attr(Attr::Defence).modify(self.name.clone(), self.modifier),
+//             // name: self.name,
+//         }
+//     }
+// }
+
+#[derive(Debug, Clone)]
+pub struct Defence {
+    pub name: DisplayStr,
+    pub defence: AttrVal,
 }
 
 #[derive(Debug, Clone)]
@@ -371,58 +424,83 @@ pub struct CombatResult2 {
     log: Vec<String>,
 }
 
-// pub enum CombatEffect {
-//     Miss,
-//     Hit,
-//     Scratch,
-//     Wound,
-//     Kill,
-// }
-
 #[derive(Debug, Clone)]
 pub enum Condition {
     Alive(Actor),
     Dead(WorldPos, Item),
 }
 
-pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> (CombatResult, Vec<String>) {
+pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> (CombatResult, DisplayStr) {
     let mut attack = attack.into_attack(&attacker);
     let attack_difficulty = attack.to_hit.val() - target.attr(Attr::Defence).val();
-    let to_hit_result = D6::roll().result(attack_difficulty);
+    let mut to_hit_roll = D6::roll();
     let mut log = vec![format!(
-        "{} attacks {} (difficulty: {:?})",
-        attacker.name, target.name, attack_difficulty
+        "{} attacks {} (difficulty: {:?}, roll: {})",
+        attacker.name, target.name, attack_difficulty, to_hit_roll.0
     )];
+
+    if let Some(defence) = target.melee_defence() {
+        let defence_roll = D6::roll();
+        to_hit_roll = to_hit_roll.modify(-1 * defence_roll.0 as i8);
+        log.push(format!("{} counters with {} (roll: {})", target.name, defence.name, defence_roll.0));
+    }
+
+    let attack_difficulty = attack.to_hit.val() - target.attr(Attr::Defence).val();
+    let to_hit_result = RR::from_roll(to_hit_roll, attack_difficulty);
 
     match to_hit_result {
         RR::FF | RR::F_ => {
-            log.push(format!("{} misses", attacker.name));
-            (CombatResult::Miss(target), log)
+            log.push("Miss".to_string());
+            (CombatResult::Miss(target), to_display_str(log))
         }
 
         RR::SF | RR::S_ | RR::SS => {
+            let mut hit_str = "Hit!".to_string();
+                
             if let RR::SF = to_hit_result {
-                attack.to_wound = attack.to_wound.modify(DisplayStr("Scratch hit"), -1);
+                hit_str = "Scratch".to_string();
+                attack.to_wound = attack.to_wound.modify(DisplayStr::new("Scratch hit"), -1);
             }
 
             if let RR::SS = to_hit_result {
-                attack.to_wound = attack.to_wound.modify(DisplayStr("Critical hit"), 1);
+                hit_str = "Critical Hit!!!".to_string();
+                attack.to_wound = attack.to_wound.modify(DisplayStr::new("Critical hit"), 1);
             }
         
             let to_wound_difficulty = target.attr(Attr::Protection).val() - attack.to_wound.val();
             let to_wound_result = D6::roll().result(to_wound_difficulty);
 
-            log.push(format!("{} hits with {:?}", attacker.name, attack));
+            log.push(hit_str);
 
             match to_wound_result {
-                RR::FF | RR::F_ => (CombatResult::Block(), log),
+                RR::FF | RR::F_ => {
+                    log.push(format!("{} could not be wounded", target.name));
+                    (CombatResult::Block(), to_display_str(log))
+                }
 
-                RR::SF | RR::S_ | RR::SS => (
-                    CombatResult::Hit(target.wound(Wound::from_roll(&to_wound_result))),
-                    log,
-                ),
+                RR::SF | RR::S_ | RR::SS => {
+                    let w = Wound::from_roll(&to_wound_result);
+
+                    if w.wound == 1 {
+                        log.push(format!("{} was wounded", target.name));
+                    } else if w.wound > 1 {
+                        log.push(format!("{} suffered a critical wound", target.name));
+                    } else if w.pain > 0 {
+                        log.push(format!("{} feels the pain but will not have a lasting insury", target.name));
+                    } else {
+                        log.push(format!("{} was completely unharmed", target.name));
+                    }
+
+                    (
+                        CombatResult::Hit(target.wound(Wound::from_roll(&to_wound_result))),
+                        to_display_str(log),
+                    )
+                }
             }
         }
     }
 }
 
+fn to_display_str(l: Vec<String>) -> DisplayStr {
+    DisplayStr::new(l.join("\n"))
+}
