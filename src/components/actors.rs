@@ -131,17 +131,18 @@ fn map_action_to_sprite(a: &Action) -> Sprite {
 fn get_txt(obj: &GameObject) -> Option<Text> {
     match obj {
         GameObject::Actor(a) => {
-            if a.is_dying() {
-                return Some(
-                    Text::new("Dying\nbreaths...".to_string(), "normal")
-                        .background(252, 134, 31, 200)
-                        .padding(5)
-                        .offset(10, 30),
-                );
-            }
+            // if a.is_dying() {
+            //     return Some(
+            //         Text::new("Dying\nbreaths...".to_string(), "normal")
+            //             .background(252, 134, 31, 200)
+            //             .padding(5)
+            //             .offset(10, 30),
+            //     );
+            // }
 
+            let (pain, wounds) = a.health();
             return Some(
-                Text::new(format!("{}", a.num_wounds()), "normal").offset(39, 95),
+                Text::new(format!("{} - {}", pain, wounds), "normal").offset(39, 95),
             );
         }
 

@@ -1,6 +1,4 @@
-use specs::Entity;
 use crate::core::DisplayStr;
-use crate::core::Tile;
 
 #[derive(Debug, Clone)]
 pub struct Trait {
@@ -23,33 +21,33 @@ pub enum Effect {
     GiveTrait(DisplayStr, AbilityTarget, Trait),
     // Ability(DisplayStr, AbilityTarget, Ability),
     Recovering,
-    Dying,
+    // Dying,
 }
 
 #[derive(Debug, Clone)]
 pub enum AbilityTarget {
     OnSelf,
-    OnOther,
-    OnTile,
+    // OnOther,
+    // OnTile,
 }
 
-#[derive(Debug, Clone)]
-pub enum Ability {
-    // MeleeAttack(DisplayStr, u8, i8, i8),
-    // RangedAttack(AttackOption),
-    GiveTrait(Trait),
-    Recover,
-    // BuffSelf(Box<Trait>),
-    // BuffOther(Box<Trait>),
-    // Aura(Box<Trait>),
-}
+// #[derive(Debug, Clone)]
+// pub enum Ability {
+//     // MeleeAttack(DisplayStr, u8, i8, i8),
+//     // RangedAttack(AttackOption),
+//     GiveTrait(Trait),
+//     Recover,
+//     // BuffSelf(Box<Trait>),
+//     // BuffOther(Box<Trait>),
+//     // Aura(Box<Trait>),
+// }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Attr {
     Wound,
-    MeleeAttack,
+    // MeleeAttack,
     MeleeDefence,
-    RangeAttack,
+    // RangeAttack,
     RangeDefence,
     ToHit,
     ToWound,

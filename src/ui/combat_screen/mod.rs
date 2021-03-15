@@ -41,7 +41,7 @@ pub fn render(
 fn render_screen_texts(
     cvs: &mut WindowCanvas,
     assets: &AssetRepo,
-    _viewport: &Rect,
+    viewport: &Rect,
     game: &CombatData,
 ) -> Result<(), String> {
     assets
@@ -58,12 +58,18 @@ fn render_screen_texts(
             .font("normal")?
             .text(s.clone())
             .max_width(500)
+            .padding(10)
             .background(Color::RGBA(252, 251, 250, 100))
             .prepare();
 
-        msg.draw(cvs, (10, y))?;
+        let txt_height = msg.dimension().1 as i32;
+        
+        if y + txt_height > viewport.height() as i32 {
+            break;
+        }
 
-        y += 10 + msg.dimension().1 as i32;
+        msg.draw(cvs, (10, y))?;
+        y += txt_height;
     }
 
     // if let CombatState::Win(Team(_, num, ..)) = game.state {

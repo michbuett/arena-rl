@@ -3,37 +3,35 @@ use crate::core::{DisplayStr, WorldPos};
 use super::actor::*;
 // use super::traits::*;
 
-pub fn generate_player(pos: WorldPos, t: Team) -> Actor {
-    extern crate rand;
-    use rand::prelude::*;
-    let range = rand::distributions::Uniform::from(1..=100);
-    let mut rng = rand::thread_rng();
-
-    ActorBuilder::new(generate_name(), pos, t)
-        .look(vec![("player", rng.sample(range))])
-        .traits(vec!(
-            Trait {
-                name: DisplayStr::new("Defensiv combat training"),
-                effects: vec!(Effect::GiveTrait(DisplayStr::new("Defensiv stance"), AbilityTarget::OnSelf, Trait {
-                    name: DisplayStr::new("Defensiv stance"),
-                    effects: vec!(Effect::AttrMod(Attr::Defence, 1)),
-                    source: TraitSource::Temporary(1),
-                })),
-                source: TraitSource::IntrinsicProperty,
-            }
-        ))
-        .build()
+pub enum ActorType {
+    Heavy,
+    Spear,
+}
+    
+pub fn generate_player_by_type(pos: WorldPos, t: Team, actor_type: ActorType) -> Actor {
+    match actor_type {
+        ActorType::Heavy => generate_player_heavy(pos, t),
+        ActorType::Spear => generate_player_spear(pos, t),
+    }
 }
 
-pub fn generate_player2(pos: WorldPos, t: Team) -> Actor {
+fn generate_player_heavy(pos: WorldPos, t: Team) -> Actor {
     ActorBuilder::new(generate_name(), pos, t)
         .look(tiles(vec![5125, 5982, 5302, 5509, 5633, 5950]))
         .traits(vec!(
             Trait {
+                name: DisplayStr::new("Plate mail"),
+                effects: vec!(
+                    Effect::AttrMod(Attr::Protection, 3),
+                ),
+                source: TraitSource::IntrinsicProperty,
+            },
+
+            Trait {
                 name: DisplayStr::new("Towershield"),
                 effects: vec!(
                     Effect::AttrMod(Attr::MeleeDefence, 2),
-                    Effect::AttrMod(Attr::RangeDefence, 1),
+                    Effect::AttrMod(Attr::RangeDefence, 2),
                     Effect::GiveTrait(DisplayStr::new("Block with Shield"), AbilityTarget::OnSelf, Trait {
                         name: DisplayStr::new("Shield raised"),
                         effects: vec!(Effect::MeleeDefence(DisplayStr::new("Block with shield"), 1)),
@@ -46,7 +44,30 @@ pub fn generate_player2(pos: WorldPos, t: Team) -> Actor {
             Trait {
                 name: DisplayStr::new("Flail"),
                 effects: vec!(
-                    Effect::MeleeAttack(DisplayStr::new("Swing Flail"), 2, 0, 2),
+                    Effect::MeleeAttack(DisplayStr::new("Swing Flail"), 1, 0, 2),
+                ),
+                source: TraitSource::IntrinsicProperty,
+            }
+        ))
+        .build()
+}
+
+fn generate_player_spear(pos: WorldPos, t: Team) -> Actor {
+    ActorBuilder::new(generate_name(), pos, t)
+        .look(tiles(vec![5125, 5982, 5302, 5509, 5633, 5950]))
+        .traits(vec!(
+            Trait {
+                name: DisplayStr::new("Chain mail"),
+                effects: vec!(
+                    Effect::AttrMod(Attr::Protection, 2),
+                ),
+                source: TraitSource::IntrinsicProperty,
+            },
+
+            Trait {
+                name: DisplayStr::new("Spear"),
+                effects: vec!(
+                    Effect::MeleeAttack(DisplayStr::new("Stab"), 2, 0, 1),
                 ),
                 source: TraitSource::IntrinsicProperty,
             }

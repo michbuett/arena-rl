@@ -227,30 +227,56 @@ fn handle_attack<'a>(
     attack: AttackOption,
 ) -> ActionResult {
     let fx_pos = target.1.pos.clone();
-    let (combat_result, log) = super::actors::combat(attack, attacker.1, target.1);
-    let changes = match combat_result {
-        CombatResult::Miss(new_actor) => vec![
-            update_actor(target.0, new_actor),
-            Change::Fx(Fx::text("Miss".to_string(), &fx_pos, 100)),
-        ],
+    let combat_result = super::actors::combat(attack, attacker.1, target.1);
+    let mut changes = vec!();
 
-        CombatResult::Block() => vec![Change::Fx(Fx::text("Blocked".to_string(), &fx_pos, 100))],
+    changes_for_condition(combat_result.attacker, attacker.0, &mut changes);
+    changes_for_condition(combat_result.target, target.0, &mut changes);
+    // match combat_result.attacker {
+    //     Condition::Alive(new_actor) => {
+    //         changes.push(update_actor(attacker.0, new_actor));
+    //     }
 
-        CombatResult::Hit(condition) => match condition {
-            Condition::Alive(new_actor) => vec![
-                update_actor(target.0, new_actor),
-                Change::Fx(Fx::text("Hit!".to_string(), &fx_pos, 100)),
-            ],
+    //     Condition::Dead(pos, corpse) => {
+    //         changes.push(Change::Remove(target.0));
+    //         changes.push(Change::Insert(GameObject::Item(pos, corpse)));
+    //     }
+    // }
+    //     update_actor(target.0, combat_result.target),
+    // );
+    let mut log = vec!();
+    let mut fx_delay_ms = 100;
 
-            Condition::Dead(pos, corpse) => vec![
-                Change::Remove(target.0),
-                Change::Insert(GameObject::Item(pos, corpse)),
-                Change::Fx(Fx::text("KILL!!!".to_string(), &fx_pos, 100)),
-            ],
-        },
-    };
+    for event in combat_result.log.iter() {
+        log.push(event.log.to_string());
 
-    (changes, millis(1000), Some(log))
+        if let Some(fx_txt) = &event.fx {
+            changes.push(Change::Fx(Fx::text(fx_txt.to_string(), &fx_pos, fx_delay_ms)));
+            fx_delay_ms += 500;
+        }
+    }
+    //     CombatResult::Miss(new_actor) => vec![
+    //         update_actor(target.0, new_actor),
+    //         Change::Fx(Fx::text("Miss".to_string(), &fx_pos, 100)),
+    //     ],
+
+    //     CombatResult::Block() => vec![Change::Fx(Fx::text("Blocked".to_string(), &fx_pos, 100))],
+
+    //     CombatResult::Hit(condition) => match condition {
+    //         Condition::Alive(new_actor) => vec![
+    //             update_actor(target.0, new_actor),
+    //             Change::Fx(Fx::text("Hit!".to_string(), &fx_pos, 100)),
+    //         ],
+
+    //         Condition::Dead(pos, corpse) => vec![
+    //             Change::Remove(target.0),
+    //             Change::Insert(GameObject::Item(pos, corpse)),
+    //             Change::Fx(Fx::text("KILL!!!".to_string(), &fx_pos, 100)),
+    //         ],
+    //     },
+    // };
+
+    (changes, millis(1000), Some(DisplayStr::new(log.join("\n"))))
 }
 
 fn millis(ms: u64) -> Duration {
@@ -277,4 +303,19 @@ fn no_op() -> ActionResult {
 /// Create an action result with a single update of the actor component
 fn single_update(e: Entity, a: Actor, ms: u64) -> ActionResult {
     (vec![update_actor(e, a)], millis(ms), None)
+}
+
+fn changes_for_condition(c: Condition, e: Entity, changes: &mut Vec<Change>) {
+    match c {
+        Condition::Unchanged => {}
+
+        Condition::Alive(actor) => {
+            changes.push(update_actor(e, actor));
+        }
+
+        Condition::Dead(pos, corpse) => {
+            changes.push(Change::Remove(e));
+            changes.push(Change::Insert(GameObject::Item(pos, corpse)));
+        }
+    }
 }

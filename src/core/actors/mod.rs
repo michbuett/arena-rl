@@ -6,7 +6,7 @@ pub use actor::{
     combat, Actor, ActorBuilder, AiBehaviour, Attack, AttackOption, CombatResult, Condition,
     Effect, Item, Look, Attr, Team, Trait, TraitSource,
 };
-pub use generator::{generate_enemy_easy, generate_player, generate_player2};
+pub use generator::{generate_enemy_easy, generate_player_by_type, ActorType};
 
 use crate::core::WorldPos;
 

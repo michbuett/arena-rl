@@ -3,7 +3,7 @@ use std::time::Instant;
 use specs::prelude::*;
 
 use super::super::action::{act, Action, Change};
-use super::super::actors::{generate_enemy_easy, generate_player, generate_player2, Actor, GameObject, Team};
+use super::super::actors::{generate_enemy_easy, generate_player_by_type, Actor, ActorType, GameObject, Team};
 // use super::super::ai::{action, actions_at, reaction, select_action};
 use super::super::ai::{action, actions_at};
 use super::types::*;
@@ -226,10 +226,10 @@ fn next_state<'a, 'b>(
             // -> find way to inject team and pos
 
             let game_objects = vec![
-                GameObject::Actor(generate_player2(WorldPos(7.0, 6.0), TEAM_PLAYER)),
-                GameObject::Actor(generate_player(WorldPos(8.0, 6.0), TEAM_PLAYER)),
-                GameObject::Actor(generate_player(WorldPos(7.0, 7.0), TEAM_PLAYER)),
-                GameObject::Actor(generate_player(WorldPos(8.0, 7.0), TEAM_PLAYER)),
+                GameObject::Actor(generate_player_by_type(WorldPos(7.0, 6.0), TEAM_PLAYER, ActorType::Heavy)),
+                GameObject::Actor(generate_player_by_type(WorldPos(8.0, 6.0), TEAM_PLAYER, ActorType::Heavy)),
+                GameObject::Actor(generate_player_by_type(WorldPos(7.0, 7.0), TEAM_PLAYER, ActorType::Heavy)),
+                GameObject::Actor(generate_player_by_type(WorldPos(8.0, 7.0), TEAM_PLAYER, ActorType::Spear)),
             ];
 
             for o in game_objects {

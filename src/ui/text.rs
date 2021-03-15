@@ -1,4 +1,5 @@
 use std::string::ToString;
+use std::cmp::max;
 
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
@@ -122,6 +123,7 @@ pub struct TextBuilder<'a> {
     background: Option<Color>,
     padding: u32,
     border: Option<(u32, Color)>,
+    min_width: u32,
     max_width: u32,
 }
 
@@ -134,6 +136,7 @@ impl<'a> TextBuilder<'a> {
             background: None,
             padding: 0,
             border: None,
+            min_width: 0,
             max_width: u32::max_value(),
         }
     }
@@ -162,6 +165,21 @@ impl<'a> TextBuilder<'a> {
     pub fn max_width(self: Self, max_width: u32) -> Self {
         Self {
             max_width: max_width,
+            ..self
+        }
+    }
+
+    pub fn min_width(self: Self, min_width: u32) -> Self {
+        Self {
+            min_width: min_width,
+            ..self
+        }
+    }
+
+    pub fn width(self: Self, width: u32) -> Self {
+        Self {
+            min_width: width,
+            max_width: width,
             ..self
         }
     }
@@ -201,10 +219,13 @@ impl<'a> TextBuilder<'a> {
             y += self.font.line_height as i32;
         }
 
+        let width = max(self.min_width, width_so_far + spacing);
+        let height = y as u32 + spacing;
+
         PreparedText {
             texture: &self.font.texture,
             words,
-            dim: (width_so_far + spacing, y as u32 + spacing),
+            dim: (width, height),
             background: self.background,
             padding: self.padding,
             border: self.border,

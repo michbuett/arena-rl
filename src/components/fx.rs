@@ -26,20 +26,20 @@ pub enum Fx {
 }
 
 impl Fx {
-    pub fn text(txt: String, WorldPos(x, y): &WorldPos, after_ms: u64) -> Self {
+    pub fn text(txt: String, pos: &WorldPos, after_ms: u64) -> Self {
         // println!("HIT {} at ({}, {})", txt, x, y);
         Fx::Text(
             Text::new(txt, "big")
                 .padding(5)
-                .background(252, 251, 250, 255),
+                .background(252, 251, 250, 155),
             Position(WorldPos(0.0, 0.0)),
             MovementAnimation {
                 // start: Instant::now(),
                 start: Instant::now() + Duration::from_millis(after_ms),
                 duration: Duration::from_millis(250),
                 loops: 1,
-                from: WorldPos(*x + 0.2, *y + 0.5),
-                to: WorldPos(x + 0.4, *y),
+                from: *pos,
+                to: animation_target_pos(pos),
             },
             EndOfLive::after_ms(500 + after_ms),
         )
@@ -60,4 +60,13 @@ impl Fx {
             }
         }
     }
+}
+
+fn animation_target_pos(WorldPos(x, y): &WorldPos) -> WorldPos {
+    extern crate rand;
+    use rand::prelude::*;
+    let range = rand::distributions::Uniform::from(-1.0..=1.0);
+    let mut rng = rand::thread_rng();
+
+    WorldPos(x + rng.sample(range), y + rng.sample(range))
 }
