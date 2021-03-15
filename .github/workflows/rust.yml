@@ -21,7 +21,7 @@ jobs:
     - name: Install SDL2 image
       run: sudo apt install libjpeg-dev libwebp-dev libtiff5-dev libsdl2-image-dev libsdl2-image-2.0-0 -y
     - name: Install SDL2 true type fonts
-      run: sudo apt install libfreetype6-dev libsdl2-ttf-dev libsdl2-ttf-2.0 -y
+      run: sudo apt install libfreetype6-dev libsdl2-ttf-dev libsdl2-ttf-2.0-0 -y
     - name: Build
       run: cargo build --verbose
     - name: Run tests
