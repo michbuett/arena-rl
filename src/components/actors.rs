@@ -142,7 +142,7 @@ fn get_txt(obj: &GameObject) -> Option<Text> {
 
             let (pain, wounds) = a.health();
             return Some(
-                Text::new(format!("{} - {}", pain, wounds), "normal").offset(39, 95),
+                Text::new(format!("{} - {}", pain, wounds), FontFace::Normal).offset(39, 95),
             );
         }
 

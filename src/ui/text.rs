@@ -3,12 +3,11 @@ use std::cmp::max;
 
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
-// use sdl2::render::{Texture, TextureCreator, WindowCanvas};
 use sdl2::render::{BlendMode, Texture, TextureCreator, WindowCanvas};
 use sdl2::surface::Surface;
 use sdl2::ttf::Font as Sdl2Font;
 
-use crate::core::DisplayStr;
+use crate::ui::types::ScreenText;
 
 const ASCII: &str = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
 
@@ -83,8 +82,7 @@ impl<'a> Font<'a> {
 
             let char_surface = font
                 .render(&c.to_string())
-                .blended(Color::RGBA(0, 0, 0, 255))
-                // .blended(Color::RGBA(255, 255, 255, 255))
+                .blended(Color::RGBA(255, 255, 255, 255)) 
                 .map_err(to_string)?;
 
             let char_tex = font_texture_creator
@@ -101,9 +99,6 @@ impl<'a> Font<'a> {
             .create_texture_from_surface(font_canvas.into_surface())
             .map_err(to_string)?;
 
-        // texture.set_color_mod(0, 0, 250);
-        // texture.set_color_mod(255, 0, 0);
-
         Ok(Font {
             texture,
             glyphs,
@@ -112,140 +107,27 @@ impl<'a> Font<'a> {
         })
     }
 
-    pub fn text(&self, txt: DisplayStr) -> TextBuilder {
-        TextBuilder::new(&self, txt)
+    pub fn draw(&mut self, screen_txt: ScreenText, cvs: &mut WindowCanvas) -> Result<(), String> {
+        let pos = screen_txt.pos.to_xy();
+        let prepared_text = prepare(screen_txt, self);
+
+        draw_text(prepared_text, cvs, &mut self.texture, pos)
     }
 }
 
-pub struct TextBuilder<'a> {
-    font: &'a Font<'a>,
-    text: String,
-    background: Option<Color>,
-    padding: u32,
-    border: Option<(u32, Color)>,
-    min_width: u32,
-    max_width: u32,
-}
-
-impl<'a> TextBuilder<'a> {
-    fn new(font: &'a Font<'a>, text: DisplayStr) -> Self {
-    // fn new(font: &'a Font<'a>, text: String) -> Self {
-        Self {
-            font,
-            text: text.into_string(),
-            background: None,
-            padding: 0,
-            border: None,
-            min_width: 0,
-            max_width: u32::max_value(),
-        }
-    }
-
-    pub fn background(self: Self, color: Color) -> Self {
-        Self {
-            background: Some(color),
-            ..self
-        }
-    }
-
-    pub fn padding(self: Self, padding: u32) -> Self {
-        Self {
-            padding: padding,
-            ..self
-        }
-    }
-
-    pub fn border(self: Self, padding: u32, color: Color) -> Self {
-        Self {
-            border: Some((padding, color)),
-            ..self
-        }
-    }
-
-    pub fn max_width(self: Self, max_width: u32) -> Self {
-        Self {
-            max_width: max_width,
-            ..self
-        }
-    }
-
-    pub fn min_width(self: Self, min_width: u32) -> Self {
-        Self {
-            min_width: min_width,
-            ..self
-        }
-    }
-
-    pub fn width(self: Self, width: u32) -> Self {
-        Self {
-            min_width: width,
-            max_width: width,
-            ..self
-        }
-    }
-
-    pub fn prepare(self: Self) -> PreparedText<'a> {
-        let (mut x, mut y) = (0, 0);
-        let mut words = Vec::new();
-        let mut width_so_far: u32 = 0;
-        let border_width = if let Some((w, _)) = self.border { w } else { 0 };
-        let spacing = 2 * self.padding + 2 * border_width;
-        let max_width = self.max_width - spacing;
-
-        for line in self.text.lines() {
-            for t in line.split_whitespace() {
-                let word = PreparedWord::prepare(self.font, t);
-                let text_width = word.width;
-                let advance = self.font.space_advance + text_width as i32;
-
-                if x > 0 && (x + advance) as u32 > max_width {
-                    // text does not fit in current line
-                    // => wrap text (no wrap if first word in line)
-                    x = 0;
-                    y += self.font.line_height as i32;
-                    width_so_far = max_width;
-                }
-
-                words.push(((x, y), word));
-
-                x += advance;
-
-                if x as u32 > width_so_far {
-                    width_so_far = x as u32;
-                }
-            }
-
-            x = 0;
-            y += self.font.line_height as i32;
-        }
-
-        let width = max(self.min_width, width_so_far + spacing);
-        let height = y as u32 + spacing;
-
-        PreparedText {
-            texture: &self.font.texture,
-            words,
-            dim: (width, height),
-            background: self.background,
-            padding: self.padding,
-            border: self.border,
-        }
-    }
-}
-
-struct PreparedWord<'a> {
-    chars: Vec<&'a GlyphRegion>,
+struct PreparedWord {
+    chars: Vec<(i32, i32, u32, u32)>,
     width: u32,
 }
 
-impl<'a> PreparedWord<'a> {
-    fn prepare(font: &'a Font, txt: &str) -> Self {
+impl PreparedWord {
+    fn prepare(glyphs: &Vec<GlyphRegion>, txt: &str) -> Self {
         let mut x = 0;
         let mut chars = Vec::new();
 
         for c in txt.chars() {
-            if let Some(r) = find_glyph_region(c, &font.glyphs) {
-                chars.push(r);
+            if let Some(r) = find_glyph_region(c, glyphs) {
+                chars.push((r.start, r.advance, r.width, r.height));
                 x = x + r.advance;
             }
         }
@@ -256,7 +138,7 @@ impl<'a> PreparedWord<'a> {
         }
     }
 
-    pub fn draw(
+    fn draw(
         self: &Self,
         texture: &Texture,
         cvs: &mut WindowCanvas,
@@ -264,78 +146,76 @@ impl<'a> PreparedWord<'a> {
     ) -> Result<(), String> {
         let (mut x, y) = pos;
 
-        for r in self.chars.iter() {
-            let from = Rect::new(r.start, 0, r.width, r.height);
-            let to = Rect::new(x, y, r.width, r.height);
+        for (start, advance, width, height) in self.chars.iter() {
+            let from = Rect::new(*start, 0, *width, *height);
+            let to = Rect::new(x, y, *width, *height);
 
             cvs.copy(&texture, Some(from), Some(to))?;
 
-            x = x + r.advance;
+            x = x + advance;
         }
 
         Ok(())
     }
 }
 
-pub struct PreparedText<'a> {
-    texture: &'a Texture<'a>,
-    words: Vec<((i32, i32), PreparedWord<'a>)>,
+struct PreparedText {
+    words: Vec<((i32, i32), PreparedWord)>,
     dim: (u32, u32),
+    color: (u8, u8, u8, u8),
     background: Option<Color>,
     padding: u32,
     border: Option<(u32, Color)>,
 }
 
-impl<'a> PreparedText<'a> {
-    pub fn draw(self: &Self, cvs: &mut WindowCanvas, pos: (i32, i32)) -> Result<(), String> {
-        let (w, h) = self.dimension();
 
-        if let Some(color) = self.background {
-            if color.a < 255 {
-                cvs.set_blend_mode(BlendMode::Blend); // TODO test performance impact
-            } else {
-                cvs.set_blend_mode(BlendMode::None);
+fn prepare<'a>(text: ScreenText, font: &'a Font) -> PreparedText {
+    let (mut x, mut y) = (0, 0);
+    let mut words = Vec::new();
+    let mut width_so_far: u32 = 0;
+    let border_width = text.border.map(|(w, _)| w).unwrap_or(0);
+    let spacing = 2 * text.padding + 2 * border_width;
+    let max_width = text.max_width - spacing;
+
+    for line in text.text.into_string().lines() {
+        for t in line.split_whitespace() {
+            let word = PreparedWord::prepare(&font.glyphs, t);
+            let text_width = word.width;
+            let advance = font.space_advance + text_width as i32;
+
+            if x > 0 && (x + advance) as u32 > max_width {
+                // text does not fit in current line
+                // => wrap text (no wrap if first word in line)
+                x = 0;
+                y += font.line_height as i32;
+                width_so_far = max_width;
             }
-                
-            cvs.set_draw_color(color);
-            cvs.fill_rect(Rect::new(pos.0, pos.1, w, h))?;
+
+            words.push(((x, y), word));
+
+            x += advance;
+
+            if x as u32 > width_so_far {
+                width_so_far = x as u32;
+            }
         }
 
-        if let Some((bw, border_color)) = self.border {
-            let xl = pos.0;
-            let xr = pos.0 + w as i32 - bw as i32;
-            let yt = pos.1;
-            let yb = pos.1 + h as i32 - bw as i32;
-
-            cvs.set_draw_color(border_color);
-            cvs.fill_rect(Rect::new(xl, yt, w, bw))?; // top
-            cvs.fill_rect(Rect::new(xl, yt, bw, h))?; // left
-            cvs.fill_rect(Rect::new(xr, yt, bw, h))?; // right
-            cvs.fill_rect(Rect::new(xl, yb, w, bw))?; // bottom
-        }
-
-        let bw = if let Some((val, _)) = self.border {
-            val as i32
-        } else {
-            0
-        };
-        let p = self.padding as i32;
-        let (x, y) = (pos.0 + p + bw, pos.1 + p + bw);
-
-        for ((offset_x, offset_y), word) in self.words.iter() {
-            word.draw(self.texture, cvs, (x + offset_x, y + offset_y))?;
-        }
-
-        Ok(())
+        x = 0;
+        y += font.line_height as i32;
     }
 
-    pub fn dimension(self: &Self) -> (u32, u32) {
-        self.dim
+    let width = max(text.min_width, width_so_far + spacing);
+    let height = y as u32 + spacing;
+
+    PreparedText {
+        words,
+        dim: (width, height),
+        color: text.color,
+        background: text.background.map(|(r, g, b, a)| Color::RGBA(r, g, b, a)),
+        padding: text.padding,
+        border: text.border.map(|(w, (r, g, b, a))| (w, Color::RGBA(r, g, b, a))),
     }
 }
-
-//////////////////////////////////////////////////
-// PRIVATE HELPER
 
 fn find_glyph_region(c: char, metrics: &Vec<GlyphRegion>) -> Option<&GlyphRegion> {
     let ascii_index = c as usize;
@@ -348,4 +228,57 @@ fn find_glyph_region(c: char, metrics: &Vec<GlyphRegion>) -> Option<&GlyphRegion
 
 fn to_string(s: impl ToString) -> String {
     s.to_string()
+}
+
+fn draw_background(cvs: &mut WindowCanvas, color: Color, x: i32, y: i32, w: u32, h: u32) -> Result<(), String> {
+    if color.a < 255 {
+        cvs.set_blend_mode(BlendMode::Blend); // TODO test performance impact
+    } else {
+        cvs.set_blend_mode(BlendMode::None);
+    }
+    
+    cvs.set_draw_color(color);
+    cvs.fill_rect(Rect::new(x, y, w, h))
+}
+
+fn draw_border(cvs: &mut WindowCanvas, color: Color, bw: u32, x: i32, y: i32, w: u32, h: u32) -> Result<(), String> {
+    let xl = x;
+    let xr = x + w as i32 - bw as i32;
+    let yt = y;
+    let yb = y + h as i32 - bw as i32;
+
+    cvs.set_draw_color(color);
+    cvs.fill_rect(Rect::new(xl, yt, w, bw))?; // top
+    cvs.fill_rect(Rect::new(xl, yt, bw, h))?; // left
+    cvs.fill_rect(Rect::new(xr, yt, bw, h))?; // right
+    cvs.fill_rect(Rect::new(xl, yb, w, bw))?; // bottom
+    Ok(())
+}
+
+fn draw_text(text: PreparedText, cvs: &mut WindowCanvas, texture: &mut Texture, pos: (i32, i32)) -> Result<(), String> {
+    let (w, h) = text.dim;
+
+    if let Some(color) = text.background {
+        draw_background(cvs, color, pos.0, pos.1, w, h)?;
+    }
+
+    if let Some((bw, border_color)) = text.border {
+        draw_border(cvs, border_color, bw, pos.0, pos.1, w, h)?;
+    }
+
+    let bw = text.border.map(|(val, _)| val).unwrap_or(0) as i32;
+    let p = text.padding as i32;
+    let (x, y) = (pos.0 + p + bw, pos.1 + p + bw);
+
+    texture.set_alpha_mod(text.color.3);
+    texture.set_color_mod(text.color.0, text.color.1, text.color.2);
+
+    for ((offset_x, offset_y), word) in text.words.iter() {
+        word.draw(texture, cvs, (x + offset_x, y + offset_y))?;
+    }
+
+    texture.set_alpha_mod(255);
+    texture.set_color_mod(0, 0, 0);
+
+    Ok(())
 }

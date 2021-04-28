@@ -1,12 +1,10 @@
 use specs::prelude::*;
 
-use sdl2::pixels::Color;
 use sdl2::rect::Rect;
-use sdl2::render::WindowCanvas;
 
-use crate::components::*;
-use crate::core::*;
-use crate::ui::*;
+use crate::components::{Position, Sprites, Text};
+use crate::core::{CombatData, CombatState, DisplayStr, InputContext, Map, Tile, TileType, UserInput, WorldPos};
+use crate::ui::{ClickArea, Scene, ScreenPos, ScreenSprite, ScreenText};
 
 pub const TILE_WIDTH: u32 = 96;
 pub const TILE_HEIGHT: u32 = 96;
@@ -19,141 +17,135 @@ pub type SystemData<'a> = (
 );
 
 pub fn render(
-    cvs: &mut WindowCanvas,
     viewport: &Rect,
     scroll_offset: (i32, i32),
     focus_pos: Option<(i32, i32)>,
     game: &CombatData,
-    assets: &AssetRepo,
-
-) -> Result<Vec<ClickArea>, String> {
+) -> (Scene, Vec<ClickArea>) {
     let (pos, sprites, texts, map): SystemData = game.world.system_data();
 
-    cvs.set_draw_color(Color::RGB(252, 246, 218));
-    cvs.fill_rect(viewport.clone())?;
-    cvs.set_viewport(viewport.clone());
+    let mut scene = Scene {
+        sprites: Vec::new(),
+        texts: vec!(),
+        // texts: [Vec::new(), Vec::new(), Vec::new()],
+        background: (252, 246, 218),
+    };
 
-    render_map(cvs, scroll_offset, focus_pos, assets, &map)?;
-    render_character(cvs, scroll_offset, &pos, &sprites, &texts, assets)?;
-        
-    cvs.set_viewport(None);
+    render_map(&mut scene, scroll_offset, focus_pos, &map);
 
-    let default_action = if let CombatState::WaitForUserAction(_, Some(InputContext::SelectedArea(pos, _, actions_at))) = &game.state {
-        actions_at.iter().cloned().next().map(|(action, cost)| (*pos, action, cost))
+    render_character(&mut scene, scroll_offset, &pos, &sprites, &texts);
+
+    let default_action = if let CombatState::WaitForUserAction(
+        _,
+        Some(InputContext::SelectedArea(pos, _, actions_at)),
+    ) = &game.state
+    {
+        actions_at
+            .iter()
+            .cloned()
+            .next()
+            .map(|(action, cost)| (*pos, action, cost))
     } else {
         None
     };
 
-    Ok(vec!(ClickArea {
-        clipping_area: viewport.clone(),
-        action: Box::new(move |screen_pos| {
-            let clicked_pos = screen_pos_to_map_pos(screen_pos, scroll_offset);
+    (
+        scene,
+        vec![ClickArea {
+            clipping_area: viewport.clone(),
+            action: Box::new(move |screen_pos| {
+                let clicked_pos = screen_pos_to_map_pos(screen_pos, scroll_offset);
 
-            if let Some((wp, action, cost)) = &default_action {
-                if clicked_pos.0.floor() == wp.0.floor() && clicked_pos.1.floor() == wp.1.floor() {
-                    return UserInput::SelectAction((action.clone(), *cost));
+                if let Some((wp, action, cost)) = &default_action {
+                    if clicked_pos.0.floor() == wp.0.floor()
+                        && clicked_pos.1.floor() == wp.1.floor()
+                    {
+                        return UserInput::SelectAction((action.clone(), *cost));
+                    }
                 }
-            }
-            UserInput::SelectWorldPos(screen_pos_to_map_pos(screen_pos, scroll_offset))
-        })
-    }))
-}
-
-fn render_sprite(
-    cvs: &mut WindowCanvas,
-    assets: &AssetRepo,
-    screen_pos: (i32, i32),
-    sprite: &Sprite,
-) -> Result<(), String> {
-    let sprite_tex = assets.texture(sprite.texture.as_str())?;
-    let (xs, ys, w, h) = sprite.region;
-    let (offset_x, offset_y) = sprite.offset;
-    let (xt, yt) = screen_pos;
-    let source = Rect::new(xs, ys, w, h);
-    let target = Rect::new(xt + offset_x, yt + offset_y, TILE_WIDTH, TILE_HEIGHT);
-
-    cvs.copy(&sprite_tex, Some(source), Some(target))
-}
-
-fn render_text<'a>(
-    cvs: &mut WindowCanvas,
-    assets: &AssetRepo,
-    screen_pos: (i32, i32),
-    text: &Text,
-) -> Result<(), String> {
-    let mut target_pos = screen_pos;
-    let mut txt = assets.font(text.font)?.text(DisplayStr::new(text.txt.clone()));
-
-    if let Some(offset) = text.offset {
-        target_pos = (target_pos.0 + offset.0, target_pos.1 + offset.1);
-    }
-
-    if let Some((r, g, b, a)) = text.background {
-        txt = txt.background(Color::RGBA(r, g, b, a));
-    }
-
-    if let Some((w, (r, g, b, a))) = text.border {
-        txt = txt.border(w, Color::RGBA(r, g, b, a));
-    }
-
-    if let Some(padding) = text.padding {
-        txt = txt.padding(padding);
-    }
-
-    txt.prepare().draw(cvs, target_pos)
+                UserInput::SelectWorldPos(screen_pos_to_map_pos(screen_pos, scroll_offset))
+            }),
+        }],
+    )
 }
 
 fn render_character<'a>(
-    cvs: &mut WindowCanvas,
+    scene: &mut Scene,
     offset: (i32, i32),
     positions: &ReadStorage<Position>,
     sprites_storage: &ReadStorage<Sprites>,
     texts: &ReadStorage<Text>,
-    assets: &AssetRepo,
-) -> Result<(), String> {
-
+) {
     for (pos, Sprites(sprites)) in (positions, sprites_storage).join() {
         let screen_pos = map_pos_to_screen_pos(pos.0, offset);
 
         for sprite in sprites.iter() {
-            render_sprite(cvs, assets, screen_pos, sprite)?;
+            let (sx, sy, sw, sh) = sprite.region;
+
+            scene.sprites.push(ScreenSprite {
+                alpha: 255,
+                pos: ScreenPos(screen_pos.0, screen_pos.1),
+                offset: sprite.offset,
+                source: (sprite.texture.clone(), sx, sy, sw, sh),
+                target_size: (TILE_WIDTH, TILE_HEIGHT),
+            });
         }
     }
 
     for (pos, text) in (positions, texts).join() {
-        render_text(cvs, assets, map_pos_to_screen_pos(pos.0, offset), text)?;
-    }
+        let (mut x, mut y) = map_pos_to_screen_pos(pos.0, offset);
+        if let Some((dx, dy)) = text.offset {
+            x += dx;
+            y += dy;
+        }
 
-    Ok(())
+        scene.texts.push(ScreenText {
+        // scene.texts[text.font as usize].push(ScreenText {
+            font: text.font,
+            text: DisplayStr::new(text.txt.clone()),
+            pos: ScreenPos(x, y),
+            color: text.color,
+            background: text.background,
+            padding: text.padding,
+            border: text.border,
+            min_width: 0,
+            max_width: u32::max_value(),
+        });
+    }
 }
 
 fn render_map(
-    cvs: &mut WindowCanvas,
+    scene: &mut Scene,
     offset: (i32, i32),
     focus_pos: Option<(i32, i32)>,
-    assets: &AssetRepo,
     map: &Map,
-) -> Result<(), String> {
+) {
     let (w, h) = (TILE_WIDTH, TILE_HEIGHT);
 
     for tile in map.tiles() {
         if let Some(tex_name) = map_tile_to_texture(tile) {
-            let tex = assets.texture(&tex_name)?;
-
             let tile_pos = tile.to_world_pos();
             let (x, y) = map_pos_to_screen_pos(tile_pos, offset);
-            let target = Rect::new(x, y, w, h);
 
-            cvs.copy(tex, None, Some(target))?;
+            scene.sprites.push(ScreenSprite {
+                source: (tex_name, 0, 0, w, h),
+                alpha: 255,
+                offset: (0, 0),
+                pos: ScreenPos(x, y),
+                target_size: (w, h),
+            })
         }
     }
 
     if let Some((x, y)) = focus_pos {
-        let target = Rect::new(x, y, w, h);
-        cvs.copy(assets.texture("selected")?, None, Some(target))?;
+        scene.sprites.push(ScreenSprite {
+            source: ("selected".to_string(), 0, 0, w, h),
+            alpha: 255,
+            offset: (0, 0),
+            pos: ScreenPos(x, y),
+            target_size: (w, h),
+        })
     }
-
-    Ok(())
 }
 
 fn screen_pos_to_map_pos(p: ScreenPos, offset: (i32, i32)) -> WorldPos {

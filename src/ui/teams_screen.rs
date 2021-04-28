@@ -1,69 +1,63 @@
-use sdl2::pixels::Color;
+use crate::ScreenPos;
+use crate::ScreenText;
 use sdl2::rect::Rect;
-use sdl2::render::WindowCanvas;
 
 use crate::core::{GameObject, UserInput, DisplayStr};
-// use crate::core::{GameObject, UserInput, WorldPos, Team, Armor};
-use crate::ui::{AssetRepo, ClickArea, ClickAreas};
+use crate::ui::{ClickArea, ClickAreas, Scene, FontFace};
 
 pub fn render(
-    cvs: &mut WindowCanvas,
     viewport: &Rect,
     game_objects: &Vec<GameObject>,
-    assets: &AssetRepo,
-) -> Result<ClickAreas, String> {
-    let text = assets
-        .font("big")?
-        .text(DisplayStr::new("Your team"))
-        .prepare();
+) -> (Scene, ClickAreas) {
+    let mut scene = Scene::empty();
+    let mut click_areas = vec!();
 
-    text.draw(
-        cvs,
-        (((viewport.width() - text.dimension().0) / 2) as i32, 50),
-    )?;
+    scene.texts.push(
+    // scene.texts[FontFace::Big as usize].push(
+        ScreenText::new(
+            DisplayStr::new("Your Team"),
+            ScreenPos(((viewport.width() - 185) / 2) as i32, 50),
+        ).font(FontFace::Big)
+    );
 
-    let click_areas = render_actors(cvs, viewport, game_objects, assets)?.into_iter()
-        .chain(vec![render_start_btn(cvs, viewport, assets)?].into_iter())
-        .collect();
+    render_actors(&mut scene, &mut click_areas, viewport, game_objects);
+    render_start_btn(&mut scene, &mut click_areas, viewport);
 
-    Ok(click_areas)
+    (scene, click_areas)
 }
 
 pub fn render_start_btn(
-    cvs: &mut WindowCanvas,
+    scene: &mut Scene,
+    click_areas: &mut ClickAreas,
     viewport: &Rect,
-    assets: &AssetRepo,
-) -> Result<ClickArea, String> {
-    let start_btn = assets
-        .font("normal")?
-        .text(DisplayStr::new("Enter the arena ..."))
+) {
+    let (w, h) = (230, 76);
+    let (x, y) = ((viewport.width() - w - 20) as i32, (viewport.height() - h - 20) as i32);
+    
+    scene.texts.push(
+    // scene.texts[FontFace::Normal as usize].push(
+        ScreenText::new(
+            DisplayStr::new("Enter the arena ..."),
+            ScreenPos(x, y),
+        )
         .padding(20)
-        .border(3, Color::RGB(23, 22, 21))
-        .background(Color::RGB(252, 251, 250))
-        .prepare();
-
-    let start_btn_area = Rect::new(
-        viewport.width() as i32 - start_btn.dimension().0 as i32 - 20,
-        viewport.height() as i32 - start_btn.dimension().1 as i32 - 20,
-        start_btn.dimension().0,
-        start_btn.dimension().1,
+        .border(3, (23, 22, 21, 255))
+        .background((242, 241, 240, 255))
     );
 
-    start_btn.draw(cvs, (start_btn_area.x, start_btn_area.y))?;
-
-    Ok(ClickArea {
-        clipping_area: start_btn_area,
+    click_areas.push(ClickArea {
+        clipping_area: Rect::new(x, y, w as u32, h as u32),
         action: Box::new(|_| UserInput::SelectTeam(vec!(
             // TODO: pass configured player characters
         ))),
-    })
+    });
 }
 
 pub fn render_actors(
-    _cvs: &mut WindowCanvas,
+    _scene: &mut Scene,
+    _click_areas: &mut ClickAreas,
     _viewport: &Rect,
     _game_objects: &Vec<GameObject>,
-    _assets: &AssetRepo,
-) -> Result<ClickAreas, String> {
-    Ok(vec![])
+) {
+    // TODO display selected team and allow changes
 }

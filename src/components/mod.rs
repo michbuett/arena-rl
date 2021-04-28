@@ -2,6 +2,7 @@ mod actors;
 mod animation;
 mod fx;
 
+use crate::FontFace;
 use std::time::{Duration, Instant};
 
 use specs::prelude::*;
@@ -45,26 +46,27 @@ pub struct Text {
     /// The text to display
     pub txt: String,
     /// A reference to the used font
-    pub font: &'static str,
+    pub font: FontFace,
     /// (dx, dy); An optional screen offset which is relativ to its postions (e.g. Position/ScreenPosition)
     pub offset: Option<(i32, i32)>, // (dx, dy)
-    pub padding: Option<u32>,
+    pub padding: u32,
+    /// (red, green, blue, alpha); Defaults to opaque black (0, 0, 0, 255)
+    pub color: (u8, u8, u8, u8), // (r, g, b, a)
     /// (red, green, blue, alpha); Optional background color, None for transparent background
     pub background: Option<(u8, u8, u8, u8)>, // (r, g, b, a)
     pub border: Option<(u32, (u8, u8, u8, u8))>,
-    pub max_width: Option<u32>,
 }
 
 impl Text {
-    pub fn new(txt: String, font: &'static str) -> Self {
+    pub fn new(txt: String, font: FontFace) -> Self {
         Self {
             txt,
             font,
             offset: None,
-            padding: None,
+            padding: 0,
+            color: (0, 0, 0, 255),
             background: None,
             border: None,
-            max_width: None,
         }
     }
 
@@ -75,9 +77,13 @@ impl Text {
         }
     }
 
-    pub fn padding(self, p: u32) -> Self {
+    pub fn padding(self, padding: u32) -> Self {
+        Self { padding, ..self }
+    }
+
+    pub fn color(self, r: u8, g: u8, b: u8, a: u8) -> Self {
         Self {
-            padding: Some(p),
+            color: (r, g, b, a),
             ..self
         }
     }
@@ -116,10 +122,7 @@ impl EndOfLive {
 pub struct EndOfLiveSystem;
 
 impl<'a> System<'a> for EndOfLiveSystem {
-    type SystemData = (
-        Entities<'a>,
-        ReadStorage<'a, EndOfLive>,
-    );
+    type SystemData = (Entities<'a>, ReadStorage<'a, EndOfLive>);
 
     fn run(&mut self, data: Self::SystemData) {
         let (entities, eol) = data;

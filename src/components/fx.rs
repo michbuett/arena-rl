@@ -27,14 +27,13 @@ pub enum Fx {
 
 impl Fx {
     pub fn text(txt: String, pos: &WorldPos, after_ms: u64) -> Self {
-        // println!("HIT {} at ({}, {})", txt, x, y);
         Fx::Text(
-            Text::new(txt, "big")
+            Text::new(txt, FontFace::VeryBig)
                 .padding(5)
+                .color(150, 21, 22, 255)
                 .background(252, 251, 250, 155),
             Position(WorldPos(0.0, 0.0)),
             MovementAnimation {
-                // start: Instant::now(),
                 start: Instant::now() + Duration::from_millis(after_ms),
                 duration: Duration::from_millis(250),
                 loops: 1,
