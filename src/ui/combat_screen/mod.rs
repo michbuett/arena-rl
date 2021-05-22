@@ -6,19 +6,17 @@ use specs::prelude::*;
 // use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 
-use crate::core::{CombatData, CombatState, InputContext, Map, WorldPos};
-use super::types::{ClickAreas, Scene};
+use crate::core::{CombatData, Map};
+use super::types::{TextureMap, ClickAreas, Scene, TILE_WIDTH, TILE_HEIGHT};
 
 pub fn render(
     viewport: &Rect,
     scroll_offset: (i32, i32),
     game: &CombatData,
+    texture_map: &TextureMap,
 ) -> (Scene, ClickAreas) {
-    let focus_pos = get_focus_pos(&game.state)
-        .map(|wp| map::map_pos_to_screen_pos(wp, scroll_offset));
-
     let mut click_areas: ClickAreas = vec!();
-    let (mut scene, mut map_clicks) = map::render(viewport, scroll_offset, focus_pos, game);
+    let (mut scene, mut map_clicks) = map::render(viewport, scroll_offset, game, texture_map);
 
     details::render(&mut scene, &mut click_areas, viewport, game);
 
@@ -81,25 +79,15 @@ pub fn render(
 //     Ok(())
 // }
 
-fn get_focus_pos<'a>(game_state: &CombatState) -> Option<WorldPos> {
-    match game_state {
-        CombatState::WaitForUserAction(_, Some(InputContext::SelectedArea(p, _, _))) => Some(*p),
-
-        // CombatState::WaitForUserAction((_, a), Some(InputContext::Opportunity(..))) => Some(a.pos),
-
-        _ => None,
-    }
-}
-
 pub fn init_scroll_offset(game: &CombatData, viewport: Rect) -> (i32, i32) {
     let map: Read<Map> = game.world.system_data();
     let num_columns = map.num_columns();
     let num_rows = map.num_rows();
-    let map_width = map::TILE_WIDTH * (num_columns + num_rows) / 2;
-    let map_height = map::TILE_HEIGHT * (num_columns + num_rows) / 2;
+    let map_width = TILE_WIDTH * (num_columns + num_rows) / 2;
+    let map_height = TILE_HEIGHT * (num_columns + num_rows) / 2;
 
     (
-        (viewport.width() as i32 - map_width as i32) / 2,
+        (viewport.width() as i32 - map_width as i32) / 2  as i32 + map_width as i32 / 2 - TILE_WIDTH as i32,
         (viewport.height() as i32 - map_height as i32) / 2,
     )
 }

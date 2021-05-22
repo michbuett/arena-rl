@@ -2,7 +2,7 @@
 use sdl2::rect::Rect;
 
 use crate::core::{Action, Actor, CombatData, CombatState, DisplayStr, GameObject, InputContext, Trait, TraitSource, UserInput, WorldPos};
-use crate::ui::types::{ClickArea, ClickAreas, FontFace, Scene, ScreenPos, ScreenText};
+use crate::ui::types::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenText};
 
 const DLG_WIDTH: u32 = 400;
 const BTN_HEIGHT: u32 = 65;

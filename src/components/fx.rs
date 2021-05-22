@@ -1,5 +1,7 @@
 use crate::components::*;
 use crate::core::*;
+use crate::ui::ScreenPos;
+    
 
 // pub fn fx_ouch(WorldPos(x, y): WorldPos) -> (Position, Sprite, MovementAnimation, EndOfLive) {
 //     (
@@ -32,7 +34,7 @@ impl Fx {
                 .padding(5)
                 .color(150, 21, 22, 255)
                 .background(252, 251, 250, 155),
-            Position(WorldPos(0.0, 0.0)),
+            Position(*pos),
             MovementAnimation {
                 start: Instant::now() + Duration::from_millis(after_ms),
                 duration: Duration::from_millis(250),
@@ -61,11 +63,15 @@ impl Fx {
     }
 }
 
-fn animation_target_pos(WorldPos(x, y): &WorldPos) -> WorldPos {
+fn animation_target_pos(wp: &WorldPos) -> WorldPos {
     extern crate rand;
     use rand::prelude::*;
-    let range = rand::distributions::Uniform::from(-1.0..=1.0);
-    let mut rng = rand::thread_rng();
 
-    WorldPos(x + rng.sample(range), y + rng.sample(range))
+    let mut rng = rand::thread_rng();
+    let range_x = rand::distributions::Uniform::from(-75..=75);
+    let range_y = rand::distributions::Uniform::from(-100..=-25);
+    let ScreenPos(sx, sy) = ScreenPos::from_world_pos(*wp, (0, 0));
+    let (dx, dy) = (rng.sample(range_x), rng.sample(range_y));
+
+    ScreenPos(sx + dx, sy + dy).to_world_pos((0, 0))
 }

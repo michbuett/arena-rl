@@ -84,13 +84,6 @@ pub type Look = Vec<(&'static str, u16)>;
 // const VISUAL_ITEM_1: u8 = 4;
 // const VISUAL_ITEM_2: u8 = 5;
 
-pub enum Visual {
-    Body = 0,
-    Head = 1,
-}
-
-pub type Visuals = [Option<(&'static str, u16)>; 6];
-
 // #[test]
 // fn test_array_indexed_by_enum() {
 //     let arr = [1, 2, 3];

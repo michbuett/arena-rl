@@ -1,7 +1,6 @@
 use sdl2::rect::Rect;
-// use sdl2::render::{TextureQuery, WindowCanvas};
 
-use crate::ui::{ClickArea, ClickAreas,  Scene, FontFace, ScreenText, ScreenSprite, ScreenPos};
+use crate::ui::{ClickArea, ClickAreas,  Scene, ScreenText, ScreenSprite, ScreenPos};
 use crate::core::{UserInput, DisplayStr};
 
 pub fn render(viewport: &Rect) -> (Scene, ClickAreas) {
@@ -21,7 +20,6 @@ pub fn render(viewport: &Rect) -> (Scene, ClickAreas) {
     );
 
     scene.texts.push(
-    // scene.texts[FontFace::Normal as usize].push(
         ScreenText::new(
             DisplayStr::new("Click somewhere to continue ..."),
             ScreenPos(

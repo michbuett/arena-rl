@@ -43,9 +43,12 @@ fn teams_step<'a, 'b>(i: &Option<UserInput>) -> Option<Game<'a, 'b>> {
             register(&mut world);
 
             world.insert(map);
+            
 
             Some(Game::Combat(init_combat_data(game_objects.clone(), world, dispatcher)))
         }
         _ => None,
     }
 }
+
+// fn create_sprite_sheets() -> CombatAssets {}

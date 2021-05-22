@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# rm raw/part*
+
+# # combine single sprites horizontally
+# magick montage -geometry 64x64+32+32 -tile 10x1 -background "rgba(0,0,0,0)" -filter Box -interpolate Integer raw/ArenaRL_Assets_\(heads\)-*.png raw/part1.png
+# magick montage -geometry 128x128+0+0 -tile 10x1 -background "rgba(0,0,0,0)" -filter Box -interpolate Integer raw/ArenaRL_Assets-*.png raw/part2.png
+
+# # combine parts vertically
+# convert raw/part*.png -append sprites.png
+
+PARAMS="-filter Box -interpolate Integer"
+mogrify -resize 48x48 -path combat/ $PARAMS  raw/ArenaRL_Assets_\(heads\)-*.png
+mogrify -resize 96x96 -path combat/ $PARAMS  raw/ArenaRL_Assets-*.png
+# mogrify -resize 64x64 -path combat/ $PARAMS  raw/ArenaRL_Assets_\(heads\)-*.png
+# mogrify -resize 128x128 -path combat/ $PARAMS  raw/ArenaRL_Assets-*.png
+

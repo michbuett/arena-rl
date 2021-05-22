@@ -17,7 +17,7 @@ pub fn generate_player_by_type(pos: WorldPos, t: Team, actor_type: ActorType) ->
 
 fn generate_player_heavy(pos: WorldPos, t: Team) -> Actor {
     ActorBuilder::new(generate_name(), pos, t)
-        .look(tiles(vec![5125, 5982, 5302, 5509, 5633, 5950]))
+        .look(vec!(("body", 1), ("head", 1), ("weapon", 1)))
         .traits(vec!(
             Trait {
                 name: DisplayStr::new("Plate mail"),
@@ -54,7 +54,7 @@ fn generate_player_heavy(pos: WorldPos, t: Team) -> Actor {
 
 fn generate_player_spear(pos: WorldPos, t: Team) -> Actor {
     ActorBuilder::new(generate_name(), pos, t)
-        .look(tiles(vec![5125, 5982, 5302, 5509, 5633, 5950]))
+        .look(vec!(("body", 2), ("head", between(1, 4)), ("weapon", 1)))
         .traits(vec!(
             Trait {
                 name: DisplayStr::new("Chain mail"),
@@ -77,7 +77,7 @@ fn generate_player_spear(pos: WorldPos, t: Team) -> Actor {
 
 pub fn generate_enemy_easy(pos: WorldPos, t: Team) -> Actor {
     ActorBuilder::new(generate_name(), pos, t)
-        .look(vec![("tile", 3965), ("tile", *one_of(&vec![5747, 5748, 5749]))],)
+        .look(vec![("body", between(1, 2)), ("head", between(1, 4))])
         .behaviour(AiBehaviour::Default)
         .traits(vec![Trait {
             name: DisplayStr::new("Fragile physiology"),
@@ -85,6 +85,10 @@ pub fn generate_enemy_easy(pos: WorldPos, t: Team) -> Actor {
             source: TraitSource::IntrinsicProperty,
         }])
         .build()
+}
+
+fn between(a: u16, b: u16) -> u16 {
+    *one_of(&(a..=b).collect())
 }
 
 fn one_of<'a, T>(v: &'a Vec<T>) -> &'a T {
@@ -136,8 +140,4 @@ fn generate_name() -> String {
         "Zug The Ugly",
         "Zuvrog Sorrow Gouger",
     ]).to_string()
-}
-
-fn tiles(tiles: Vec<u16>) -> Look {
-    tiles.iter().map(|t| ("tile", *t)).collect()
 }

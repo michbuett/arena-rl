@@ -1,0 +1,79 @@
+[
+    // === BEGIN SECTION head ================================
+    ("head_1", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_(heads)-1.png"],
+            offset: (40, 24),
+            alpha: 255,
+        )),
+    ("head_2", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_(heads)-2.png"],
+            offset: (40, 24),
+            alpha: 255,
+        )),
+    ("head_3", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_(heads)-3.png"],
+            offset: (40, 24),
+            alpha: 255,
+        )),
+    ("head_4", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_(heads)-4.png"],
+            offset: (40, 24),
+            alpha: 255,
+        )),
+
+    // === BEGIN SECTION body ================================
+    ("body_1", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets-6.png"],
+            offset: (16, 16),
+            alpha: 255,
+        )),
+
+    ("body_2", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets-7.png"],
+            offset: (16, 16),
+            alpha: 255,
+        )),
+
+    // === BEGIN SECTION head ================================
+    ("weapon_1", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets-23.png", "ArenaRL_Assets-22.png", "ArenaRL_Assets-24.png", "ArenaRL_Assets-22.png"],
+            offset: (16, 16),
+            alpha: 255,
+            frame_durration: Some(200),
+        )),
+
+    // === BEGIN SECTION team backgrounds ================================
+    ("team_1_active", ProtoSpriteConfig(
+            files: ["ArenaRL_Background-1.png"],
+            offset: (0, 0),
+            alpha: 255,
+        )),
+    ("team_1_inactive", ProtoSpriteConfig(
+            files: ["ArenaRL_Background-2.png"],
+            offset: (0, 0),
+            alpha: 255,
+        )),
+    ("team_2_active", ProtoSpriteConfig(
+            files: ["ArenaRL_Background-3.png"],
+            offset: (0, 0),
+            alpha: 255,
+        )),
+    ("team_2_inactive", ProtoSpriteConfig(
+            files: ["ArenaRL_Background-4.png"],
+            offset: (0, 0),
+            alpha: 255,
+        )),
+
+    // === BEGIN SECTION floor backgrounds ================================
+    ("floor", ProtoSpriteConfig(
+            files: ["floor.png"],
+            offset: (32, 32),
+            alpha: 255,
+        )),
+
+    ("selected", ProtoSpriteConfig(
+            files: ["selected.png"],
+            offset: (32, 32),
+            alpha: 255,
+        )),
+]

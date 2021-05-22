@@ -1,6 +1,7 @@
 mod actors;
 mod animation;
 mod fx;
+mod sprites;
 
 use crate::FontFace;
 use std::time::{Duration, Instant};
@@ -13,6 +14,7 @@ use crate::core::{GameObject, WorldPos};
 pub use crate::components::actors::*;
 pub use crate::components::animation::*;
 pub use crate::components::fx::*;
+pub use crate::components::sprites::*;
 
 pub fn register(world: &mut World) {
     world.register::<ScreenPosition>();
@@ -24,6 +26,9 @@ pub fn register(world: &mut World) {
 
     // from animation module
     world.register::<MovementAnimation>();
+
+    // from sprites module
+    world.register::<VisualCmp>();
 }
 
 /// The current position of a given entity
@@ -94,19 +99,6 @@ impl Text {
             ..self
         }
     }
-}
-
-#[derive(Component, Debug)]
-#[storage(VecStorage)]
-pub struct Sprites(pub Vec<Sprite>);
-
-// #[derive(Component, Debug)]
-// #[storage(VecStorage)]
-#[derive(Debug)]
-pub struct Sprite {
-    pub texture: String,
-    pub region: (i32, i32, u32, u32),
-    pub offset: (i32, i32),
 }
 
 #[derive(Component, Debug)]

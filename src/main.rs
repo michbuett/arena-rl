@@ -17,9 +17,10 @@ fn main() -> Result<(), String> {
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let _image_context = sdl2::image::init(InitFlag::PNG);
-    let dim = Rect::new(0, 0, 800, 450);
+    let dim = Rect::new(0, 0, 1200, 600);
     let window = video_subsystem
         .window("ArenaRL", dim.width(), dim.height())
+        // .fullscreen_desktop()
         .allow_highdpi()
         .opengl()
         .build()
@@ -39,10 +40,13 @@ fn main() -> Result<(), String> {
         Path::new("./assets/images"),
         Path::new("./assets/fonts/font.ttf"),
     )?;
+
+    let texture_map = assets.create_texture_from_path(Path::new("./assets/images/combat"))?;
+
     let mut click_areas = vec![];
     let mut sdl_events = sdl_context.event_pump()?;
     let mut game = Game::Start;
-    let mut ui = init_ui(&game, canvas.viewport(), pixel_ratio);
+    let mut ui = init_ui(canvas.viewport(), pixel_ratio, texture_map);
 
     'main: loop {
         let user_input = poll(&mut sdl_events, &click_areas, &ui);
@@ -52,7 +56,7 @@ fn main() -> Result<(), String> {
         }
 
         game = step(game, &user_input);
-        ui = step_ui(ui, &user_input);
+        ui = step_ui(ui, &game, &user_input);
         click_areas = render(&mut canvas, &ui, &game, &mut assets)?;
 
         std::thread::sleep(Duration::from_nanos(0)); // TODO: fps limit without vsync

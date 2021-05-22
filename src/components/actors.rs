@@ -1,7 +1,7 @@
 use specs::prelude::*;
 
 use crate::components::*;
-use crate::core::{GameObject, Action};
+use crate::core::{GameObject, Action, };
 
 pub fn insert_game_object_components(obj: GameObject, world: &World) {
     let (updater, positions, entities): (Read<LazyUpdate>, ReadStorage<Position>, Entities) =
@@ -46,10 +46,7 @@ fn lazy_insert_components<'a>(
         updater.insert(entity, txt);
     }
 
-    if let Some(sprites) = get_sprites(&obj) {
-        updater.insert(entity, sprites);
-    }
-
+    updater.insert(entity, get_visual_components(&obj));
     updater.insert(entity, GameObjectCmp(obj));
 }
 
@@ -60,86 +57,21 @@ fn get_target_position(obj: &GameObject) -> WorldPos {
     }
 }
 
-fn get_sprites(obj: &GameObject) -> Option<Sprites> {
-    match obj {
-        GameObject::Actor(a) => {
-            let mut sprites: Vec<Sprite> = vec![];
-            let team_num = a.team.1 as i32;
 
-            if a.active {
-                sprites.push(Sprite {
-                    texture: "teams".to_string(),
-                    region: (0, 0, 128, 128),
-                    offset: (0, 0),
-                });
-            }
-
-            sprites.push(Sprite {
-                texture: "teams".to_string(),
-                region: (team_num * 128, 0, 128, 128),
-                offset: (0, 0),
-            });
-
-            for l in a.look().iter() {
-                sprites.push(map_sprite(l));
-            }
-
-            if let Some((action, _)) = &a.pending_action {
-            // if let Some(pending_action) = &a.pending_action {
-                // let (action, _) = pending_action.as_ref();
-                // let (action, _) = pending_action;
-                sprites.push(map_action_to_sprite(&action));
-            }
-
-            Some(Sprites(sprites))
-        }
-
-        GameObject::Item(_, item) => Some(Sprites(
-            item.look.iter().map(|key| map_sprite(key)).collect(),
-        )),
-    }
-}
-
-fn map_sprite((s, num): &(&str, u16)) -> Sprite {
-    // dbg!(s);
-    match *s {
-        "player" => from_tiles(5125 + num),
-
-        "enemy" => from_tiles(3840 + num),
-
-        "tile" => from_tiles(*num),
-
-        _ => Sprite {
-            texture: s.to_string(),
-            region: (0, 0, 128, 128),
-            offset: (0, -32),
-        },
-    }
-}
-
-fn map_action_to_sprite(a: &Action) -> Sprite {
+fn map_action_to_sprite(a: &Action) -> String {
     // dbg!(s);
     match a {
-        Action::MoveTo(_) => from_tiles(3641),
-        Action::MeleeAttack(..) => from_tiles(3620),
-        Action::Charge(..) => from_tiles(3640),
-        Action::Wait(..) => from_tiles(3638),
-        _ => from_tiles(3508),
-    }
+        Action::MoveTo(_) => "icon-action-MoveTo",
+        Action::MeleeAttack(..) => "icon-action-MeleeAttack",
+        Action::Charge(..) => "icon-action-Charge",
+        Action::Wait(..) => "icon-action-Wait",
+        _ => "icon-action-Unknown",
+    }.to_string()
 }
 
 fn get_txt(obj: &GameObject) -> Option<Text> {
     match obj {
         GameObject::Actor(a) => {
-            // if a.is_dying() {
-            //     return Some(
-            //         Text::new("Dying\nbreaths...".to_string(), "normal")
-            //             .background(252, 134, 31, 200)
-            //             .padding(5)
-            //             .offset(10, 30),
-            //     );
-            // }
-
             let (pain, wounds) = a.health();
             return Some(
                 Text::new(format!("{} - {}", pain, wounds), FontFace::Normal).offset(39, 95),
@@ -150,17 +82,33 @@ fn get_txt(obj: &GameObject) -> Option<Text> {
     }
 }
 
-fn from_tiles(num: u16) -> Sprite {
-    let x = (num as i32 % 64) * 32;
-    let y = (num as i32 / 64) * 32;
+fn get_visual_components(obj: &GameObject) -> VisualCmp {
+    match obj {
+        GameObject::Actor(a) => {
+            let mut visual_elements = vec!();
+            
+            if a.active {
+                visual_elements.push(format!("team_{}_active", a.team.1));
+            } else {
+                visual_elements.push(format!("team_{}_inactive", a.team.1));
+            }
 
-    Sprite {
-        texture: "tiles".to_string(),
-        region: (x, y, 32, 32),
-        offset: (0, -32),
+            for l in a.look() {
+                visual_elements.push(visual_element(l));
+            }
+
+            if let Some((action, _)) = &a.pending_action {
+                visual_elements.push(map_action_to_sprite(action));
+            }
+
+            VisualCmp(Instant::now(), visual_elements)
+        }
+        
+        GameObject::Item(_, item) => 
+            VisualCmp(Instant::now(), item.look.iter().map(visual_element).collect()),
     }
 }
 
-// trait ToSprites {
-//     fn to_sprites(&self) -> Sprites;
-// }
+fn visual_element((name, num): &(&str, u16)) -> String {
+    format!("{}_{}", name, num)
+}

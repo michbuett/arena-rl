@@ -15,7 +15,8 @@ pub fn poll(sdl_events: &mut EventPump, click_areas: &ClickAreas, ui: &UI) -> Op
             } => return Some(UserInput::Exit()),
 
             Sdl2Event::MouseMotion { xrel, yrel, .. } => {
-                if ui.is_scrolling {
+                let is_scrolling = ui.scrolling.as_ref().map(|s| s.is_scrolling).unwrap_or(false);
+                if is_scrolling {
                     return Some(UserInput::ScrollTo(
                         ui.pixel_ratio as i32 * xrel,
                         ui.pixel_ratio as i32 * yrel,
@@ -24,7 +25,8 @@ pub fn poll(sdl_events: &mut EventPump, click_areas: &ClickAreas, ui: &UI) -> Op
             }
 
             Sdl2Event::MouseButtonUp { x, y, .. } => {
-                if ui.has_scrolled {
+                let has_scrolled = ui.scrolling.as_ref().map(|s| s.has_scrolled).unwrap_or(false);
+                if has_scrolled {
                     return Some(UserInput::EndScrolling());
                 } else {
                     let p = ScreenPos(ui.pixel_ratio as i32 * x, ui.pixel_ratio as i32 * y); 

@@ -6,10 +6,12 @@ edition = "2018"
 
 [dependencies]
 rand = "0.7"
+serde = { version = "1.0", features = ["derive"] }
+ron = "0.6"
 shred = "0.9"
 specs = "0.16.1"
 specs-derive = "0.4"
 
 [dependencies.sdl2]
 features = ["image", "ttf"]
-version = "0.32"
+version = "0.34"
