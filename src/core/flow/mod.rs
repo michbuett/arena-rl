@@ -3,7 +3,7 @@ mod types;
 
 use specs::prelude::*;
 
-use crate::components::{register, Animation, EndOfLiveSystem};
+use crate::components::{register, Animation, EndOfLiveSystem, FxSystem};
 use crate::core::map::dummy;
 
 use combat::{init_combat_data};
@@ -33,6 +33,7 @@ fn teams_step<'a, 'b>(i: &Option<UserInput>) -> Option<Game<'a, 'b>> {
     match i {
         Some(UserInput::SelectTeam(game_objects)) => {
             let dispatcher = DispatcherBuilder::new()
+                .with(FxSystem, "FxSystem", &[])
                 .with(Animation, "Animaton", &[])
                 .with(EndOfLiveSystem, "EOL", &[])
                 .build();

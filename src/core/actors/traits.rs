@@ -15,7 +15,10 @@ pub enum TraitSource {
 
 #[derive(Debug, Clone)]
 pub enum Effect {
+    /// (attribute, bonus/malus)
     AttrMod(Attr, i8),
+
+    /// (name, reach, to-hit, to-wound)
     MeleeAttack(DisplayStr, u8, i8, i8),
     MeleeDefence(DisplayStr, i8),
     GiveTrait(DisplayStr, AbilityTarget, Trait),

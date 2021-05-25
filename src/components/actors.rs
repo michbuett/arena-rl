@@ -27,18 +27,7 @@ fn lazy_insert_components<'a>(
 ) {
     let (updater, positions) = data;
 
-    if let Some(Position(curr_pos)) = positions.get(entity) {
-        updater.insert(
-            entity,
-            MovementAnimation {
-                start: Instant::now(),
-                duration: Duration::from_millis(250),
-                loops: 1,
-                from: *curr_pos,
-                to: get_target_position(&obj),
-            },
-        );
-    } else {
+    if positions.get(entity).is_none() {
         updater.insert(entity, Position(get_target_position(&obj)));
     }
 

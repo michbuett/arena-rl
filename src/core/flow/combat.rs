@@ -226,10 +226,10 @@ fn next_state<'a, 'b>(
             // -> find way to inject team and pos
 
             let game_objects = vec![
-                GameObject::Actor(generate_player_by_type(WorldPos(7.0, 6.0), TEAM_PLAYER, ActorType::Heavy)),
-                GameObject::Actor(generate_player_by_type(WorldPos(8.0, 6.0), TEAM_PLAYER, ActorType::Heavy)),
-                GameObject::Actor(generate_player_by_type(WorldPos(7.0, 7.0), TEAM_PLAYER, ActorType::Heavy)),
-                GameObject::Actor(generate_player_by_type(WorldPos(8.0, 7.0), TEAM_PLAYER, ActorType::Spear)),
+                GameObject::Actor(generate_player_by_type(WorldPos(7.0, 6.0), TEAM_PLAYER, ActorType::Tank)),
+                GameObject::Actor(generate_player_by_type(WorldPos(8.0, 6.0), TEAM_PLAYER, ActorType::Saw)),
+                GameObject::Actor(generate_player_by_type(WorldPos(7.0, 7.0), TEAM_PLAYER, ActorType::Spear)),
+                GameObject::Actor(generate_player_by_type(WorldPos(8.0, 7.0), TEAM_PLAYER, ActorType::Healer)),
             ];
 
             for o in game_objects {

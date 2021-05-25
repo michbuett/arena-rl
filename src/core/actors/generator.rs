@@ -4,20 +4,24 @@ use super::actor::*;
 // use super::traits::*;
 
 pub enum ActorType {
-    Heavy,
+    Tank,
+    Saw,
     Spear,
+    Healer,
 }
     
 pub fn generate_player_by_type(pos: WorldPos, t: Team, actor_type: ActorType) -> Actor {
     match actor_type {
-        ActorType::Heavy => generate_player_heavy(pos, t),
+        ActorType::Tank => generate_player_heavy(pos, t),
+        ActorType::Saw => generate_player_saw(pos, t),
         ActorType::Spear => generate_player_spear(pos, t),
+        ActorType::Healer => generate_player_healer(pos, t),
     }
 }
 
 fn generate_player_heavy(pos: WorldPos, t: Team) -> Actor {
     ActorBuilder::new(generate_name(), pos, t)
-        .look(vec!(("body", 1), ("head", 1), ("weapon", 1)))
+        .look(vec!(("body-heavy", 1), ("head-heavy", 1), ("melee-1h", 1), ("shild", 1)))
         .traits(vec!(
             Trait {
                 name: DisplayStr::new("Plate mail"),
@@ -52,9 +56,32 @@ fn generate_player_heavy(pos: WorldPos, t: Team) -> Actor {
         .build()
 }
 
+fn generate_player_saw(pos: WorldPos, t: Team) -> Actor {
+    ActorBuilder::new(generate_name(), pos, t)
+        .look(vec!(("body-heavy", 1), ("head-heavy", 2), ("melee-2h", 1)))
+        .traits(vec!(
+            Trait {
+                name: DisplayStr::new("Plate Mail"),
+                effects: vec!(
+                    Effect::AttrMod(Attr::Protection, 3),
+                ),
+                source: TraitSource::IntrinsicProperty,
+            },
+
+            Trait {
+                name: DisplayStr::new("Power Saw"),
+                effects: vec!(
+                    Effect::MeleeAttack(DisplayStr::new("Swing"), 1, 0, 3),
+                ),
+                source: TraitSource::IntrinsicProperty,
+            }
+        ))
+        .build()
+}
+
 fn generate_player_spear(pos: WorldPos, t: Team) -> Actor {
     ActorBuilder::new(generate_name(), pos, t)
-        .look(vec!(("body", 2), ("head", between(1, 4)), ("weapon", 1)))
+        .look(vec!(("body-light", 2), ("head", between(1, 4)), ("melee-2h", 2)))
         .traits(vec!(
             Trait {
                 name: DisplayStr::new("Chain mail"),
@@ -75,9 +102,32 @@ fn generate_player_spear(pos: WorldPos, t: Team) -> Actor {
         .build()
 }
 
+fn generate_player_healer(pos: WorldPos, t: Team) -> Actor {
+    ActorBuilder::new(generate_name(), pos, t)
+        .look(vec!(("body-light", 1), ("head", 5), ("melee-1h", 2)))
+        .traits(vec!(
+            Trait {
+                name: DisplayStr::new("Chain mail"),
+                effects: vec!(
+                    Effect::AttrMod(Attr::Protection, 2),
+                ),
+                source: TraitSource::IntrinsicProperty,
+            },
+
+            Trait {
+                name: DisplayStr::new("Injector"),
+                effects: vec!(
+                    Effect::MeleeAttack(DisplayStr::new("Stab"), 2, 0, 1),
+                ),
+                source: TraitSource::IntrinsicProperty,
+            }
+        ))
+        .build()
+}
+
 pub fn generate_enemy_easy(pos: WorldPos, t: Team) -> Actor {
     ActorBuilder::new(generate_name(), pos, t)
-        .look(vec![("body", between(1, 2)), ("head", between(1, 4))])
+        .look(vec![("body-light", between(1, 3)), ("head", between(1, 4))])
         .behaviour(AiBehaviour::Default)
         .traits(vec![Trait {
             name: DisplayStr::new("Fragile physiology"),

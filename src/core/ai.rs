@@ -6,7 +6,7 @@ use crate::components::*;
 use crate::core::*;
 use primitives::*;
 
-pub use primitives::{can_move_towards, can_attack_melee, can_charge, find_movement_obstacles};
+pub use primitives::{can_attack_melee, can_charge, can_move_towards, find_movement_obstacles};
 
 pub fn action(e: &(Entity, Actor), w: &World) -> (Action, u8) {
     zombi_action(&e, w)
@@ -26,10 +26,12 @@ fn zombi_action((_, a): &(Entity, Actor), w: &World) -> (Action, u8) {
 
         if a.can_move() {
             if let Some(path) = can_move_towards(a, &ta, &map, &game_objects) {
-                let tile = path.iter().take(a.move_distance().into()).last();
-                if let Some(tile) = tile {
-                    return Action::move_to(tile.clone());
-                }
+                return Action::move_to(
+                    path.iter()
+                        .take(a.move_distance().into())
+                        .cloned()
+                        .collect(),
+                );
             }
         }
     }
@@ -64,16 +66,14 @@ pub fn actions_at(
         }
     }
 
-    if let Some(target_tile) = map.find_tile(selected_pos) {
-        if actor.can_move() {
-            let from = MapPos::from_world_pos(actor.pos);
-            let to = MapPos::from_world_pos(selected_pos);
-            let obstacles = find_movement_obstacles(&objects);
+    if actor.can_move() {
+        let from = MapPos::from_world_pos(actor.pos);
+        let to = MapPos::from_world_pos(selected_pos);
+        let obstacles = find_movement_obstacles(&objects);
 
-            if let Some(path) = map.find_path(from, to, &obstacles) {
-                if path.len() <= actor.move_distance().into() {
-                    result.push(Action::move_to(target_tile));
-                }
+        if let Some(path) = map.find_path(from, to, &obstacles) {
+            if path.len() <= actor.move_distance().into() {
+                result.push(Action::move_to(path));
             }
         }
     }
