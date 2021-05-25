@@ -9,9 +9,10 @@
 # # combine parts vertically
 # convert raw/part*.png -append sprites.png
 
-PARAMS="-filter Box -interpolate Integer"
-mogrify -resize 48x48 -path combat/ $PARAMS  raw/ArenaRL_Assets_\(heads\)-*.png
-mogrify -resize 96x96 -path combat/ $PARAMS  raw/ArenaRL_Assets-*.png
+PARAMS="-path combat/ -filter Box -interpolate Integer"
+mogrify -resize 48x48 $PARAMS  raw/ArenaRL_Assets_\(heads\)-*.png
+mogrify -resize 96x96 $PARAMS  raw/ArenaRL_Assets_Weapons_-*.png
+mogrify -resize 96x96 $PARAMS  raw/ArenaRL_Assets-*.png
 # mogrify -resize 64x64 -path combat/ $PARAMS  raw/ArenaRL_Assets_\(heads\)-*.png
 # mogrify -resize 128x128 -path combat/ $PARAMS  raw/ArenaRL_Assets-*.png
 

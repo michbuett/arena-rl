@@ -20,37 +20,93 @@
             offset: (40, 24),
             alpha: 255,
         )),
+    ("head_5", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_(heads)-13.png"],
+            offset: (40, 24),
+            alpha: 255,
+        )),
+    ("head-heavy_1", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_(heads)-15.png"],
+            offset: (40, 24),
+            alpha: 255,
+        )),
+    ("head-heavy_2", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_(heads)-17.png"],
+            offset: (40, 24),
+            alpha: 255,
+        )),
 
     // === BEGIN SECTION body ================================
-    ("body_1", ProtoSpriteConfig(
+    ("body-heavy_1", ProtoSpriteConfig(
             files: ["ArenaRL_Assets-6.png"],
             offset: (16, 16),
             alpha: 255,
         )),
 
-    ("body_2", ProtoSpriteConfig(
+    ("body-light_1", ProtoSpriteConfig(
             files: ["ArenaRL_Assets-7.png"],
+            offset: (16, 16),
+            alpha: 255,
+        )),
+    ("body-light_2", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets-8.png"],
+            offset: (16, 16),
+            alpha: 255,
+        )),
+    ("body-light_3", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets-9.png"],
             offset: (16, 16),
             alpha: 255,
         )),
 
     // === BEGIN SECTION head ================================
-    ("weapon_1", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets-23.png", "ArenaRL_Assets-22.png", "ArenaRL_Assets-24.png", "ArenaRL_Assets-22.png"],
+    ("melee-1h_1", ProtoSpriteConfig( // power mace
+            files: ["ArenaRL_Assets_Weapons_-10.png", "ArenaRL_Assets_Weapons_-11.png"],
             offset: (16, 16),
             alpha: 255,
             frame_durration: Some(200),
         )),
+    ("melee-1h_2", ProtoSpriteConfig( // injector
+            files: ["ArenaRL_Assets_Weapons_-3.png"],
+            offset: (16, 16),
+            alpha: 255,
+        )),
+    ("melee-1h_3", ProtoSpriteConfig( // scimitar
+            files: ["ArenaRL_Assets_Weapons_-9.png"],
+            offset: (16, 16),
+            alpha: 255,
+        )),
+    ("melee-2h_1", ProtoSpriteConfig( // power saw
+            files: ["ArenaRL_Assets_Weapons_-4.png", "ArenaRL_Assets_Weapons_-5.png"],
+            offset: (16, 16),
+            alpha: 255,
+            frame_durration: Some(200),
+        )),
+    ("melee-2h_2", ProtoSpriteConfig( // spear
+            files: ["ArenaRL_Assets_Weapons_-8.png"],
+            offset: (16, 16),
+            alpha: 255,
+        )),
+    ("shild_1", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_Weapons_-6.png"],
+            offset: (16, 16),
+            alpha: 255,
+        )),
+    ("shild_2", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_Weapons_-7.png"],
+            offset: (16, 16),
+            alpha: 255,
+        )),
 
     // === BEGIN SECTION team backgrounds ================================
     ("team_1_active", ProtoSpriteConfig(
-            files: ["ArenaRL_Background-1.png"],
-            offset: (0, 0),
+            files: ["ArenaRL_Assets_Backgrounds-2.png"],
+            offset: (16, 16),
             alpha: 255,
         )),
     ("team_1_inactive", ProtoSpriteConfig(
-            files: ["ArenaRL_Background-2.png"],
-            offset: (0, 0),
+            files: ["ArenaRL_Assets_Backgrounds-1.png"],
+            offset: (16, 16),
             alpha: 255,
         )),
     ("team_2_active", ProtoSpriteConfig(
