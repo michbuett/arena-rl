@@ -101,7 +101,7 @@ fn draw_action_buttons(
 
 fn display_text((action, delay): &(Action, u8), is_first: bool) -> DisplayStr {
     let str = match action {
-        Action::Wait() => format!("Wait"),
+        Action::Done() => format!("Do nothing"),
         Action::MoveTo(..) => format!("Move Here"),
         Action::Activate(_) => format!("Activate"),
         Action::MeleeAttack(_, a) => format!("{} ({})", a.name, delay),

@@ -3,26 +3,39 @@ use std::time::Instant;
 use specs::prelude::*;
 
 use super::super::action::{act, Action, Change};
-use super::super::actors::{generate_enemy_easy, generate_player_by_type, Actor, ActorType, GameObject, Team};
-// use super::super::ai::{action, actions_at, reaction, select_action};
 use super::super::ai::{action, actions_at};
 use super::types::*;
 use crate::components::*;
-use crate::core::WorldPos;
-use crate::core::DisplayStr;
+use crate::core::*;
 
-const TEAM_PLAYER: Team = Team("Player", 1, true);
+// const TEAM_PLAYER: Team = Team("Player", 1, true);
 const TEAM_CPU: Team = Team("Computer", 2, false);
 
 pub fn init_combat_data<'a, 'b>(
     game_objects: Vec<GameObject>,
-    world: World,
-    dispatcher: Dispatcher<'a, 'b>,
+    teams: Vec<Team>,
+    generator: ObjectGenerator,
+    texture_map: TextureMap,
 ) -> CombatData<'a, 'b> {
+    let dispatcher = DispatcherBuilder::new()
+        .with(FxSystem, "FxSystem", &[])
+        .with(Animation, "Animaton", &[])
+        .with(EndOfLiveSystem, "EOL", &[])
+        .build();
+
+    let mut world = World::new();
+    let map = dummy();
+
+    register(&mut world);
+
+    world.insert(map);
+    world.insert(generator);
+    world.insert(texture_map);
+
     CombatData {
         turn: 0,
         active_team_idx: 0,
-        teams: vec![TEAM_PLAYER, TEAM_CPU],
+        teams,
         world,
         dispatcher,
         state: CombatState::Init(game_objects),
@@ -221,16 +234,16 @@ fn next_state<'a, 'b>(
     w: &World,
 ) -> (u64, usize, Option<CombatState>, Option<DisplayStr>) {
     match state {
-        CombatState::Init(_game_objects) => {
+        CombatState::Init(game_objects) => {
             // TODO use configured characters
             // -> find way to inject team and pos
 
-            let game_objects = vec![
-                GameObject::Actor(generate_player_by_type(WorldPos(7.0, 6.0), TEAM_PLAYER, ActorType::Tank)),
-                GameObject::Actor(generate_player_by_type(WorldPos(8.0, 6.0), TEAM_PLAYER, ActorType::Saw)),
-                GameObject::Actor(generate_player_by_type(WorldPos(7.0, 7.0), TEAM_PLAYER, ActorType::Spear)),
-                GameObject::Actor(generate_player_by_type(WorldPos(8.0, 7.0), TEAM_PLAYER, ActorType::Healer)),
-            ];
+            // let game_objects = vec![
+            //     GameObject::Actor(generate_player_by_type(WorldPos(7.0, 6.0), TEAM_PLAYER, ActorType::Tank)),
+            //     GameObject::Actor(generate_player_by_type(WorldPos(8.0, 6.0), TEAM_PLAYER, ActorType::Saw)),
+            //     GameObject::Actor(generate_player_by_type(WorldPos(7.0, 7.0), TEAM_PLAYER, ActorType::Spear)),
+            //     GameObject::Actor(generate_player_by_type(WorldPos(8.0, 7.0), TEAM_PLAYER, ActorType::Healer)),
+            // ];
 
             for o in game_objects {
                 insert_game_object_components(o.clone(), w);

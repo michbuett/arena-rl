@@ -1,17 +1,43 @@
+use std::time::Instant;
+
 use specs::prelude::*;
 use specs_derive::Component;
 
+use crate::ui::{ScreenPos, ScreenSprite};
+use crate::core::SpriteConfig;
+
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
-pub struct Sprites(pub Vec<Sprite>);
+pub struct Sprites(Instant, Vec<SpriteConfig>);
 
-#[derive(Debug)]
-pub struct Sprite {
-    pub texture: String,
-    pub region: (i32, i32, u32, u32),
-    pub offset: (i32, i32),
+impl Sprites {
+    pub fn new(sprites: Vec<SpriteConfig>) -> Self {
+        Self(Instant::now(), sprites)
+    }
+    
+    pub fn sample(&self, pos: ScreenPos) -> SpriteIter {
+        let runtime = (Instant::now() - self.0).as_millis();
+
+        SpriteIter {
+            runtime,
+            pos,
+            sprites: self.1.iter(),
+        }
+    }
 }
 
-#[derive(Component, Debug)]
-#[storage(VecStorage)]
-pub struct VisualCmp(pub std::time::Instant, pub Vec<String>);
+pub struct SpriteIter<'a> {
+    runtime: u128,
+    pos: ScreenPos,
+    sprites: std::slice::Iter<'a, SpriteConfig>,
+}
+
+impl<'a> Iterator for SpriteIter<'a> {
+    type Item = ScreenSprite;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.sprites
+            .next()
+            .map(|cfg| ScreenSprite(self.pos, cfg.sample(self.runtime)))
+    }
+}

@@ -2,8 +2,7 @@ use std::time::Instant;
 
 use specs::prelude::*;
 
-use super::super::actors::GameObject;
-use crate::core::{Actor, Team, Action, WorldPos, DisplayStr};
+use crate::core::*;
 
 #[derive(Debug)]
 pub enum UserInput {
@@ -24,8 +23,8 @@ pub enum InputContext {
 }
 
 pub enum Game<'a, 'b> {
-    Start,
-    TeamSelection(Vec<GameObject>),
+    Start(ObjectGenerator, TextureMap),
+    TeamSelection(ObjectGenerator, TextureMap, Vec<GameObject>),
     Combat(CombatData<'a, 'b>),
 }
 
@@ -37,6 +36,7 @@ pub struct CombatData<'a, 'b> {
     pub world: World,
     pub dispatcher: Dispatcher<'a, 'b>,
     pub log: Vec<DisplayStr>,
+    // pub generator: ObjectGenerator,
 }
 
 impl<'a, 'b> CombatData<'a, 'b> {

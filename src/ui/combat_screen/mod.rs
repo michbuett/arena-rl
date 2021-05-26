@@ -7,16 +7,15 @@ use specs::prelude::*;
 use sdl2::rect::Rect;
 
 use crate::core::{CombatData, Map};
-use super::types::{TextureMap, ClickAreas, Scene, TILE_WIDTH, TILE_HEIGHT};
+use super::types::{ClickAreas, Scene, TILE_WIDTH, TILE_HEIGHT};
 
 pub fn render(
     viewport: &Rect,
     scroll_offset: (i32, i32),
     game: &CombatData,
-    texture_map: &TextureMap,
 ) -> (Scene, ClickAreas) {
     let mut click_areas: ClickAreas = vec!();
-    let (mut scene, mut map_clicks) = map::render(viewport, scroll_offset, game, texture_map);
+    let (mut scene, mut map_clicks) = map::render(viewport, scroll_offset, game);
 
     details::render(&mut scene, &mut click_areas, viewport, game);
 

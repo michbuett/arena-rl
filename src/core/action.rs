@@ -15,7 +15,7 @@ use super::actors::*;
 #[derive(Debug, Clone)]
 pub enum Action {
     StartTurn(),
-    Wait(),
+    Done(),
     MoveTo(Path),
     Activate(Entity),
     MeleeAttack(Entity, AttackOption),
@@ -34,11 +34,11 @@ impl Action {
     // }
 
     pub fn done() -> Act {
-        (Self::Wait(), 0)
+        (Self::Done(), 0)
     }
 
     pub fn recover() -> Act {
-        (Self::Wait(), 1)
+        (Self::Done(), 1)
     }
 
     pub fn activate(e: Entity) -> Act {
@@ -117,7 +117,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             (updates, millis(0), None)
         }
 
-        Action::Wait() => no_op(),
+        Action::Done() => no_op(),
 
         Action::UseAbility(target_entity, ability_name, t) => {
             if let Some(target_actor) = get_actor(target_entity, w) {
@@ -147,6 +147,10 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
         }
 
         Action::MoveTo(path) => {
+            if path.is_empty() {
+                return no_op()
+            }
+            
             let sp = actor.pos;
             (
                 vec![

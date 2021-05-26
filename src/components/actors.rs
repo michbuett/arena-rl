@@ -1,14 +1,18 @@
 use specs::prelude::*;
 
 use crate::components::*;
-use crate::core::{GameObject, Action, };
+use crate::core::{Action, GameObject,TextureMap};
 
 pub fn insert_game_object_components(obj: GameObject, world: &World) {
-    let (updater, positions, entities): (Read<LazyUpdate>, ReadStorage<Position>, Entities) =
-        world.system_data();
+    let (updater, positions, texture_map, entities): (
+        Read<LazyUpdate>,
+        ReadStorage<Position>,
+        Read<TextureMap>,
+        Entities,
+    ) = world.system_data();
     let e = updater.create_entity(&entities).build();
 
-    lazy_insert_components(e, obj, (updater, positions));
+    lazy_insert_components(e, obj, (updater, texture_map, positions));
 }
 
 pub fn update_components(entity: Entity, obj: GameObject, world: &World) {
@@ -23,9 +27,13 @@ pub fn remove_components(entity: Entity, world: &World) {
 fn lazy_insert_components<'a>(
     entity: Entity,
     obj: GameObject,
-    data: (Read<'a, LazyUpdate>, ReadStorage<'a, Position>),
+    data: (
+        Read<'a, LazyUpdate>,
+        Read<'a, TextureMap>,
+        ReadStorage<'a, Position>,
+    ),
 ) {
-    let (updater, positions) = data;
+    let (updater, texture_map, positions) = data;
 
     if positions.get(entity).is_none() {
         updater.insert(entity, Position(get_target_position(&obj)));
@@ -35,7 +43,7 @@ fn lazy_insert_components<'a>(
         updater.insert(entity, txt);
     }
 
-    updater.insert(entity, get_visual_components(&obj));
+    updater.insert(entity, get_sprites(&obj, &texture_map));
     updater.insert(entity, GameObjectCmp(obj));
 }
 
@@ -46,16 +54,15 @@ fn get_target_position(obj: &GameObject) -> WorldPos {
     }
 }
 
-
 fn map_action_to_sprite(a: &Action) -> String {
-    // dbg!(s);
     match a {
         Action::MoveTo(_) => "icon-action-MoveTo",
         Action::MeleeAttack(..) => "icon-action-MeleeAttack",
         Action::Charge(..) => "icon-action-Charge",
-        Action::Wait(..) => "icon-action-Wait",
+        Action::Done(..) => "icon-action-Done",
         _ => "icon-action-Unknown",
-    }.to_string()
+    }
+    .to_string()
 }
 
 fn get_txt(obj: &GameObject) -> Option<Text> {
@@ -63,7 +70,8 @@ fn get_txt(obj: &GameObject) -> Option<Text> {
         GameObject::Actor(a) => {
             let (pain, wounds) = a.health();
             return Some(
-                Text::new(format!("{} - {}", pain, wounds), FontFace::Normal).offset(39, 95),
+                Text::new(format!("{} - {}", pain, wounds), FontFace::Normal)
+                    .offset(39,85)
             );
         }
 
@@ -71,11 +79,11 @@ fn get_txt(obj: &GameObject) -> Option<Text> {
     }
 }
 
-fn get_visual_components(obj: &GameObject) -> VisualCmp {
-    match obj {
+fn get_sprites(obj: &GameObject, texture_map: &TextureMap) -> Sprites {
+    let visual_components = match obj {
         GameObject::Actor(a) => {
-            let mut visual_elements = vec!();
-            
+            let mut visual_elements = vec![];
+
             if a.active {
                 visual_elements.push(format!("team_{}_active", a.team.1));
             } else {
@@ -90,12 +98,19 @@ fn get_visual_components(obj: &GameObject) -> VisualCmp {
                 visual_elements.push(map_action_to_sprite(action));
             }
 
-            VisualCmp(Instant::now(), visual_elements)
+            visual_elements
         }
-        
-        GameObject::Item(_, item) => 
-            VisualCmp(Instant::now(), item.look.iter().map(visual_element).collect()),
-    }
+
+        GameObject::Item(_, item) => item.look.iter().map(visual_element).collect(),
+    };
+    
+    let sprites = visual_components
+        .iter()
+        .filter_map(|key| texture_map.get(key))
+        .cloned()
+        .collect();
+
+    Sprites::new(sprites)
 }
 
 fn visual_element((name, num): &(&str, u16)) -> String {

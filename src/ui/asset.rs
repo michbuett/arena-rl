@@ -13,7 +13,8 @@ use sdl2::video::WindowContext;
 
 use ron::de::from_reader;
 
-use crate::ui::{Font, FontFace, ProtoSpriteConfig, SpriteConfig, SpriteSource, TextureMap};
+use crate::ui::{Font, FontFace, ProtoSpriteConfig};
+use crate::core::{SpriteConfig, SpriteSource, TextureMap};
 
 pub struct AssetRepo<'a> {
     texture_creator: &'a TextureCreator<WindowContext>,

@@ -1,11 +1,13 @@
-use std::string::ToString;
 use std::cmp::max;
+use std::collections::HashMap;
+use std::string::ToString;
 
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::{BlendMode, Texture, TextureCreator, WindowCanvas};
 use sdl2::surface::Surface;
 use sdl2::ttf::Font as Sdl2Font;
+use sdl2::video::WindowContext;
 
 use crate::ui::types::ScreenText;
 
@@ -16,6 +18,9 @@ pub struct Font<'a> {
     glyphs: Vec<GlyphRegion>,
     line_height: u32,
     space_advance: i32,
+
+    texture_creator: &'a TextureCreator<WindowContext>,
+    cached_texts: HashMap<String, (Texture<'a>, u32, u32)>,
 }
 
 struct GlyphRegion {
@@ -26,16 +31,6 @@ struct GlyphRegion {
 }
 
 impl<'a> Font<'a> {
-    // pub fn load(
-    //     ttf_context: &'a Sdl2TtfContext,
-    //     texture_creator: &'a TextureCreator<sdl2::video::WindowContext>,
-    //     path: &Path,
-    //     size: u16,
-    // ) -> Result<Self, String> {
-    //     let font = ttf_context.load_font(path, size)?;
-    //     Self::from_font(texture_creator, font)
-    // }
-
     pub fn from_font(
         texture_creator: &'a TextureCreator<sdl2::video::WindowContext>,
         font: Sdl2Font,
@@ -75,14 +70,14 @@ impl<'a> Font<'a> {
         .into_canvas()?;
 
         let font_texture_creator = font_canvas.texture_creator();
-
         let mut x = 0;
+
         for (i, c) in ASCII.char_indices() {
             let GlyphRegion { width, .. } = glyphs[i];
 
             let char_surface = font
                 .render(&c.to_string())
-                .blended(Color::RGBA(255, 255, 255, 255)) 
+                .blended(Color::RGBA(255, 255, 255, 255))
                 .map_err(to_string)?;
 
             let char_tex = font_texture_creator
@@ -104,14 +99,43 @@ impl<'a> Font<'a> {
             glyphs,
             line_height: total_height,
             space_advance,
+            texture_creator,
+            cached_texts: HashMap::new(),
         })
     }
 
     pub fn draw(&mut self, screen_txt: ScreenText, cvs: &mut WindowCanvas) -> Result<(), String> {
-        let pos = screen_txt.pos.to_xy();
-        let prepared_text = prepare(screen_txt, self);
+        let cache_key = screen_txt.text.to_string();
 
-        draw_text(prepared_text, cvs, &mut self.texture, pos)
+        if let Some((tex, w, h)) = self.cached_texts.get(&cache_key) {
+            let (x, y) = screen_txt.pos.to_xy();
+            return cvs.copy(tex, Rect::new(0, 0, *w, *h), Rect::new(x, y, *w, *h));
+        }
+
+        let (x, y) = screen_txt.pos.to_xy();
+        let prepared_text = prepare(screen_txt, self);
+        let (w, h) = prepared_text.dim;
+        let pixel_format = self.texture_creator.default_pixel_format();
+        let mut target_tex = self
+            .texture_creator
+            // !!! ATTENSION: there seems to be a very wierd issue if texture is to small
+            // the background/transparency of small textures is broken
+            .create_texture_target(pixel_format, max(w, 65), max(h, 33))
+            .map_err(to_string)?;
+
+        target_tex.set_blend_mode(BlendMode::Blend);
+
+        draw_text(
+            prepared_text,
+            cvs,
+            &mut self.texture,
+            &mut target_tex,
+            (x, y, w, h),
+        )?;
+
+        self.cached_texts.insert(cache_key, (target_tex, w, h));
+
+        Ok(())
     }
 }
 
@@ -142,6 +166,7 @@ impl PreparedWord {
         self: &Self,
         texture: &Texture,
         cvs: &mut WindowCanvas,
+        target: &mut Texture,
         pos: (i32, i32),
     ) -> Result<(), String> {
         let (mut x, y) = pos;
@@ -150,7 +175,10 @@ impl PreparedWord {
             let from = Rect::new(*start, 0, *width, *height);
             let to = Rect::new(x, y, *width, *height);
 
-            cvs.copy(&texture, Some(from), Some(to))?;
+            cvs.with_texture_canvas(target, |texture_canvas| {
+                texture_canvas.copy(&texture, Some(from), Some(to)).unwrap();
+            })
+            .map_err(to_string)?;
 
             x = x + advance;
         }
@@ -167,7 +195,6 @@ struct PreparedText {
     padding: u32,
     border: Option<(u32, Color)>,
 }
-
 
 fn prepare<'a>(text: ScreenText, font: &'a Font) -> PreparedText {
     let (mut x, mut y) = (0, 0);
@@ -213,7 +240,9 @@ fn prepare<'a>(text: ScreenText, font: &'a Font) -> PreparedText {
         color: text.color,
         background: text.background.map(|(r, g, b, a)| Color::RGBA(r, g, b, a)),
         padding: text.padding,
-        border: text.border.map(|(w, (r, g, b, a))| (w, Color::RGBA(r, g, b, a))),
+        border: text
+            .border
+            .map(|(w, (r, g, b, a))| (w, Color::RGBA(r, g, b, a))),
     }
 }
 
@@ -230,55 +259,77 @@ fn to_string(s: impl ToString) -> String {
     s.to_string()
 }
 
-fn draw_background(cvs: &mut WindowCanvas, color: Color, x: i32, y: i32, w: u32, h: u32) -> Result<(), String> {
-    if color.a < 255 {
-        cvs.set_blend_mode(BlendMode::Blend); // TODO test performance impact
-    } else {
-        cvs.set_blend_mode(BlendMode::None);
-    }
-    
-    cvs.set_draw_color(color);
-    cvs.fill_rect(Rect::new(x, y, w, h))
+fn draw_background(
+    cvs: &mut WindowCanvas,
+    target_texture: &mut Texture,
+    color: Color,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+) -> Result<(), String> {
+    cvs.with_texture_canvas(target_texture, |texture_canvas| {
+        texture_canvas.set_blend_mode(BlendMode::Blend); // TODO test performance impact
+        texture_canvas.set_draw_color(color);
+        texture_canvas.fill_rect(Rect::new(x, y, w, h)).unwrap();
+    })
+    .map_err(to_string)
 }
 
-fn draw_border(cvs: &mut WindowCanvas, color: Color, bw: u32, x: i32, y: i32, w: u32, h: u32) -> Result<(), String> {
+fn draw_border(
+    cvs: &mut WindowCanvas,
+    target_texture: &mut Texture,
+    color: Color,
+    bw: u32,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+) -> Result<(), String> {
     let xl = x;
     let xr = x + w as i32 - bw as i32;
     let yt = y;
     let yb = y + h as i32 - bw as i32;
 
-    cvs.set_draw_color(color);
-    cvs.fill_rect(Rect::new(xl, yt, w, bw))?; // top
-    cvs.fill_rect(Rect::new(xl, yt, bw, h))?; // left
-    cvs.fill_rect(Rect::new(xr, yt, bw, h))?; // right
-    cvs.fill_rect(Rect::new(xl, yb, w, bw))?; // bottom
-    Ok(())
+    cvs.with_texture_canvas(target_texture, |texture_canvas| {
+        texture_canvas.set_draw_color(color);
+        texture_canvas.fill_rect(Rect::new(xl, yt, w, bw)).unwrap(); // top
+        texture_canvas.fill_rect(Rect::new(xl, yt, bw, h)).unwrap(); // left
+        texture_canvas.fill_rect(Rect::new(xr, yt, bw, h)).unwrap(); // right
+        texture_canvas.fill_rect(Rect::new(xl, yb, w, bw)).unwrap(); // bottom
+    })
+    .map_err(to_string)
 }
 
-fn draw_text(text: PreparedText, cvs: &mut WindowCanvas, texture: &mut Texture, pos: (i32, i32)) -> Result<(), String> {
-    let (w, h) = text.dim;
+fn draw_text(
+    text: PreparedText,
+    cvs: &mut WindowCanvas,
+    texture: &mut Texture,
+    target: &mut Texture,
+    (x, y, w, h): (i32, i32, u32, u32),
+) -> Result<(), String> {
 
     if let Some(color) = text.background {
-        draw_background(cvs, color, pos.0, pos.1, w, h)?;
+        draw_background(cvs, target, color, 0, 0, w, h)?;
     }
 
     if let Some((bw, border_color)) = text.border {
-        draw_border(cvs, border_color, bw, pos.0, pos.1, w, h)?;
+        draw_border(cvs, target, border_color, bw, 0, 0, w, h)?;
     }
 
-    let bw = text.border.map(|(val, _)| val).unwrap_or(0) as i32;
-    let p = text.padding as i32;
-    let (x, y) = (pos.0 + p + bw, pos.1 + p + bw);
+    let shift = text.border.map(|(val, _)| val).unwrap_or(0) as i32 + text.padding as i32;
 
     texture.set_alpha_mod(text.color.3);
     texture.set_color_mod(text.color.0, text.color.1, text.color.2);
 
     for ((offset_x, offset_y), word) in text.words.iter() {
-        word.draw(texture, cvs, (x + offset_x, y + offset_y))?;
+        word.draw(texture, cvs, target, (shift + offset_x, shift + offset_y))?;
     }
 
     texture.set_alpha_mod(255);
     texture.set_color_mod(0, 0, 0);
+
+    cvs.copy(&target, Rect::new(0, 0, w, h), Rect::new(x, y, w, h))?;
 
     Ok(())
 }

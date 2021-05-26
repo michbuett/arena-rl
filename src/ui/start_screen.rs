@@ -1,7 +1,7 @@
 use sdl2::rect::Rect;
 
 use crate::ui::{ClickArea, ClickAreas,  Scene, ScreenText, ScreenSprite, ScreenPos};
-use crate::core::{UserInput, DisplayStr};
+use crate::core::{Sprite, UserInput, DisplayStr};
 
 pub fn render(viewport: &Rect) -> (Scene, ClickAreas) {
     let (width, height) = (400, 106);
@@ -10,13 +10,19 @@ pub fn render(viewport: &Rect) -> (Scene, ClickAreas) {
     let mut scene = Scene::empty();
     
     scene.sprites.push(
-        ScreenSprite {
-            source: ("logo".to_string(), 0, 0, width, height),
+        // ScreenSprite {
+        //     source: ("logo".to_string(), 0, 0, width, height),
+        //     offset: (0, 0),
+        //     pos: ScreenPos(xpos, ypos),
+        //     alpha: 255,
+        //     target_size: (width, height),
+        // }
+        ScreenSprite(ScreenPos(xpos, ypos), Sprite {
+            source: (0, 0),
+            dim: (width, height),
             offset: (0, 0),
-            pos: ScreenPos(xpos, ypos),
             alpha: 255,
-            target_size: (width, height),
-        }
+        })
     );
 
     scene.texts.push(

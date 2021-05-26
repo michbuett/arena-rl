@@ -6,7 +6,6 @@ mod teams_screen;
 mod text;
 mod types;
 
-use std::collections::HashMap;
 pub use asset::*;
 pub use input::*;
 pub use text::*;
@@ -27,13 +26,13 @@ pub fn render(
 ) -> Result<ClickAreas, String> {
     // let now = Instant::now();
     let (mut scene, click_areas) = match game {
-        Game::Start => start_screen::render(&ui.viewport),
+        Game::Start(..) => start_screen::render(&ui.viewport),
 
-        Game::TeamSelection(game_objects) => teams_screen::render(&ui.viewport, game_objects),
+        Game::TeamSelection(_, _, game_objects) => teams_screen::render(&ui.viewport, game_objects),
 
         Game::Combat(combat_data) => {
             let scroll_offset = ui.scrolling.as_ref().map(|s| s.offset).unwrap_or((0, 0));
-            combat_screen::render(&ui.viewport, scroll_offset, combat_data, &ui.textures.1)
+            combat_screen::render(&ui.viewport, scroll_offset, combat_data)
         }
     };
 
@@ -68,41 +67,59 @@ fn draw_scene(
     cvs.set_draw_color(Color::RGB(r, g, b));
     cvs.clear();
 
-    for ScreenSprite {
-        source,
-        pos,
-        offset,
-        alpha,
-        target_size,
-    } in scene.sprites
-    {
-        let mut texture = if source.0.is_empty() {
-            assets.texture.as_mut()
-        } else {
-            assets.textures.get_mut(&source.0)
-        };
+    // println!("draw {} sprites and {} texts", scene.sprites.len(), scene.texts.len());
+        
+    for ScreenSprite(pos, sprite) in scene.sprites {
+        let mut texture = assets.texture.as_mut();
 
         if let Some(ref mut t) = texture {
-            let (_, x, y, w, h) = source;
+            let (x, y) = sprite.source;
+            let (dx, dy) = sprite.offset;
+            let (w, h) = sprite.dim;
             let from = Rect::new(x, y, w, h);
-            let to = Rect::new(
-                pos.0 + offset.0,
-                pos.1 + offset.1,
-                target_size.0,
-                target_size.1,
-            );
+            let to = Rect::new(pos.0 + dx, pos.1 + dy, w, h);
 
-            t.set_alpha_mod(alpha);
+            t.set_alpha_mod(sprite.alpha);
 
             cvs.copy(t, from, to)?;
-
-            // println!("render_sprite from {:?} to {:?}", from, to);
-            // if source.0 == "floor" {
-            //     cvs.set_draw_color(Color::RGB(0, 0, 0));
-            //     cvs.draw_rect(to)?;
-            // }
         }
     }
+
+    // for ScreenSprite {
+    //     source,
+    //     pos,
+    //     offset,
+    //     alpha,
+    //     target_size,
+    // } in scene.sprites
+    // {
+    //     let mut texture = if source.0.is_empty() {
+    //         assets.texture.as_mut()
+    //     } else {
+    //         assets.textures.get_mut(&source.0)
+    //     };
+
+    //     if let Some(ref mut t) = texture {
+    //         let (_, x, y, w, h) = source;
+    //         let from = Rect::new(x, y, w, h);
+    //         let to = Rect::new(
+    //             pos.0 + offset.0,
+    //             pos.1 + offset.1,
+    //             target_size.0,
+    //             target_size.1,
+    //         );
+
+    //         t.set_alpha_mod(alpha);
+
+    //         cvs.copy(t, from, to)?;
+
+    //         // println!("render_sprite from {:?} to {:?}", from, to);
+    //         // if source.0 == "floor" {
+    //         //     cvs.set_draw_color(Color::RGB(0, 0, 0));
+    //         //     cvs.draw_rect(to)?;
+    //         // }
+    //     }
+    // }
 
     for txt in scene.texts {
         let font = assets.fonts[txt.font as usize].as_mut().unwrap();
@@ -114,7 +131,7 @@ fn draw_scene(
     Ok(())
 }
 
-pub fn init_ui(viewport: Rect, pixel_ratio: u8, texture_map: HashMap<String, SpriteConfig>) -> UI {
+pub fn init_ui(viewport: Rect, pixel_ratio: u8) -> UI {
     UI {
         viewport,
         pixel_ratio,
@@ -122,7 +139,7 @@ pub fn init_ui(viewport: Rect, pixel_ratio: u8, texture_map: HashMap<String, Spr
         frames: 0,
         last_check: Instant::now(),
         scrolling: None,
-        textures: ("combat", texture_map),
+        // textures: ("combat", texture_map),
     }
 }
 

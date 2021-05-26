@@ -1,9 +1,9 @@
 use sdl2::rect::{Point, Rect};
-use std::collections::HashMap;
+// use std::collections::HashMap;
 
 use serde::Deserialize;
 
-use crate::core::{DisplayStr, UserInput, WorldPos};
+use crate::core::{DisplayStr, UserInput, WorldPos, Sprite};
 
 #[derive(Clone, Copy, Debug)]
 pub struct ScreenPos(pub i32, pub i32);
@@ -59,7 +59,7 @@ pub struct UI {
     pub frames: u32,
     pub last_check: std::time::Instant,
     pub scrolling: Option<ScrollData>,
-    pub textures: (&'static str, HashMap<String, SpriteConfig>),
+    // pub textures: (&'static str, HashMap<String, SpriteConfig>),
 }
 
 pub struct ScrollData {
@@ -163,7 +163,6 @@ impl ScreenText {
 pub struct Scene {
     pub background: (u8, u8, u8),
     pub texts: Vec<ScreenText>,
-    // pub texts: [Vec<ScreenText>; 3],
     pub sprites: Vec<ScreenSprite>,
 }
 
@@ -172,24 +171,20 @@ impl Scene {
         Self {
             background: (252, 251, 250),
             texts: vec![],
-            // texts: [vec!(), vec!(), vec!()],
-            sprites: vec![],
+            sprites: Vec::with_capacity(500),
         }
     }
-
-    // pub fn add_text(&mut self, text: ScreenText) {
-    //     self.texts.push(text);
-    // }
 }
 
 #[derive(Debug)]
-pub struct ScreenSprite {
-    pub source: (String, i32, i32, u32, u32),
-    pub pos: ScreenPos,
-    pub offset: (i32, i32),
-    pub alpha: u8,
-    pub target_size: (u32, u32),
-}
+pub struct ScreenSprite(pub ScreenPos, pub Sprite);
+// pub struct ScreenSprite {
+//     pub source: (String, i32, i32, u32, u32),
+//     pub pos: ScreenPos,
+//     pub offset: (i32, i32),
+//     pub alpha: u8,
+//     pub target_size: (u32, u32),
+// }
 
 // #[derive(Debug)]
 // pub struct ScreenSprite(Sprite, ScreenPos);
@@ -203,51 +198,51 @@ pub struct ProtoSpriteConfig {
     pub frame_durration: Option<u32>,
 }
 
-#[derive(Debug)]
-pub struct SpriteConfig {
-    pub source: SpriteSource,
-    pub offset: (i32, i32),
-    pub dim: (u32, u32),
-    pub alpha: u8,
-}
+// #[derive(Debug, Clone)]
+// pub struct SpriteConfig {
+//     pub source: SpriteSource,
+//     pub offset: (i32, i32),
+//     pub dim: (u32, u32),
+//     pub alpha: u8,
+// }
 
-impl SpriteConfig {
-    pub fn into_screen_sprite(&self, pos: ScreenPos, runtime_ms: u128) -> ScreenSprite {
-        let (w, h) = self.dim;
-        let (x, y) = self.source.get_frame_pos(runtime_ms);
-        let source = ("".to_string(), x, y, w, h);
+// impl SpriteConfig {
+//     pub fn into_screen_sprite(&self, pos: ScreenPos, runtime_ms: u128) -> ScreenSprite {
+//         let (w, h) = self.dim;
+//         let (x, y) = self.source.get_frame_pos(runtime_ms);
+//         let source = ("".to_string(), x, y, w, h);
 
-        ScreenSprite {
-            pos,
-            source,
-            target_size: self.dim,
-            offset: self.offset,
-            alpha: self.alpha,
-        }
-    }
-}
+//         ScreenSprite {
+//             pos,
+//             source,
+//             target_size: self.dim,
+//             offset: self.offset,
+//             alpha: self.alpha,
+//         }
+//     }
+// }
 
-#[derive(Debug, Clone)]
-pub enum SpriteSource {
-    Static(i32, i32),
-    SimpleAnimation(u32, Vec<(i32, i32)>),
-}
+// #[derive(Debug, Clone)]
+// pub enum SpriteSource {
+//     Static(i32, i32),
+//     SimpleAnimation(u32, Vec<(i32, i32)>),
+// }
 
-impl SpriteSource {
-    fn get_frame_pos (&self, runtime_ms: u128) -> (i32, i32) {
-        match self {
-            Self::Static(x, y) => (*x, *y),
+// impl SpriteSource {
+//     fn get_frame_pos (&self, runtime_ms: u128) -> (i32, i32) {
+//         match self {
+//             Self::Static(x, y) => (*x, *y),
 
-            Self::SimpleAnimation(durr_per_frame, frames) => {
-                let total_animation_time = *durr_per_frame as usize * frames.len();
-                // let loops = runtime_ms / total_animation_time as u128;
-                let remaining = runtime_ms as usize % total_animation_time;
-                let frame_idx = remaining / *durr_per_frame as usize;
+//             Self::SimpleAnimation(durr_per_frame, frames) => {
+//                 let total_animation_time = *durr_per_frame as usize * frames.len();
+//                 // let loops = runtime_ms / total_animation_time as u128;
+//                 let remaining = runtime_ms as usize % total_animation_time;
+//                 let frame_idx = remaining / *durr_per_frame as usize;
 
-                frames[frame_idx]
-            }
-        }
-    }
-}
+//                 frames[frame_idx]
+//             }
+//         }
+//     }
+// }
 
-pub type TextureMap = HashMap<String, SpriteConfig>;
+// pub type TextureMap = HashMap<String, SpriteConfig>;

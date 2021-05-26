@@ -1,5 +1,4 @@
 mod actors;
-// mod actor_actions;
 mod animation;
 mod fx;
 mod sprites;
@@ -13,15 +12,12 @@ use specs_derive::Component;
 use crate::core::{GameObject, WorldPos};
 
 pub use crate::components::actors::*;
-// pub use crate::components::actor_actions::*;
 pub use crate::components::animation::*;
 pub use crate::components::fx::*;
 pub use crate::components::sprites::*;
 
 pub fn register(world: &mut World) {
-    world.register::<ScreenPosition>();
     world.register::<Text>();
-    world.register::<Sprites>();
     world.register::<EndOfLive>();
     world.register::<GameObjectCmp>();
     world.register::<Position>();
@@ -30,7 +26,7 @@ pub fn register(world: &mut World) {
     world.register::<MovementAnimation>();
 
     // from sprites module
-    world.register::<VisualCmp>();
+    world.register::<Sprites>();
 
     // from fx module
     world.register::<Fx>();
@@ -45,13 +41,8 @@ pub struct Position(pub WorldPos);
 #[storage(VecStorage)]
 pub struct GameObjectCmp(pub GameObject);
 
-/// The current position of a given entity
 #[derive(Component, Debug, Clone)]
-#[storage(VecStorage)]
-pub struct ScreenPosition(pub (i32, i32));
-
-#[derive(Component, Debug, Clone)]
-#[storage(VecStorage)]
+#[storage(DenseVecStorage)]
 pub struct Text {
     /// The text to display
     pub txt: String,
@@ -107,7 +98,7 @@ impl Text {
 }
 
 #[derive(Component, Debug, Clone)]
-#[storage(VecStorage)]
+#[storage(DenseVecStorage)]
 pub struct EndOfLive(pub Instant);
 
 impl EndOfLive {

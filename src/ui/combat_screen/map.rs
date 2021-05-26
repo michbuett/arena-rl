@@ -1,29 +1,28 @@
 use specs::prelude::*;
-use std::time::Instant;
 
 use sdl2::rect::Rect;
 
-use crate::components::{Position, Text, VisualCmp};
+use crate::components::{Position, Text, Sprites};
 use crate::core::{
     Action, CombatData, CombatState, DisplayStr, InputContext, Map, Tile, TileType, UserInput,
-    WorldPos,
+    WorldPos, TextureMap,
 };
-use crate::ui::{ClickArea, Scene, ScreenPos, ScreenText, TextureMap, TILE_WIDTH};
+use crate::ui::{ClickArea, Scene, ScreenPos, ScreenText, ScreenSprite, TILE_WIDTH};
 
 pub type SystemData<'a> = (
     ReadStorage<'a, Position>,
-    ReadStorage<'a, VisualCmp>,
+    ReadStorage<'a, Sprites>,
     ReadStorage<'a, Text>,
     Read<'a, Map>,
+    Read<'a, TextureMap>,
 );
 
 pub fn render(
     viewport: &Rect,
     scroll_offset: (i32, i32),
     game: &CombatData,
-    texture_map: &TextureMap,
 ) -> (Scene, Vec<ClickArea>) {
-    let (pos, visuals, texts, map): SystemData = game.world.system_data();
+    let (pos, sprites, texts, map, texture_map): SystemData = game.world.system_data();
 
     let mut scene = Scene {
         sprites: Vec::new(),
@@ -32,7 +31,7 @@ pub fn render(
     };
 
     render_map(&mut scene, scroll_offset, game, &map, &texture_map);
-    render_character(&mut scene, scroll_offset, &pos, &visuals, &texture_map);
+    render_character(&mut scene, scroll_offset, &pos, &sprites);
     render_texts(&mut scene, scroll_offset, &pos, &texts);
 
     let default_action = get_default_action(&game);
@@ -63,20 +62,13 @@ fn render_character<'a>(
     scene: &mut Scene,
     offset: (i32, i32),
     positions: &ReadStorage<Position>,
-    visuals: &ReadStorage<VisualCmp>,
-    texture_map: &TextureMap,
+    visuals: &ReadStorage<Sprites>,
 ) {
-    let now = Instant::now();
-    for (pos, VisualCmp(instant, visual_elements)) in (positions, visuals).join() {
-        for key in visual_elements.iter() {
-            if let Some(sprite_config) = texture_map.get(key) {
-                let p = ScreenPos::from_world_pos(pos.0, offset);
-                let time_delta = (now - *instant).as_millis();
+    for (pos, sprite_cmp) in (positions, visuals).join() {
+        let p = ScreenPos::from_world_pos(pos.0, offset);
 
-                scene
-                    .sprites
-                    .push(sprite_config.into_screen_sprite(p, time_delta));
-            }
+        for sprite in sprite_cmp.sample(p) {
+            scene.sprites.push(sprite);
         }
     }
 }
@@ -120,14 +112,17 @@ fn render_map(
             let tile_pos = tile.to_world_pos();
             let p = ScreenPos::from_world_pos(tile_pos, offset);
 
-            scene.sprites.push(sprite_config.into_screen_sprite(p, 0));
+            scene.sprites.push(ScreenSprite(p, sprite_config.sample(0)));
+            // scene.sprites.push(sprite_config.into_screen_sprite(p, 0));
         }
     }
 
     if let Some(wp) = get_focus_pos(&game.state) {
         if let Some(sprite_config) = texture_map.get("selected") {
             let p = ScreenPos::from_world_pos(wp, offset);
-            scene.sprites.push(sprite_config.into_screen_sprite(p, 0));
+
+            scene.sprites.push(ScreenSprite(p, sprite_config.sample(0)));
+            // scene.sprites.push(sprite_config.into_screen_sprite(p, 0));
         }
     }
 }
