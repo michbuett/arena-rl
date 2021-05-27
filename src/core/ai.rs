@@ -53,8 +53,10 @@ pub fn actions_at(
                 result.push(Action::use_ability(*entity, n, t, d));
             }
         } else {
-            if actor.team == other_actor.team && other_actor.can_activate() {
-                result.push(Action::activate(other_entity));
+            if actor.team == other_actor.team {
+                if other_actor.can_activate() {
+                    result.push(Action::activate(other_entity));
+                }
             } else {
                 if let Some(attack) = can_attack_melee(actor, &other_actor, &map, &objects) {
                     result.push(Action::melee_attack(other_entity, attack));
