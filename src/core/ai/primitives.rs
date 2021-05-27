@@ -7,22 +7,31 @@ use super::super::actors::*;
 use crate::components::*;
 use crate::core::*;
 
-pub fn find_movement_obstacles(objects: &ReadStorage<GameObjectCmp>) -> ObstacleSet {
-    let mut obstacles = HashMap::new();
+pub fn find_movement_obstacles(
+    positions: &ReadStorage<Position>,
+    obstacles: &ReadStorage<ObstacleCmp>,
+) -> ObstacleSet {
+// pub fn find_movement_obstacles(objects: &ReadStorage<GameObjectCmp>) -> ObstacleSet {
+    let mut result = HashMap::new();
 
-    for GameObjectCmp(obj) in objects.join() {
-        match obj {
-            GameObject::Actor(a) => {
-                obstacles.insert(MapPos::from_world_pos(a.pos), Obstacle::Inaccessible());
-            }
-
-            GameObject::Item(pos, _) => {
-                obstacles.insert(MapPos::from_world_pos(*pos), Obstacle::Impediment(1.5));
-            }
-        }
+    for (ObstacleCmp(o), Position(p)) in (obstacles, positions).join() {
+        result.insert(MapPos::from_world_pos(*p), o.clone());
     }
+    // for GameObjectCmp(obj) in objects.join() {
+    //     match obj {
+    //         GameObject::Actor(a) => {
+    //             obstacles.insert(MapPos::from_world_pos(a.pos), Obstacle { allow_movement: false });
+    //             // obstacles.insert(MapPos::from_world_pos(a.pos), Obstacle::Inaccessible());
+    //         }
 
-    ObstacleSet(obstacles)
+    //         _ => {}
+    //         // GameObject::Item(pos, _) => {
+    //         //     obstacles.insert(MapPos::from_world_pos(*pos), Obstacle::Impediment(1.5));
+    //         // }
+    //     }
+    // }
+
+    ObstacleSet(result)
 }
 
 pub fn find_enemies(
@@ -75,7 +84,8 @@ pub fn can_attack_with(
     target: &Actor,
     attack: &AttackOption,
     map: &Read<Map>,
-    objects: &ReadStorage<GameObjectCmp>,
+    positions: &ReadStorage<Position>,
+    obstacles: &ReadStorage<ObstacleCmp>,
 ) -> bool {
     let from = MapPos::from_world_pos(actor.pos);
     let to = MapPos::from_world_pos(target.pos);
@@ -84,7 +94,7 @@ pub fn can_attack_with(
     if d == 1 {
         return true;
     }  else if d <= attack.reach.into() {
-        let obstacles = find_movement_obstacles(&objects).ignore(to);
+        let obstacles = find_movement_obstacles(&positions, &obstacles).ignore(to);
         if let Some(_) = map.find_straight_path(from, to, &obstacles) {
             return true;
         }
@@ -97,10 +107,11 @@ pub fn can_attack_melee(
     actor: &Actor,
     target: &Actor,
     map: &Read<Map>,
-    objects: &ReadStorage<GameObjectCmp>,
+    positions: &ReadStorage<Position>,
+    obstacles: &ReadStorage<ObstacleCmp>,
 ) -> Option<AttackOption> {
     let attack = actor.melee_attack();
-    if can_attack_with(actor, target, &attack, map, objects) {
+    if can_attack_with(actor, target, &attack, map, positions, obstacles) {
         Some(attack)
     } else {
         None
@@ -111,7 +122,8 @@ pub fn can_charge(
     actor: &Actor,
     target: &Actor,
     map: &Read<Map>,
-    objects: &ReadStorage<GameObjectCmp>,
+    positions: &ReadStorage<Position>,
+    obstacles: &ReadStorage<ObstacleCmp>,
 ) -> Option<AttackOption> {
     let attack = actor.melee_attack();
     let from = MapPos::from_world_pos(actor.pos);
@@ -121,7 +133,7 @@ pub fn can_charge(
     let move_distance: usize = actor.move_distance().into();
 
     if actor.can_move() && 1 < d && d <= 1 + move_distance {
-        let obstacles = find_movement_obstacles(&objects).ignore(to);
+        let obstacles = find_movement_obstacles(positions, obstacles).ignore(to);
         if let Some(_) = map.find_straight_path(from, to, &obstacles) {
             return Some(attack);
         }
@@ -134,7 +146,8 @@ pub fn can_move_towards(
     actor: &Actor,
     target: &Actor,
     map: &Read<Map>,
-    objects: &ReadStorage<GameObjectCmp>,
+    positions: &ReadStorage<Position>,
+    obstacles: &ReadStorage<ObstacleCmp>,
 ) -> Option<Path> {
     if !actor.can_move() {
         return None;
@@ -144,7 +157,7 @@ pub fn can_move_towards(
     let tt = map.find_tile(target.pos);
 
     if let (Some(source_tile), Some(target_tile)) = (st, tt) {
-        find_path_next_to_tile(&source_tile, &target_tile, map, objects)
+        find_path_next_to_tile(&source_tile, &target_tile, map, positions, obstacles)
     } else {
         None
     }
@@ -154,7 +167,8 @@ fn find_path_next_to_tile(
     source_tile: &Tile,
     target_tile: &Tile,
     map: &Read<Map>,
-    objects: &ReadStorage<GameObjectCmp>,
+    positions: &ReadStorage<Position>,
+    obstacles: &ReadStorage<ObstacleCmp>,
 ) -> Option<Path> {
     let distance = source_tile.distance(&target_tile);
     if distance <= 1.0 {
@@ -162,7 +176,7 @@ fn find_path_next_to_tile(
         return None;
     }
 
-    let obstacles = find_movement_obstacles(&objects)
+    let obstacles = find_movement_obstacles(positions, obstacles)
         // ignore obstacles at target since we only want to move next to it
         .ignore(target_tile.to_map_pos());
 

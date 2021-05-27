@@ -4,7 +4,7 @@ use std::time::Duration;
 // use specs::prelude::Entity;
 use specs::prelude::*;
 
-use crate::components::{Fx, GameObjectCmp};
+use crate::components::{Fx, GameObjectCmp, Position, ObstacleCmp};
 use crate::core::ai::find_movement_obstacles;
 use crate::core::*;
 // use crate::core::{Tile, WorldPos};
@@ -148,9 +148,9 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
 
         Action::MoveTo(path) => {
             if path.is_empty() {
-                return no_op()
+                return no_op();
             }
-            
+
             let sp = actor.pos;
             (
                 vec![
@@ -182,7 +182,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
 
         Action::MeleeAttack(target_entity, attack) => {
             if let Some(target_actor) = get_actor(target_entity, w) {
-                let move_steps = vec!(actor.pos, target_actor.pos, actor.pos);
+                let move_steps = vec![actor.pos, target_actor.pos, actor.pos];
                 let from = MapPos::from_world_pos(actor.pos);
                 let to = MapPos::from_world_pos(target_actor.pos);
 
@@ -191,7 +191,8 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     return no_op();
                 }
 
-                let (mut changes, delay, log) = handle_attack((entity, actor), (target_entity, target_actor), attack);
+                let (mut changes, delay, log) =
+                    handle_attack((entity, actor), (target_entity, target_actor), attack);
                 changes.push(fx_move(entity, move_steps, 0));
 
                 (changes, delay, log)
@@ -213,8 +214,12 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     return no_op();
                 }
 
-                let (map, game_objects): (Read<Map>, ReadStorage<GameObjectCmp>) = w.system_data();
-                let obstacles = find_movement_obstacles(&game_objects).ignore(to);
+                let (map, position_cmp, obstacle_cmp): (
+                    Read<Map>,
+                    ReadStorage<Position>,
+                    ReadStorage<ObstacleCmp>,
+                ) = w.system_data();
+                let obstacles = find_movement_obstacles(&position_cmp, &obstacle_cmp).ignore(to);
 
                 if let Some(p) = map.find_straight_path(from, to, &obstacles) {
                     let tile = p[steps_needed - 1];
@@ -232,7 +237,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     }]);
                     let mut updates = vec![
                         update_actor(entity, actor.clone()),
-                        fx_move(entity, vec!(p1, p2, p3), 0),
+                        fx_move(entity, vec![p1, p2, p3], 0),
                     ];
                     let (mut combat_updates, delay, log) =
                         handle_attack((entity, actor), (target_entity, target_actor), attack);

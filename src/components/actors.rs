@@ -43,6 +43,7 @@ fn lazy_insert_components<'a>(
         updater.insert(entity, txt);
     }
 
+    updater.insert(entity, ObstacleCmp(Obstacle { allow_movement: false }));
     updater.insert(entity, get_sprites(&obj, &texture_map));
     updater.insert(entity, GameObjectCmp(obj));
 }

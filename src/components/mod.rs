@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use specs::prelude::*;
 use specs_derive::Component;
 
-use crate::core::{GameObject, WorldPos};
+use crate::core::{GameObject, WorldPos, Obstacle};
 
 pub use crate::components::actors::*;
 pub use crate::components::animation::*;
@@ -20,6 +20,7 @@ pub fn register(world: &mut World) {
     world.register::<Text>();
     world.register::<EndOfLive>();
     world.register::<GameObjectCmp>();
+    world.register::<ObstacleCmp>();
     world.register::<Position>();
 
     // from animation module
@@ -40,6 +41,10 @@ pub struct Position(pub WorldPos);
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
 pub struct GameObjectCmp(pub GameObject);
+
+#[derive(Component, Debug)]
+#[storage(VecStorage)]
+pub struct ObstacleCmp(pub Obstacle);
 
 #[derive(Component, Debug, Clone)]
 #[storage(DenseVecStorage)]
