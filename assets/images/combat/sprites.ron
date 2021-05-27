@@ -126,10 +126,31 @@
             offset: (32, 32),
             alpha: 255,
         )),
-
     ("selected", ProtoSpriteConfig(
             files: ["selected.png"],
             offset: (32, 32),
+            alpha: 255,
+        )),
+
+    // === BEGIN SECTION icons ================================
+    ("icon-action-Done", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_Icons-1.png"],
+            offset: (96, 0),
+            alpha: 255,
+        )),
+    ("icon-action-Charge", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_Icons-2.png"],
+            offset: (64, 0),
+            alpha: 255,
+        )),
+    ("icon-action-MeleeAttack", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_Icons-3.png"],
+            offset: (64, 0),
+            alpha: 255,
+        )),
+    ("icon-action-RangedAttack", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_Icons-4.png"],
+            offset: (64, 0),
             alpha: 255,
         )),
 ]
