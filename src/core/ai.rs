@@ -74,7 +74,7 @@ pub fn actions_at(
         let obstacles = find_movement_obstacles(&objects);
 
         if let Some(path) = map.find_path(from, to, &obstacles) {
-            if path.len() <= actor.move_distance().into() {
+            if path.len() > 0 && path.len() <= actor.move_distance().into() {
                 result.push(Action::move_to(path));
             }
         }
