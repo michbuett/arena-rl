@@ -1,3 +1,4 @@
+use sdl2::rect::{Rect, Point};
 use sdl2::event::Event as Sdl2Event;
 use sdl2::keyboard::Keycode;
 use sdl2::EventPump;
@@ -31,8 +32,8 @@ pub fn poll(sdl_events: &mut EventPump, click_areas: &ClickAreas, ui: &UI) -> Op
                 } else {
                     let p = ScreenPos(ui.pixel_ratio as i32 * x, ui.pixel_ratio as i32 * y); 
 
-                    for ClickArea {clipping_area, action,} in click_areas.iter() {
-                        if clipping_area.contains_point(p.to_point()) {
+                    for ClickArea {clipping_area, action} in click_areas.iter() {
+                        if contains_point(*clipping_area, p) {
                             return Some(action(p));
                         }
                     }
@@ -48,4 +49,9 @@ pub fn poll(sdl_events: &mut EventPump, click_areas: &ClickAreas, ui: &UI) -> Op
     }
 
     None
+}
+
+
+fn contains_point((x, y, w, h): (i32, i32, u32, u32), p: ScreenPos) -> bool {
+    Rect::new(x, y, w, h).contains_point(Point::new(p.0, p.1))
 }

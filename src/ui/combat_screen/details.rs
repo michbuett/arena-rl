@@ -1,6 +1,3 @@
-// use sdl2::pixels::Color;
-use sdl2::rect::Rect;
-
 use crate::core::{Action, Actor, CombatData, CombatState, DisplayStr, GameObject, InputContext, Trait, TraitSource, UserInput, WorldPos};
 use crate::ui::types::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenText};
 
@@ -10,13 +7,13 @@ const BTN_HEIGHT: u32 = 65;
 pub fn render(
     scene: &mut Scene,
     click_areas: &mut ClickAreas,
-    viewport: &Rect,
+    viewport: (u32, u32),
     game: &CombatData,
 ) {
     if let CombatState::WaitForUserAction(_, ctxt) = &game.state {
         match ctxt {
             Some(InputContext::SelectedArea(p, objects, actions)) => {
-                draw_area_details(scene, viewport, *p, objects);
+                draw_area_details(scene, viewport.0, *p, objects);
                 draw_action_buttons(scene, click_areas, game, viewport, Some(actions));
             }
 
@@ -29,7 +26,7 @@ pub fn render(
 
 fn draw_area_details(
     scene: &mut Scene,
-    viewport: &Rect,
+    viewport_width: u32,
     pos: WorldPos,
     objects: &Vec<GameObject>,
 ) {
@@ -52,7 +49,7 @@ fn draw_area_details(
         }
     }
 
-    let x = (viewport.width() - DLG_WIDTH) as i32;
+    let x = (viewport_width - DLG_WIDTH) as i32;
 
     scene.texts.push(
     // scene.texts[FontFace::Normal as usize].push(
@@ -68,12 +65,12 @@ fn draw_action_buttons(
     scene: &mut Scene,
     click_areas: &mut ClickAreas,
     game: &CombatData,
-    viewport: &Rect,
+    (viewport_width, viewport_height): (u32, u32),
     actions: Option<&Vec<(Action, u8)>>,
 ) {
     let mut action_buttons = create_action_buttons(game, actions);
-    let x = (viewport.width() - DLG_WIDTH) as i32;
-    let mut y = (viewport.height() - action_buttons.len() as u32 * BTN_HEIGHT) as i32;
+    let x = (viewport_width - DLG_WIDTH) as i32;
+    let mut y = (viewport_height - action_buttons.len() as u32 * BTN_HEIGHT) as i32;
 
     for (text, action) in action_buttons.drain(..) {
         scene.texts.push(
@@ -86,7 +83,7 @@ fn draw_action_buttons(
         );
 
         click_areas.push(ClickArea {
-            clipping_area: Rect::new(x, y, DLG_WIDTH, BTN_HEIGHT),
+            clipping_area: (x, y, DLG_WIDTH, BTN_HEIGHT),
             action: Box::new(move |_| UserInput::SelectAction(action.clone())),
         });
 

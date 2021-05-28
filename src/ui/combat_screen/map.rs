@@ -2,8 +2,6 @@ use std::iter::once;
 
 use specs::prelude::*;
 
-use sdl2::rect::Rect;
-
 use crate::components::{Position, Text, Sprites};
 use crate::core::{
     Action, CombatData, CombatState, DisplayStr, InputContext, Map, Tile, TileType, UserInput,
@@ -20,7 +18,7 @@ pub type SystemData<'a> = (
 );
 
 pub fn render(
-    viewport: &Rect,
+    viewport: (i32, i32, u32, u32),
     scroll_offset: (i32, i32),
     game: &CombatData,
 ) -> (Scene, Vec<ClickArea>) {
@@ -41,7 +39,7 @@ pub fn render(
     (
         scene,
         vec![ClickArea {
-            clipping_area: viewport.clone(),
+            clipping_area: viewport,
             action: Box::new(move |screen_pos| {
                 let screen_pos = ScreenPos(screen_pos.0 - TILE_WIDTH as i32 / 2, screen_pos.1);
                 let clicked_pos = screen_pos.to_world_pos(scroll_offset);

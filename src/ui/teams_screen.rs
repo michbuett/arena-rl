@@ -1,12 +1,8 @@
-use crate::ScreenPos;
-use crate::ScreenText;
-use sdl2::rect::Rect;
-
 use crate::core::{GameObject, UserInput, DisplayStr};
-use crate::ui::{ClickArea, ClickAreas, Scene, FontFace};
+use crate::ui::{ClickArea, ClickAreas, Scene, FontFace, ScreenPos, ScreenText};
 
 pub fn render(
-    viewport: &Rect,
+    (viewport_width, viewport_height): (u32, u32),
     game_objects: &Vec<GameObject>,
 ) -> (Scene, ClickAreas) {
     let mut scene = Scene::empty();
@@ -16,12 +12,12 @@ pub fn render(
     // scene.texts[FontFace::Big as usize].push(
         ScreenText::new(
             DisplayStr::new("Your Team"),
-            ScreenPos(((viewport.width() - 185) / 2) as i32, 50),
+            ScreenPos(((viewport_width - 185) / 2) as i32, 50),
         ).font(FontFace::Big)
     );
 
-    render_actors(&mut scene, &mut click_areas, viewport, game_objects);
-    render_start_btn(&mut scene, &mut click_areas, viewport);
+    render_actors(&mut scene, &mut click_areas, game_objects);
+    render_start_btn(&mut scene, &mut click_areas, (viewport_width, viewport_height));
 
     (scene, click_areas)
 }
@@ -29,10 +25,10 @@ pub fn render(
 pub fn render_start_btn(
     scene: &mut Scene,
     click_areas: &mut ClickAreas,
-    viewport: &Rect,
+    (viewport_width, viewport_height): (u32, u32),
 ) {
     let (w, h) = (230, 76);
-    let (x, y) = ((viewport.width() - w - 20) as i32, (viewport.height() - h - 20) as i32);
+    let (x, y) = ((viewport_width - w - 20) as i32, (viewport_height - h - 20) as i32);
     
     scene.texts.push(
     // scene.texts[FontFace::Normal as usize].push(
@@ -46,7 +42,7 @@ pub fn render_start_btn(
     );
 
     click_areas.push(ClickArea {
-        clipping_area: Rect::new(x, y, w as u32, h as u32),
+        clipping_area: (x, y, w as u32, h as u32),
         action: Box::new(|_| UserInput::SelectTeam(vec!(
             // TODO: pass configured player characters
         ))),
@@ -56,7 +52,6 @@ pub fn render_start_btn(
 pub fn render_actors(
     _scene: &mut Scene,
     _click_areas: &mut ClickAreas,
-    _viewport: &Rect,
     _game_objects: &Vec<GameObject>,
 ) {
     // TODO display selected team and allow changes

@@ -1,4 +1,4 @@
-use sdl2::rect::{Point, Rect};
+// use sdl2::rect::Rect;
 // use std::collections::HashMap;
 
 use serde::Deserialize;
@@ -12,10 +12,6 @@ pub const TILE_WIDTH: u32 = 128;
 pub const TILE_HEIGHT: u32 = 128;
 
 impl ScreenPos {
-    pub fn to_point(&self) -> Point {
-        Point::new(self.0, self.1)
-    }
-
     pub fn to_xy(&self) -> (i32, i32) {
         (self.0, self.1)
     }
@@ -46,7 +42,7 @@ impl ScreenPos {
 }
 
 pub struct ClickArea {
-    pub clipping_area: Rect,
+    pub clipping_area: (i32, i32, u32, u32),
     pub action: Box<dyn Fn(ScreenPos) -> UserInput>,
 }
 
@@ -54,12 +50,11 @@ pub type ClickAreas = Vec<ClickArea>;
 
 pub struct UI {
     pub pixel_ratio: u8,
-    pub viewport: Rect,
+    pub viewport: (i32, i32, u32, u32),
     pub fps: u128,
     pub frames: u32,
     pub last_check: std::time::Instant,
     pub scrolling: Option<ScrollData>,
-    // pub textures: (&'static str, HashMap<String, SpriteConfig>),
 }
 
 pub struct ScrollData {
@@ -178,17 +173,6 @@ impl Scene {
 
 #[derive(Debug)]
 pub struct ScreenSprite(pub ScreenPos, pub Sprite);
-// pub struct ScreenSprite {
-//     pub source: (String, i32, i32, u32, u32),
-//     pub pos: ScreenPos,
-//     pub offset: (i32, i32),
-//     pub alpha: u8,
-//     pub target_size: (u32, u32),
-// }
-
-// #[derive(Debug)]
-// pub struct ScreenSprite(Sprite, ScreenPos);
-// pub struct Visual(Vec<String>);
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProtoSpriteConfig {
@@ -197,52 +181,3 @@ pub struct ProtoSpriteConfig {
     pub alpha: u8,
     pub frame_durration: Option<u32>,
 }
-
-// #[derive(Debug, Clone)]
-// pub struct SpriteConfig {
-//     pub source: SpriteSource,
-//     pub offset: (i32, i32),
-//     pub dim: (u32, u32),
-//     pub alpha: u8,
-// }
-
-// impl SpriteConfig {
-//     pub fn into_screen_sprite(&self, pos: ScreenPos, runtime_ms: u128) -> ScreenSprite {
-//         let (w, h) = self.dim;
-//         let (x, y) = self.source.get_frame_pos(runtime_ms);
-//         let source = ("".to_string(), x, y, w, h);
-
-//         ScreenSprite {
-//             pos,
-//             source,
-//             target_size: self.dim,
-//             offset: self.offset,
-//             alpha: self.alpha,
-//         }
-//     }
-// }
-
-// #[derive(Debug, Clone)]
-// pub enum SpriteSource {
-//     Static(i32, i32),
-//     SimpleAnimation(u32, Vec<(i32, i32)>),
-// }
-
-// impl SpriteSource {
-//     fn get_frame_pos (&self, runtime_ms: u128) -> (i32, i32) {
-//         match self {
-//             Self::Static(x, y) => (*x, *y),
-
-//             Self::SimpleAnimation(durr_per_frame, frames) => {
-//                 let total_animation_time = *durr_per_frame as usize * frames.len();
-//                 // let loops = runtime_ms / total_animation_time as u128;
-//                 let remaining = runtime_ms as usize % total_animation_time;
-//                 let frame_idx = remaining / *durr_per_frame as usize;
-
-//                 frames[frame_idx]
-//             }
-//         }
-//     }
-// }
-
-// pub type TextureMap = HashMap<String, SpriteConfig>;

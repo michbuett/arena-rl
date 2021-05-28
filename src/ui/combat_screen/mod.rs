@@ -3,26 +3,23 @@ mod map;
 
 use specs::prelude::*;
 
-// use sdl2::pixels::Color;
-use sdl2::rect::Rect;
-
+use super::types::{ClickAreas, Scene, TILE_HEIGHT, TILE_WIDTH};
 use crate::core::{CombatData, Map};
-use super::types::{ClickAreas, Scene, TILE_WIDTH, TILE_HEIGHT};
 
 pub fn render(
-    viewport: &Rect,
+    (x, y, w, h): (i32, i32, u32, u32),
     scroll_offset: (i32, i32),
     game: &CombatData,
 ) -> (Scene, ClickAreas) {
-    let mut click_areas: ClickAreas = vec!();
-    let (mut scene, mut map_clicks) = map::render(viewport, scroll_offset, game);
+    let mut click_areas: ClickAreas = vec![];
+    let (mut scene, mut map_clicks) = map::render((x, y, w, h), scroll_offset, game);
 
-    details::render(&mut scene, &mut click_areas, viewport, game);
+    details::render(&mut scene, &mut click_areas, (w, h), game);
 
     // render_screen_texts(cvs, assets, viewport, game)?;
 
     click_areas.append(&mut map_clicks);
-    
+
     (scene, click_areas)
 }
 
@@ -51,7 +48,7 @@ pub fn render(
 //             .prepare();
 
 //         let txt_height = msg.dimension().1 as i32;
-        
+
 //         if y + txt_height > viewport.height() as i32 {
 //             break;
 //         }
@@ -78,7 +75,10 @@ pub fn render(
 //     Ok(())
 // }
 
-pub fn init_scroll_offset(game: &CombatData, viewport: Rect) -> (i32, i32) {
+pub fn init_scroll_offset(
+    game: &CombatData,
+    (viewport_width, viewport_height): (u32, u32),
+) -> (i32, i32) {
     let map: Read<Map> = game.world.system_data();
     let num_columns = map.num_columns();
     let num_rows = map.num_rows();
@@ -86,7 +86,8 @@ pub fn init_scroll_offset(game: &CombatData, viewport: Rect) -> (i32, i32) {
     let map_height = TILE_HEIGHT * (num_columns + num_rows) / 2;
 
     (
-        (viewport.width() as i32 - map_width as i32) / 2  as i32 + map_width as i32 / 2 - TILE_WIDTH as i32,
-        (viewport.height() as i32 - map_height as i32) / 2,
+        (viewport_width as i32 - map_width as i32) / 2 as i32 + map_width as i32 / 2
+            - TILE_WIDTH as i32,
+        (viewport_height as i32 - map_height as i32) / 2,
     )
 }

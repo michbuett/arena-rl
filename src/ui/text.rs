@@ -115,6 +115,7 @@ impl<'a> Font<'a> {
         let (x, y) = screen_txt.pos.to_xy();
         let prepared_text = prepare(screen_txt, self);
         let (w, h) = prepared_text.dim;
+        // let pixel_format = sdl2::pixels::PixelFormatEnum::RGBA8888;
         let pixel_format = self.texture_creator.default_pixel_format();
         let mut target_tex = self
             .texture_creator

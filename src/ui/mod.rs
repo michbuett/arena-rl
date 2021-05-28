@@ -26,20 +26,23 @@ pub fn render(
 ) -> Result<ClickAreas, String> {
     // let now = Instant::now();
     let (mut scene, click_areas) = match game {
-        Game::Start(..) => start_screen::render(&ui.viewport),
+        Game::Start(..) => start_screen::render(ui.viewport),
 
-        Game::TeamSelection(_, _, game_objects) => teams_screen::render(&ui.viewport, game_objects),
+        Game::TeamSelection(_, _, game_objects) => {
+            let (_, _, w, h) = ui.viewport;
+            teams_screen::render((w, h), game_objects)
+        }
 
         Game::Combat(combat_data) => {
             let scroll_offset = ui.scrolling.as_ref().map(|s| s.offset).unwrap_or((0, 0));
-            combat_screen::render(&ui.viewport, scroll_offset, combat_data)
+            combat_screen::render(ui.viewport, scroll_offset, combat_data)
         }
     };
 
     scene.texts.push(
         ScreenText::new(
             DisplayStr::new(format!("FPS: {}", ui.fps)),
-            ScreenPos(10, ui.viewport.height() as i32 - 60),
+            ScreenPos(10, ui.viewport.3 as i32 - 60),
         )
         .color((20, 150, 20, 255))
         .padding(10)
@@ -131,7 +134,7 @@ fn draw_scene(
     Ok(())
 }
 
-pub fn init_ui(viewport: Rect, pixel_ratio: u8) -> UI {
+pub fn init_ui(viewport: (i32, i32, u32, u32), pixel_ratio: u8) -> UI {
     UI {
         viewport,
         pixel_ratio,
@@ -169,6 +172,7 @@ fn update_fps(ui: UI) -> UI {
 
 fn update_scrolling(ui: UI, g: &Game, i: &Option<UserInput>) -> UI {
     let scrolling = ui.scrolling;
+    let (_, _, w, h) = ui.viewport;
 
     UI {
         scrolling: match (scrolling, g, i) {
@@ -177,7 +181,7 @@ fn update_scrolling(ui: UI, g: &Game, i: &Option<UserInput>) -> UI {
             (None, Game::Combat(combat_data), _) => Some(ScrollData {
                 is_scrolling: false,
                 has_scrolled: false,
-                offset: combat_screen::init_scroll_offset(combat_data, ui.viewport),
+                offset: combat_screen::init_scroll_offset(combat_data, (w, h)),
             }),
 
             (Some(sd), Game::Combat(..), Some(i)) => Some(get_scrolling(sd, i)),

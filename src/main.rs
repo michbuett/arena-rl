@@ -43,11 +43,12 @@ fn main() -> Result<(), String> {
 
     let texture_map = assets.create_texture_from_path(Path::new("./assets/images/combat"))?;
     let object_generator = ObjectGenerator::new();
+    let vp = canvas.viewport();
 
     let mut click_areas = vec![];
     let mut sdl_events = sdl_context.event_pump()?;
     let mut game = Game::Start(object_generator, texture_map);
-    let mut ui = init_ui(canvas.viewport(), pixel_ratio);
+    let mut ui = init_ui((vp.x(), vp.y(), vp.width(), vp.height()), pixel_ratio);
 
     'main: loop {
         let user_input = poll(&mut sdl_events, &click_areas, &ui);
