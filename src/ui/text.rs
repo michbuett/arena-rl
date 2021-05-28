@@ -120,7 +120,7 @@ impl<'a> Font<'a> {
             .texture_creator
             // !!! ATTENSION: there seems to be a very wierd issue if texture is to small
             // the background/transparency of small textures is broken
-            .create_texture_target(pixel_format, max(w, 65), max(h, 33))
+            .create_texture_target(pixel_format, max(w, 65), max(h, 65))
             .map_err(to_string)?;
 
         target_tex.set_blend_mode(BlendMode::Blend);
@@ -191,7 +191,8 @@ struct PreparedText {
     words: Vec<((i32, i32), PreparedWord)>,
     dim: (u32, u32),
     color: (u8, u8, u8, u8),
-    background: Option<Color>,
+    background: Color,
+    // background: Option<Color>,
     padding: u32,
     border: Option<(u32, Color)>,
 }
@@ -238,7 +239,7 @@ fn prepare<'a>(text: ScreenText, font: &'a Font) -> PreparedText {
         words,
         dim: (width, height),
         color: text.color,
-        background: text.background.map(|(r, g, b, a)| Color::RGBA(r, g, b, a)),
+        background: text.background.map(|(r, g, b, a)| Color::RGBA(r, g, b, a)).unwrap_or(Color::RGBA(0, 0, 0, 0)),
         padding: text.padding,
         border: text
             .border
@@ -308,10 +309,7 @@ fn draw_text(
     target: &mut Texture,
     (x, y, w, h): (i32, i32, u32, u32),
 ) -> Result<(), String> {
-
-    if let Some(color) = text.background {
-        draw_background(cvs, target, color, 0, 0, w, h)?;
-    }
+    draw_background(cvs, target, text.background, 0, 0, w, h)?;
 
     if let Some((bw, border_color)) = text.border {
         draw_border(cvs, target, border_color, bw, 0, 0, w, h)?;
