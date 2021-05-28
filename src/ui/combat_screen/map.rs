@@ -1,3 +1,5 @@
+use std::iter::once;
+
 use specs::prelude::*;
 
 use sdl2::rect::Rect;
@@ -30,11 +32,11 @@ pub fn render(
         background: (252, 246, 218),
     };
 
-    render_map(&mut scene, scroll_offset, game, &map, &texture_map);
+    let default_action = get_default_action(&game);
+
+    render_map(&mut scene, scroll_offset, &default_action, &map, &texture_map);
     render_character(&mut scene, scroll_offset, &pos, &sprites);
     render_texts(&mut scene, scroll_offset, &pos, &texts);
-
-    let default_action = get_default_action(&game);
 
     (
         scene,
@@ -103,7 +105,7 @@ fn render_texts<'a>(
 fn render_map(
     scene: &mut Scene,
     offset: (i32, i32),
-    game: &CombatData,
+    default_action: &Option<(WorldPos, Action, u8)>,
     map: &Map,
     texture_map: &TextureMap,
 ) {
@@ -117,14 +119,21 @@ fn render_map(
         }
     }
 
-    if let Some(wp) = get_focus_pos(&game.state) {
+    for wp in get_highlighted_tiles(default_action) {
         if let Some(sprite_config) = texture_map.get("selected") {
             let p = ScreenPos::from_world_pos(wp, offset);
 
             scene.sprites.push(ScreenSprite(p, sprite_config.sample(0)));
-            // scene.sprites.push(sprite_config.into_screen_sprite(p, 0));
         }
     }
+
+    // if let Some(wp) = default_action {
+    //     if let Some(sprite_config) = texture_map.get("selected") {
+    //         let p = ScreenPos::from_world_pos(wp, offset);
+
+    //         scene.sprites.push(ScreenSprite(p, sprite_config.sample(0)));
+    //     }
+    // }
 }
 
 fn map_tile_to_texture(t: Tile) -> Option<String> {
@@ -134,12 +143,12 @@ fn map_tile_to_texture(t: Tile) -> Option<String> {
     }
 }
 
-fn get_focus_pos<'a>(game_state: &CombatState) -> Option<WorldPos> {
-    match game_state {
-        CombatState::WaitForUserAction(_, Some(InputContext::SelectedArea(p, _, _))) => Some(*p),
-        _ => None,
-    }
-}
+// fn get_focus_pos<'a>(game_state: &CombatState) -> Option<WorldPos> {
+//     match game_state {
+//         CombatState::WaitForUserAction(_, Some(InputContext::SelectedArea(p, _, _))) => Some(*p),
+//         _ => None,
+//     }
+// }
 
 fn get_default_action(game: &CombatData) -> Option<(WorldPos, Action, u8)> {
     match &game.state {
@@ -152,5 +161,18 @@ fn get_default_action(game: &CombatData) -> Option<(WorldPos, Action, u8)> {
         }
 
         _ => None,
+    }
+}
+
+fn get_highlighted_tiles(
+    default_action: &Option<(WorldPos, Action, u8)>
+) -> Vec<WorldPos> {
+    if let Some((pos, action, _)) = default_action {
+        match action {
+            Action::MoveTo(p) => once(*pos).chain(p.iter().map(|t| t.to_world_pos())).collect(),
+            _ => vec!(*pos),
+        }
+    } else {
+        vec!()
     }
 }
