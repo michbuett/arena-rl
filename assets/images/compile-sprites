@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -e
 # rm raw/part*
 
 # # combine single sprites horizontally
@@ -8,11 +8,19 @@
 
 # # combine parts vertically
 # convert raw/part*.png -append sprites.png
+PATH_IN="assets/images/raw"
+PARAMS="-path assets/images/combat/ -filter Box -interpolate Integer"
 
-PARAMS="-path combat/ -filter Box -interpolate Integer"
-mogrify -resize 48x48 $PARAMS  raw/ArenaRL_Assets_\(heads\)-*.png
-mogrify -resize 96x96 $PARAMS  raw/ArenaRL_Assets_Weapons_-*.png
-mogrify -resize 96x96 $PARAMS  raw/ArenaRL_Assets-*.png
+echo "resizing sprites..."
+mogrify -resize 48x48   $PARAMS $PATH_IN/ArenaRL_Assets_\(heads\)-*.png
+mogrify -resize 96x96   $PARAMS $PATH_IN/ArenaRL_Assets_Weapons_-*.png
+mogrify -resize 96x96   $PARAMS $PATH_IN/ArenaRL_Assets-*.png
+mogrify -resize 96x96   $PARAMS $PATH_IN/Background-*.png
+mogrify -resize 32x32   $PARAMS $PATH_IN/icons/*.png
+mogrify -resize 96x96   $PARAMS $PATH_IN/floor.png
+mogrify -resize 128x128 $PARAMS $PATH_IN/selected.png
+mogrify -resize 256x256 $PARAMS $PATH_IN/Fx-*.png
+echo "done"
 # mogrify -resize 64x64 -path combat/ $PARAMS  raw/ArenaRL_Assets_\(heads\)-*.png
 # mogrify -resize 128x128 -path combat/ $PARAMS  raw/ArenaRL_Assets-*.png
 

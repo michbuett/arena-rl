@@ -6,6 +6,7 @@ mod teams_screen;
 mod text;
 mod types;
 
+use sdl2::render::Texture;
 pub use asset::*;
 pub use input::*;
 pub use text::*;
@@ -16,7 +17,7 @@ use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
 use std::time::Instant;
 
-use crate::core::{DisplayStr, Game, UserInput};
+use crate::core::{DisplayStr, Game, UserInput, Sprite};
 
 pub fn render(
     cvs: &mut WindowCanvas,
@@ -70,59 +71,19 @@ fn draw_scene(
     cvs.set_draw_color(Color::RGB(r, g, b));
     cvs.clear();
 
-    // println!("draw {} sprites and {} texts", scene.sprites.len(), scene.texts.len());
-        
+    for (tex_name, ScreenSprite(pos, sprite)) in scene.images {
+        if let Some(ref mut t) = assets.textures.get_mut(&tex_name) {
+            draw_sprite(pos, sprite, t, cvs)?;
+        }
+    }
+
     for ScreenSprite(pos, sprite) in scene.sprites {
         let mut texture = assets.texture.as_mut();
 
         if let Some(ref mut t) = texture {
-            let (x, y) = sprite.source;
-            let (dx, dy) = sprite.offset;
-            let (w, h) = sprite.dim;
-            let from = Rect::new(x, y, w, h);
-            let to = Rect::new(pos.0 + dx, pos.1 + dy, w, h);
-
-            t.set_alpha_mod(sprite.alpha);
-
-            cvs.copy(t, from, to)?;
+            draw_sprite(pos, sprite, t, cvs)?;
         }
     }
-
-    // for ScreenSprite {
-    //     source,
-    //     pos,
-    //     offset,
-    //     alpha,
-    //     target_size,
-    // } in scene.sprites
-    // {
-    //     let mut texture = if source.0.is_empty() {
-    //         assets.texture.as_mut()
-    //     } else {
-    //         assets.textures.get_mut(&source.0)
-    //     };
-
-    //     if let Some(ref mut t) = texture {
-    //         let (_, x, y, w, h) = source;
-    //         let from = Rect::new(x, y, w, h);
-    //         let to = Rect::new(
-    //             pos.0 + offset.0,
-    //             pos.1 + offset.1,
-    //             target_size.0,
-    //             target_size.1,
-    //         );
-
-    //         t.set_alpha_mod(alpha);
-
-    //         cvs.copy(t, from, to)?;
-
-    //         // println!("render_sprite from {:?} to {:?}", from, to);
-    //         // if source.0 == "floor" {
-    //         //     cvs.set_draw_color(Color::RGB(0, 0, 0));
-    //         //     cvs.draw_rect(to)?;
-    //         // }
-    //     }
-    // }
 
     for txt in scene.texts {
         let font = assets.fonts[txt.font as usize].as_mut().unwrap();
@@ -142,7 +103,6 @@ pub fn init_ui(viewport: (i32, i32, u32, u32), pixel_ratio: u8) -> UI {
         frames: 0,
         last_check: Instant::now(),
         scrolling: None,
-        // textures: ("combat", texture_map),
     }
 }
 
@@ -244,3 +204,20 @@ fn get_scrolling(sd: ScrollData, i: &UserInput) -> ScrollData {
 // fn get_scrolling(ui: &UI, game: &Game) -> Option<ScrollData> {
 //     if let Some
 // }
+
+fn draw_sprite(
+    pos: ScreenPos,
+    sprite: Sprite,
+    t: &mut Texture,
+    cvs: &mut WindowCanvas,
+) -> Result<(), String> {
+    let (x, y) = sprite.source;
+    let (dx, dy) = sprite.offset;
+    let (w, h) = sprite.dim;
+    let from = Rect::new(x, y, w, h);
+    let to = Rect::new(pos.0 + dx, pos.1 + dy, w, h);
+
+    t.set_alpha_mod(sprite.alpha);
+
+    cvs.copy(t, from, to)
+}

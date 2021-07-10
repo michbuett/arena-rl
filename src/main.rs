@@ -8,18 +8,16 @@ use std::path::Path;
 use std::time::Duration;
 
 use sdl2::image::InitFlag;
-use sdl2::rect::Rect;
 
-use crate::core::*;
-use crate::ui::*;
+use crate::core::{step, Game, ObjectGenerator, UserInput};
+use crate::ui::{init_ui, poll, render, step_ui, AssetRepo, FontFace};
 
 fn main() -> Result<(), String> {
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let _image_context = sdl2::image::init(InitFlag::PNG);
-    let dim = Rect::new(0, 0, 1200, 600);
     let window = video_subsystem
-        .window("ArenaRL", dim.width(), dim.height())
+        .window("ArenaRL", 1200, 600)
         // .fullscreen_desktop()
         .allow_highdpi()
         .opengl()

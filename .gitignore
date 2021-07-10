@@ -1,4 +1,4 @@
 /target
-/assets/images/raw
+/assets/images/**/*.png
 **/*.rs.bk
 **/.DS_Store

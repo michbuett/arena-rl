@@ -19,6 +19,7 @@ pub enum Action {
     MoveTo(Path),
     Activate(Entity),
     MeleeAttack(Entity, AttackOption),
+    RangeAttack(Entity, AttackOption),
     Charge(Entity, AttackOption),
     UseAbility(Entity, DisplayStr, Trait),
     EndTurn(Team),
@@ -180,19 +181,24 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             }
         }
 
+        Action::RangeAttack(target_entity, attack) => {
+            no_op()
+        }
+        
         Action::MeleeAttack(target_entity, attack) => {
             if let Some(target_actor) = get_actor(target_entity, w) {
                 let move_steps = vec![actor.pos, target_actor.pos, actor.pos];
                 let from = MapPos::from_world_pos(actor.pos);
                 let to = MapPos::from_world_pos(target_actor.pos);
 
-                if from.distance(to) > attack.reach.into() {
+                if from.distance(to) > attack.max_distance.into() {
                     // attacker cannot reach target => cancel attack
                     return no_op();
                 }
 
                 let (mut changes, delay, log) =
                     handle_attack((entity, actor), (target_entity, target_actor), attack);
+
                 changes.push(fx_move(entity, move_steps, 0));
 
                 (changes, delay, log)
@@ -225,7 +231,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     let tile = p[steps_needed - 1];
                     let p1 = actor.pos; // start movement at the original postion of the attacer
                     let p2 = p.last().unwrap().to_world_pos(); // step on the target tile to visualise impact
-                    let p3 = tile.to_world_pos(); // on tile back to the place where the attacker actually stands
+                    let p3 = tile.to_world_pos(); // one tile back to the place where the attacker actually stands
                     let actor = actor.move_to(tile).add_traits(&mut vec![Trait {
                         name: DisplayStr::new("Charging"),
                         effects: vec![
@@ -266,6 +272,9 @@ fn handle_attack<'a>(
 
     changes_for_condition(combat_result.attacker, attacker.0, &mut changes);
     changes_for_condition(combat_result.target, target.0, &mut changes);
+
+    changes.push(Change::Fx(Fx::sprite("fx-hit-1".to_string(), fx_pos, fx_delay_ms, 400)));
+    fx_delay_ms += 400;
 
     for event in combat_result.log.iter() {
         log.push(event.log.to_string());

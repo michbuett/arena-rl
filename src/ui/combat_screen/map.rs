@@ -27,6 +27,7 @@ pub fn render(
     let mut scene = Scene {
         sprites: Vec::new(),
         texts: vec![],
+        images: vec![],
         background: (252, 246, 218),
     };
 

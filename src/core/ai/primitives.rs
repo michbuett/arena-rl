@@ -93,7 +93,7 @@ pub fn can_attack_with(
 
     if d == 1 {
         return true;
-    }  else if d <= attack.reach.into() {
+    }  else if d <= attack.max_distance.into() {
         let obstacles = find_movement_obstacles(&positions, &obstacles).ignore(to);
         if let Some(_) = map.find_straight_path(from, to, &obstacles) {
             return true;

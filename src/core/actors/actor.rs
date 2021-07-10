@@ -219,7 +219,8 @@ impl Actor {
                 Effect::MeleeAttack(name, reach, to_hit, to_wound) => {
                     return AttackOption {
                         name: name.clone(),
-                        reach: *reach,
+                        min_distance: 0,
+                        max_distance: *reach,
                         to_hit: *to_hit,
                         to_wound: *to_wound,
                     }
@@ -230,10 +231,30 @@ impl Actor {
 
         AttackOption {
             name: DisplayStr::new("Unarmed attack"),
-            reach: 1,
+            min_distance: 0,
+            max_distance: 1,
             to_hit: 0,
             to_wound: 0,
         }
+    }
+
+    pub fn range_attack(&self, distance: u8) -> Option<AttackOption> {
+        for (_, eff) in self.effects.iter() {
+            match eff {
+                Effect::RangeAttack(name, min_distance, max_distance, to_hit, to_wound) => {
+                    return Some(AttackOption {
+                        name: name.clone(),
+                        min_distance: *min_distance,
+                        max_distance: *max_distance,
+                        to_hit: *to_hit,
+                        to_wound: *to_wound,
+                    })
+                }
+                _ => {}
+            }
+        }
+
+        None
     }
 
     pub fn melee_defence(&self) -> Option<Defence> {
@@ -351,7 +372,8 @@ pub struct Activation {
 #[derive(Debug, Clone)]
 pub struct AttackOption {
     pub name: DisplayStr,
-    pub reach: u8,
+    pub min_distance: u8,
+    pub max_distance: u8,
     pub to_hit: i8,
     pub to_wound: i8,
 }
@@ -494,8 +516,9 @@ pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> CombatRes
         _ => {}
     };
 
+    println!("[DEBUG] attack target at {:?}", target.pos);
     println!(
-        "DEBUG ATTACK\n  attack to-hit: {:?}  attack to-wound: {:?}\n  defence: {:?}\n  attack_difficulty: {},  wound_difficulty: {}\n  attack roll: {:?}\n  result: {:?}",
+        "[DEBUG ATTACK]\n  attack to-hit: {:?}  attack to-wound: {:?}\n  defence: {:?}\n  attack_difficulty: {},  wound_difficulty: {}\n  attack roll: {:?}\n  result: {:?}",
         attack.to_hit,
         attack.to_wound,
         target.attr(Attr::Defence),

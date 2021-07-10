@@ -17,13 +17,18 @@ pub enum FxEffect {
     /// - Vec<WorldPos>: the path the entity should move along
     /// - Duration: the duration of the complet action
     MoveTo(Entity, Vec<WorldPos>, Duration),
+
+    Sprite(String, WorldPos, u64),
 }
 
 impl Fx {
     pub fn move_to(e: Entity, p: Vec<WorldPos>, delay: u64, dur_ms: u64) -> Self {
         let d = Duration::from_millis(dur_ms);
-        
         Fx(start_after(delay), FxEffect::MoveTo(e, p, d))
+    }
+
+    pub fn sprite(s: String, p: WorldPos, delay: u64, dur_ms: u64) -> Self {
+        Fx(start_after(delay), FxEffect::Sprite(s, p, dur_ms))
     }
 
     pub fn text(txt: String, pos: &WorldPos, delay: u64) -> Self {
@@ -44,10 +49,11 @@ impl<'a> System<'a> for FxSystem {
         Entities<'a>,
         ReadStorage<'a, Fx>,
         Read<'a, LazyUpdate>,
+        Read<'a, TextureMap>,
     );
 
     fn run(&mut self, data: Self::SystemData) {
-        let (entities, fx, updater) = data;
+        let (entities, fx, updater, texture_map) = data;
         let now = Instant::now();
 
         for (e, Fx(start_time, fx_eff)) in (&entities, &fx).join() {
@@ -57,12 +63,13 @@ impl<'a> System<'a> for FxSystem {
 
             match fx_eff {
                 FxEffect::Text(txt, pos, dur) => {
+                    println!("[DEBUG] at FX text at {:?}", pos);
                     updater
                         .create_entity(&entities)
                         .with(Text::new(txt.to_string(), FontFace::VeryBig)
                               .padding(5)
-                              .color(150, 21, 22, 255)
-                              .background(252, 251, 250, 155))
+                              // .background(252, 251, 250, 155)
+                              .color(210, 31, 42, 255))
                         .with(Position(*pos))
                         .with(MovementAnimation {
                             start: now,
@@ -71,6 +78,10 @@ impl<'a> System<'a> for FxSystem {
                         })
                         .with(EndOfLive::after_ms(*dur))
                         .build();
+                }
+
+                FxEffect::Sprite(sprite, pos, duration) => {
+                    handle_sprite(sprite, *pos, *duration, &entities, &updater, &texture_map);
                 }
 
                 FxEffect::MoveTo(entity, path, duration) => {
@@ -110,6 +121,25 @@ fn animation_target_pos(wp: &WorldPos) -> WorldPos {
     let (dx, dy) = (rng.sample(range_x), rng.sample(range_y));
 
     ScreenPos(sx + dx, sy + dy).to_world_pos((0, 0))
+}
+
+fn handle_sprite(
+    sprite_name: &str,
+    pos: WorldPos,
+    duration: u64,
+    entities: &Entities,
+    updater: &Read<LazyUpdate>,
+    texture_map: &Read<TextureMap>,
+) {
+    if let Some(sprite) = texture_map.get(sprite_name) {
+        println!("[DEBUG] add hit animation at {:?}", pos);
+        updater
+            .create_entity(&entities)
+            .with(Sprites::new(vec!(sprite.clone())))
+            .with(Position(pos))
+            .with(EndOfLive::after_ms(duration))
+            .build();
+    }
 }
 
 fn start_after(ms: u64) -> Instant {

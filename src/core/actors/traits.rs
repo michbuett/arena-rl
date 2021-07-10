@@ -20,6 +20,10 @@ pub enum Effect {
 
     /// (name, reach, to-hit, to-wound)
     MeleeAttack(DisplayStr, u8, i8, i8),
+
+    /// (name, min-distance, max-distance, to-hit, to-wound)
+    RangeAttack(DisplayStr, u8, u8, i8, i8),
+
     MeleeDefence(DisplayStr, i8),
     GiveTrait(DisplayStr, AbilityTarget, Trait),
     // Ability(DisplayStr, AbilityTarget, Ability),

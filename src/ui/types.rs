@@ -159,14 +159,16 @@ pub struct Scene {
     pub background: (u8, u8, u8),
     pub texts: Vec<ScreenText>,
     pub sprites: Vec<ScreenSprite>,
+    pub images: Vec<(String, ScreenSprite)>,
 }
 
 impl Scene {
     pub fn empty() -> Self {
         Self {
             background: (252, 251, 250),
-            texts: vec![],
+            texts: vec!(),
             sprites: Vec::with_capacity(500),
+            images: vec!(),
         }
     }
 }
