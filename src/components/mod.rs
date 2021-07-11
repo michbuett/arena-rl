@@ -28,6 +28,9 @@ pub fn register(world: &mut World) {
 
     // from sprites module
     world.register::<Sprites>();
+    world.register::<ZLayerFloor>();
+    world.register::<ZLayerGameObject>();
+    world.register::<ZLayerFX>();
 
     // from fx module
     world.register::<Fx>();

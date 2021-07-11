@@ -132,12 +132,13 @@ fn handle_sprite(
     texture_map: &Read<TextureMap>,
 ) {
     if let Some(sprite) = texture_map.get(sprite_name) {
-        println!("[DEBUG] add hit animation at {:?}", pos);
+        // println!("[DEBUG] add hit animation at {:?}", pos);
         updater
             .create_entity(&entities)
             .with(Sprites::new(vec!(sprite.clone())))
             .with(Position(pos))
             .with(EndOfLive::after_ms(duration))
+            .with(ZLayerFX)
             .build();
     }
 }

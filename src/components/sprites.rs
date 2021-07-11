@@ -6,6 +6,18 @@ use specs_derive::Component;
 use crate::ui::{ScreenPos, ScreenSprite};
 use crate::core::SpriteConfig;
 
+#[derive(Component)]
+#[storage(VecStorage)]
+pub struct ZLayerFloor;
+
+#[derive(Component)]
+#[storage(VecStorage)]
+pub struct ZLayerGameObject;
+
+#[derive(Component)]
+#[storage(VecStorage)]
+pub struct ZLayerFX;
+
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
 pub struct Sprites(Instant, Vec<SpriteConfig>);

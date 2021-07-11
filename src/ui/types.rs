@@ -1,6 +1,3 @@
-// use sdl2::rect::Rect;
-// use std::collections::HashMap;
-
 use serde::Deserialize;
 
 use crate::core::{DisplayStr, UserInput, WorldPos, Sprite};
@@ -169,6 +166,13 @@ impl Scene {
             texts: vec!(),
             sprites: Vec::with_capacity(500),
             images: vec!(),
+        }
+    }
+
+    pub fn set_background(self, r: u8, g: u8, b: u8) -> Self {
+        Self {
+            background: (r, g, b),
+            ..self
         }
     }
 }

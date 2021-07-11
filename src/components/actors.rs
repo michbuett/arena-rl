@@ -45,6 +45,13 @@ fn lazy_insert_components<'a>(
 
     updater.insert(entity, ObstacleCmp(Obstacle { allow_movement: false }));
     updater.insert(entity, get_sprites(&obj, &texture_map));
+
+    if let GameObject::Actor(_) = &obj {
+        updater.insert(entity, ZLayerGameObject);
+    } else {
+        updater.insert(entity, ZLayerFloor);
+    }
+
     updater.insert(entity, GameObjectCmp(obj));
 }
 
