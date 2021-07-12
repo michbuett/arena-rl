@@ -84,7 +84,7 @@ pub fn actions_at(
     if actor.can_move() {
         let from = MapPos::from_world_pos(actor.pos);
         let to = MapPos::from_world_pos(selected_pos);
-        let obstacles = find_movement_obstacles(&positions, &obstacle_cmp);
+        let obstacles = find_movement_obstacles(&positions, &obstacle_cmp, &actor.team);
 
         if let Some(path) = map.find_path(from, to, &obstacles) {
             if path.len() > 0 && path.len() <= actor.move_distance().into() {

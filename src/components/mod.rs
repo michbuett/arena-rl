@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use specs::prelude::*;
 use specs_derive::Component;
 
-use crate::core::{GameObject, WorldPos, Obstacle};
+use crate::core::{GameObject, Team, WorldPos};
 
 pub use crate::components::actors::*;
 pub use crate::components::animation::*;
@@ -45,9 +45,20 @@ pub struct Position(pub WorldPos);
 #[storage(VecStorage)]
 pub struct GameObjectCmp(pub GameObject);
 
+#[derive(Debug, Clone)]
+pub enum Restriction {
+    AllowAll,
+    AllowTeam(Team),
+    AllowNone,
+}
+
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
-pub struct ObstacleCmp(pub Obstacle);
+pub struct ObstacleCmp {
+    pub restrict_movement: Restriction,
+    pub restrict_melee_attack: Restriction,
+    pub restrict_ranged_attack: Restriction,
+}
 
 #[derive(Component, Debug, Clone)]
 #[storage(DenseVecStorage)]
@@ -97,12 +108,12 @@ impl Text {
         }
     }
 
-    pub fn background(self, r: u8, g: u8, b: u8, a: u8) -> Self {
-        Self {
-            background: Some((r, g, b, a)),
-            ..self
-        }
-    }
+    // pub fn background(self, r: u8, g: u8, b: u8, a: u8) -> Self {
+    //     Self {
+    //         background: Some((r, g, b, a)),
+    //         ..self
+    //     }
+    // }
 }
 
 #[derive(Component, Debug, Clone)]

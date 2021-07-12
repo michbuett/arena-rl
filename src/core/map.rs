@@ -239,9 +239,7 @@ impl Map {
 }
 
 #[derive(Debug, Clone)]
-pub struct Obstacle {
-    pub allow_movement: bool,
-}
+pub struct Obstacle(pub f32);
 
 // pub enum Obstacle {
 //     Inaccessible(),
@@ -345,7 +343,8 @@ impl<'a> Iterator for NeighborTileIter<'a> {
                     continue;
                 }
 
-                if !self.obstacles.0.get(&p).map(|o| o.allow_movement).unwrap_or(true) {
+                if self.obstacles.0.contains_key(&p) {
+                // if !self.obstacles.0.get(&p).map(|o| o.allow_movement).unwrap_or(true) {
                 // if let Some(Obstacle::Inaccessible()) = self.obstacles.0.get(&p) {
                     // the way is blocked by an inpenetrable obstacle
                     continue;
@@ -522,12 +521,5 @@ fn distance(MapPos(x1, y1): MapPos, MapPos(x2, y2): MapPos) -> f32 {
 }
 
 fn costs(t: &Tile, obstacles: &ObstacleSet) -> f32 {
-    // if let Some(Obstacle::Impediment(i)) = obstacles.0.get(&t.to_map_pos()) {
-    //     return *i;
-    // }
-    if obstacles.0.get(&t.to_map_pos()).map(|o| o.allow_movement).unwrap_or(true) {
-        1.0
-    } else {
-        f32::MAX
-    }
+    obstacles.0.get(&t.to_map_pos()).map(|Obstacle(costs)| *costs).unwrap_or(1.0)
 }

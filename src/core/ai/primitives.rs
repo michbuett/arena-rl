@@ -7,31 +7,37 @@ use super::super::actors::*;
 use crate::components::*;
 use crate::core::*;
 
+pub fn find_obstacles<F>(
+    positions: &ReadStorage<Position>,
+    obstacles: &ReadStorage<ObstacleCmp>,
+    allow: F,
+)  -> ObstacleSet where F: Fn(&ObstacleCmp) -> bool {
+    let mut result = HashMap::new();
+
+    for (o, Position(p)) in (obstacles, positions).join() {
+        if !allow(o) {
+            result.insert(MapPos::from_world_pos(*p), Obstacle(f32::MAX));
+        }
+    }
+
+    ObstacleSet(result)
+}
+
 pub fn find_movement_obstacles(
     positions: &ReadStorage<Position>,
     obstacles: &ReadStorage<ObstacleCmp>,
+    team: &Team,
 ) -> ObstacleSet {
-// pub fn find_movement_obstacles(objects: &ReadStorage<GameObjectCmp>) -> ObstacleSet {
-    let mut result = HashMap::new();
-
-    for (ObstacleCmp(o), Position(p)) in (obstacles, positions).join() {
-        result.insert(MapPos::from_world_pos(*p), o.clone());
-    }
-    // for GameObjectCmp(obj) in objects.join() {
-    //     match obj {
-    //         GameObject::Actor(a) => {
-    //             obstacles.insert(MapPos::from_world_pos(a.pos), Obstacle { allow_movement: false });
-    //             // obstacles.insert(MapPos::from_world_pos(a.pos), Obstacle::Inaccessible());
-    //         }
-
-    //         _ => {}
-    //         // GameObject::Item(pos, _) => {
-    //         //     obstacles.insert(MapPos::from_world_pos(*pos), Obstacle::Impediment(1.5));
-    //         // }
-    //     }
-    // }
-
-    ObstacleSet(result)
+    find_obstacles(
+        &positions,
+        &obstacles,
+        | ObstacleCmp { restrict_movement, .. } |
+        match restrict_movement {
+            Restriction::AllowAll => true,
+            Restriction::AllowTeam(allowed_team) => allowed_team == team,
+            _ => false,
+        }
+    )
 }
 
 pub fn find_enemies(
@@ -79,7 +85,7 @@ pub fn find_actor_at(w: &World, at: &WorldPos) -> Option<(Entity, Actor)> {
     None
 }
 
-pub fn can_attack_with(
+fn can_attack_with(
     actor: &Actor,
     target: &Actor,
     attack: &AttackOption,
@@ -91,15 +97,29 @@ pub fn can_attack_with(
     let to = MapPos::from_world_pos(target.pos);
     let d = from.distance(to);
 
-    if d == 1 {
-        return true;
-    }  else if d <= attack.max_distance.into() {
-        let obstacles = find_movement_obstacles(&positions, &obstacles).ignore(to);
+    if d > attack.max_distance.into() {
+        return false;
+    } else {
+        let attackers_team = &actor.team;
+        let obstacles = find_obstacles(
+            &positions,
+            &obstacles,
+            | ObstacleCmp { restrict_melee_attack, .. } | {
+                match restrict_melee_attack {
+                    Restriction::AllowAll => true,
+                    Restriction::AllowTeam(allowed_team) => {
+                        allowed_team == attackers_team
+                    }
+                    _ => false,
+                }
+            }
+        ).ignore(to);
+        
         if let Some(_) = map.find_straight_path(from, to, &obstacles) {
             return true;
         }
     }
-    
+
     false
 }
 
@@ -133,12 +153,12 @@ pub fn can_charge(
     let move_distance: usize = actor.move_distance().into();
 
     if actor.can_move() && 1 < d && d <= 1 + move_distance {
-        let obstacles = find_movement_obstacles(positions, obstacles).ignore(to);
+        let obstacles = find_movement_obstacles(positions, obstacles, &actor.team).ignore(to);
         if let Some(_) = map.find_straight_path(from, to, &obstacles) {
             return Some(attack);
         }
     }
-    
+
     None
 }
 
@@ -157,7 +177,7 @@ pub fn can_move_towards(
     let tt = map.find_tile(target.pos);
 
     if let (Some(source_tile), Some(target_tile)) = (st, tt) {
-        find_path_next_to_tile(&source_tile, &target_tile, map, positions, obstacles)
+        find_path_next_to_tile(&source_tile, &target_tile, &actor.team, map, positions, obstacles)
     } else {
         None
     }
@@ -166,6 +186,7 @@ pub fn can_move_towards(
 fn find_path_next_to_tile(
     source_tile: &Tile,
     target_tile: &Tile,
+    team: &Team,
     map: &Read<Map>,
     positions: &ReadStorage<Position>,
     obstacles: &ReadStorage<ObstacleCmp>,
@@ -176,7 +197,7 @@ fn find_path_next_to_tile(
         return None;
     }
 
-    let obstacles = find_movement_obstacles(positions, obstacles)
+    let obstacles = find_movement_obstacles(positions, obstacles, team)
         // ignore obstacles at target since we only want to move next to it
         .ignore(target_tile.to_map_pos());
 

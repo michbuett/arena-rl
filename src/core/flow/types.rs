@@ -36,7 +36,6 @@ pub struct CombatData<'a, 'b> {
     pub world: World,
     pub dispatcher: Dispatcher<'a, 'b>,
     pub log: Vec<DisplayStr>,
-    // pub generator: ObjectGenerator,
 }
 
 impl<'a, 'b> CombatData<'a, 'b> {

@@ -181,7 +181,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             }
         }
 
-        Action::RangeAttack(target_entity, attack) => {
+        Action::RangeAttack(_target_entity, _attack) => {
             no_op()
         }
         
@@ -225,7 +225,8 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     ReadStorage<Position>,
                     ReadStorage<ObstacleCmp>,
                 ) = w.system_data();
-                let obstacles = find_movement_obstacles(&position_cmp, &obstacle_cmp).ignore(to);
+
+                let obstacles = find_movement_obstacles(&position_cmp, &obstacle_cmp, &actor.team).ignore(to);
 
                 if let Some(p) = map.find_straight_path(from, to, &obstacles) {
                     let tile = p[steps_needed - 1];

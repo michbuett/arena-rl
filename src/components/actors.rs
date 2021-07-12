@@ -43,12 +43,24 @@ fn lazy_insert_components<'a>(
         updater.insert(entity, txt);
     }
 
-    updater.insert(entity, ObstacleCmp(Obstacle { allow_movement: false }));
     updater.insert(entity, get_sprites(&obj, &texture_map));
 
-    if let GameObject::Actor(_) = &obj {
+    if let GameObject::Actor(a) = &obj {
+        updater.insert(entity, ObstacleCmp {
+            restrict_movement: Restriction::AllowNone,
+            restrict_melee_attack: Restriction::AllowTeam(a.team.clone()),
+            restrict_ranged_attack: Restriction::AllowTeam(a.team.clone()),
+        });
+
         updater.insert(entity, ZLayerGameObject);
+
     } else {
+        updater.insert(entity, ObstacleCmp {
+            restrict_movement: Restriction::AllowNone,
+            restrict_melee_attack: Restriction::AllowAll,
+            restrict_ranged_attack: Restriction::AllowAll,
+        });
+
         updater.insert(entity, ZLayerFloor);
     }
 
