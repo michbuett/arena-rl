@@ -4,7 +4,7 @@ use std::time::Duration;
 // use specs::prelude::Entity;
 use specs::prelude::*;
 
-use crate::components::{Fx, GameObjectCmp, Position, ObstacleCmp};
+use crate::components::{Fx, GameObjectCmp, Position, ObstacleCmp, MovementModification};
 use crate::core::ai::find_movement_obstacles;
 use crate::core::*;
 // use crate::core::{Tile, WorldPos};
@@ -161,7 +161,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     ),
                     fx_move(entity, get_steps(sp, path), 0),
                 ],
-                millis(200),
+                millis(400), // TODO: make this depend on the length of the path
                 None,
             )
         }
@@ -302,7 +302,7 @@ fn update_actor(e: Entity, a: Actor) -> Change {
 }
 
 fn fx_move(e: Entity, p: Vec<WorldPos>, delay: u64) -> Change {
-    Change::Fx(Fx::move_to(e, p, delay, 200))
+    Change::Fx(Fx::move_to(e, p, delay, 200, MovementModification::ParabolaJump(96)))
 }
 
 fn get_actor(e: Entity, w: &World) -> Option<Actor> {

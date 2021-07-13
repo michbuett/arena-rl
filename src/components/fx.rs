@@ -15,16 +15,23 @@ pub enum FxEffect {
 
     /// - Entity: the target entity (the entity which should move)
     /// - Vec<WorldPos>: the path the entity should move along
-    /// - Duration: the duration of the complet action
-    MoveTo(Entity, Vec<WorldPos>, Duration),
+    /// - Duration: the duration of the complete action
+    /// - MovementModification: modification of the movement (e.g. add jump effect)
+    MoveTo(Entity, Vec<WorldPos>, Duration, MovementModification),
 
     Sprite(String, WorldPos, u64),
 }
 
 impl Fx {
-    pub fn move_to(e: Entity, p: Vec<WorldPos>, delay: u64, dur_ms: u64) -> Self {
+    pub fn move_to(
+        e: Entity,
+        p: Vec<WorldPos>,
+        delay: u64,
+        dur_ms: u64,
+        m: MovementModification,
+    ) -> Self {
         let d = Duration::from_millis(dur_ms);
-        Fx(start_after(delay), FxEffect::MoveTo(e, p, d))
+        Fx(start_after(delay), FxEffect::MoveTo(e, p, d, m))
     }
 
     pub fn sprite(s: String, p: WorldPos, delay: u64, dur_ms: u64) -> Self {
@@ -66,16 +73,17 @@ impl<'a> System<'a> for FxSystem {
                     println!("[DEBUG] at FX text at {:?}", pos);
                     updater
                         .create_entity(&entities)
-                        .with(Text::new(txt.to_string(), FontFace::VeryBig)
-                              .padding(5)
-                              // .background(252, 251, 250, 155)
-                              .color(210, 31, 42, 255))
+                        .with(
+                            Text::new(txt.to_string(), FontFace::VeryBig)
+                                .padding(5)
+                                // .background(252, 251, 250, 155)
+                                .color(210, 31, 42, 255),
+                        )
                         .with(Position(*pos))
-                        .with(MovementAnimation {
-                            start: now,
-                            duration: Duration::from_millis(250),
-                            steps: vec![*pos, animation_target_pos(pos)],
-                        })
+                        .with(MovementAnimation::new(
+                            Duration::from_millis(250),
+                            vec![*pos, animation_target_pos(pos)],
+                        ))
                         .with(EndOfLive::after_ms(*dur))
                         .build();
                 }
@@ -84,8 +92,8 @@ impl<'a> System<'a> for FxSystem {
                     handle_sprite(sprite, *pos, *duration, &entities, &updater, &texture_map);
                 }
 
-                FxEffect::MoveTo(entity, path, duration) => {
-                    handle_move_to(*entity, path.to_vec(), *duration, &updater);
+                FxEffect::MoveTo(entity, path, duration, modification) => {
+                    handle_move_to(*entity, path.to_vec(), *duration, *modification, &updater);
                 }
             }
 
@@ -98,15 +106,12 @@ fn handle_move_to(
     target_entity: Entity,
     path: Vec<WorldPos>,
     duration: Duration,
+    modification: MovementModification,
     updater: &Read<LazyUpdate>,
 ) {
     updater.insert(
         target_entity,
-        MovementAnimation {
-            start: Instant::now(),
-            duration: duration / (path.len() as u32 - 1),
-            steps: path,
-        },
+        MovementAnimation::new(duration, path).set_modification(modification),
     );
 }
 
@@ -135,7 +140,7 @@ fn handle_sprite(
         // println!("[DEBUG] add hit animation at {:?}", pos);
         updater
             .create_entity(&entities)
-            .with(Sprites::new(vec!(sprite.clone())))
+            .with(Sprites::new(vec![sprite.clone()]))
             .with(Position(pos))
             .with(EndOfLive::after_ms(duration))
             .with(ZLayerFX)
