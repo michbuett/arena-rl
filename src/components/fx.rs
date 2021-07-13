@@ -70,7 +70,6 @@ impl<'a> System<'a> for FxSystem {
 
             match fx_eff {
                 FxEffect::Text(txt, pos, dur) => {
-                    println!("[DEBUG] at FX text at {:?}", pos);
                     updater
                         .create_entity(&entities)
                         .with(
@@ -84,6 +83,7 @@ impl<'a> System<'a> for FxSystem {
                             Duration::from_millis(250),
                             vec![*pos, animation_target_pos(pos)],
                         ))
+                        .with(FadeAnimation::fadeout_after_ms(*dur))
                         .with(EndOfLive::after_ms(*dur))
                         .build();
                 }
@@ -120,8 +120,8 @@ fn animation_target_pos(wp: &WorldPos) -> WorldPos {
     use rand::prelude::*;
 
     let mut rng = rand::thread_rng();
-    let range_x = rand::distributions::Uniform::from(-75..=75);
-    let range_y = rand::distributions::Uniform::from(-100..=-25);
+    let range_x = rand::distributions::Uniform::from(-100..=100);
+    let range_y = rand::distributions::Uniform::from(-150..=-100);
     let ScreenPos(sx, sy) = ScreenPos::from_world_pos(*wp, (0, 0));
     let (dx, dy) = (rng.sample(range_x), rng.sample(range_y));
 
@@ -137,7 +137,6 @@ fn handle_sprite(
     texture_map: &Read<TextureMap>,
 ) {
     if let Some(sprite) = texture_map.get(sprite_name) {
-        // println!("[DEBUG] add hit animation at {:?}", pos);
         updater
             .create_entity(&entities)
             .with(Sprites::new(vec![sprite.clone()]))

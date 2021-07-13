@@ -75,6 +75,7 @@ pub struct ScreenText {
     pub color: (u8, u8, u8, u8),
     pub background: Option<(u8, u8, u8, u8)>,
     pub padding: u32,
+    pub alpha: u8,
 
     /// e.g.
     /// Some(width, (red, green, blue, alpha))
@@ -90,6 +91,7 @@ impl ScreenText {
             font: FontFace::Normal,
             text,
             pos,
+            alpha: 255,
             color: (0, 0, 0, 255),
             background: None,
             padding: 0,

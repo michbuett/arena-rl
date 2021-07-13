@@ -25,6 +25,7 @@ pub fn register(world: &mut World) {
 
     // from animation module
     world.register::<MovementAnimation>();
+    world.register::<FadeAnimation>();
 
     // from sprites module
     world.register::<Sprites>();
@@ -75,6 +76,7 @@ pub struct Text {
     /// (red, green, blue, alpha); Optional background color, None for transparent background
     pub background: Option<(u8, u8, u8, u8)>, // (r, g, b, a)
     pub border: Option<(u32, (u8, u8, u8, u8))>,
+    pub alpha: u8,
 }
 
 impl Text {
@@ -87,6 +89,7 @@ impl Text {
             color: (0, 0, 0, 255),
             background: None,
             border: None,
+            alpha: 255,
         }
     }
 

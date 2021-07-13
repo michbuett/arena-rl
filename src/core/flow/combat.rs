@@ -19,7 +19,8 @@ pub fn init_combat_data<'a, 'b>(
 ) -> CombatData<'a, 'b> {
     let dispatcher = DispatcherBuilder::new()
         .with(FxSystem, "FxSystem", &[])
-        .with(Animation, "Animaton", &[])
+        .with(MovementAnimationSystem, "MovementAnimationSystem", &[])
+        .with(FadeAnimationSystem, "FadeAnimatonSystem", &[])
         .with(EndOfLiveSystem, "EOL", &[])
         .build();
 

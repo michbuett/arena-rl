@@ -107,8 +107,9 @@ impl<'a> Font<'a> {
     pub fn draw(&mut self, screen_txt: ScreenText, cvs: &mut WindowCanvas) -> Result<(), String> {
         let cache_key = screen_txt.text.to_string();
 
-        if let Some((tex, w, h)) = self.cached_texts.get(&cache_key) {
+        if let Some((ref mut tex, w, h)) = self.cached_texts.get_mut(&cache_key) {
             let (x, y) = screen_txt.pos.to_xy();
+            tex.set_alpha_mod(screen_txt.alpha);
             return cvs.copy(tex, Rect::new(0, 0, *w, *h), Rect::new(x, y, *w, *h));
         }
 

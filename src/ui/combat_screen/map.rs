@@ -143,6 +143,7 @@ fn render_texts<'a>(
             background: text.background,
             padding: text.padding,
             border: text.border,
+            alpha: text.alpha,
             min_width: 0,
             max_width: u32::max_value(),
         });

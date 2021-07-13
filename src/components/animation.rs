@@ -1,6 +1,7 @@
 use crate::ui::ScreenPos;
 use std::time::Duration;
 use std::time::Instant;
+use std::cmp::{max, min};
 
 use specs::prelude::*;
 
@@ -48,31 +49,15 @@ pub enum MovementModification {
     ParabolaJump(u32),
 }
 
-// impl MovementAnimation {
-//     pub fn new(from: WorldPos, to: WorldPos, t: Duration) -> Self {
-//         debug_assert!(t.as_nanos() > 0); // a zero length animation makes no sense
-//         let start = Instant::now();
-//         Self { start, duration: t, loops: 1, from, to, }
-//     }
-
-//     pub fn start(self, start: Instant) -> Self {
-//         Self { start, ..self }
-//     }
-
-//     pub fn loops(self, loops: u8) -> Self {
-//         Self { loops, ..self }
-//     }
-// }
-
 // #[derive(Debug)]
 // pub enum Easing {
 //     Linear,
 //     BounceBack,
 // }
 
-pub struct Animation;
+pub struct MovementAnimationSystem;
 
-impl<'a> System<'a> for Animation {
+impl<'a> System<'a> for MovementAnimationSystem {
     type SystemData = (
         Entities<'a>,
         WriteStorage<'a, Position>,
@@ -154,4 +139,60 @@ fn euclidian_distance(p1: ScreenPos, p2: ScreenPos) -> f32 {
     let dx = (p2.0 - p1.0) as f32;
     let dy = (p2.1 - p1.1) as f32;
     f32::sqrt(dx * dx + dy * dy)
+}
+
+
+#[derive(Component, Debug, Clone)]
+#[storage(VecStorage)]
+pub struct FadeAnimation {
+    start: Instant,
+    duration: Duration,
+    start_alpha: u8,
+    end_alpha: u8,
+}
+
+impl FadeAnimation {
+    pub fn fadeout_after_ms(dur_ms: u64) -> Self {
+        Self {
+            start: Instant::now(),
+            duration: Duration::from_millis(dur_ms),
+            start_alpha: 255,
+            end_alpha: 0,
+        }
+    }
+}
+pub struct FadeAnimationSystem;
+
+impl<'a> System<'a> for FadeAnimationSystem {
+    type SystemData = (
+        Entities<'a>,
+        ReadStorage<'a, FadeAnimation>,
+        WriteStorage<'a, Text>,
+        Read<'a, LazyUpdate>,
+    );
+
+    fn run(&mut self, data: Self::SystemData) {
+        let (entities, animations, mut texts, updater) = data;
+        let now = Instant::now();
+
+        for (anim, text, e) in (&animations, &mut texts, &entities).join() {
+            if anim.start > now {
+                // animation not started yet -> skip it
+                continue;
+            }
+
+            let delta: Duration = now - anim.start;
+            if delta > anim.duration {
+                // animation completed -> remove component
+                updater.remove::<FadeAnimation>(e);
+                continue;
+            }
+
+            let dt = delta.as_millis() as f32 / anim.duration.as_millis() as f32;
+            let da = dt * (anim.end_alpha as f32 - anim.start_alpha as f32);
+            let new_alpha = anim.start_alpha as i32 + da.round() as i32;
+
+            text.alpha = max(0, min( 255, new_alpha)) as u8;
+        }
+    }
 }
