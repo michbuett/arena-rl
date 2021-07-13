@@ -7,22 +7,34 @@ use crate::ui::ScreenPos;
 
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
-pub struct Fx(Instant, FxEffect);
+pub struct Fx(Instant, Duration, FxEffect);
 
 #[derive(Debug)]
 pub enum FxEffect {
-    Text(String, WorldPos, u64),
+    Text(Text, WorldPos),
 
     /// - Entity: the target entity (the entity which should move)
     /// - Vec<WorldPos>: the path the entity should move along
-    /// - Duration: the duration of the complete action
     /// - MovementModification: modification of the movement (e.g. add jump effect)
-    MoveTo(Entity, Vec<WorldPos>, Duration, MovementModification),
+    MoveTo(Entity, Vec<WorldPos>, MovementModification),
 
-    Sprite(String, WorldPos, u64),
+    Sprite(String, WorldPos),
 }
 
 impl Fx {
+    pub fn from_combat_event(ev: CombatEventFx, delay: u64) -> Self {
+        match ev {
+            CombatEventFx::Text(txt, pos, duration) =>
+                Self::say(txt, pos, delay, duration),
+
+            CombatEventFx::Scream(txt, pos, duration) =>
+                Self::scream(txt, pos, delay, duration),
+                        
+            CombatEventFx::Sprite(s, pos, duration) =>
+                Self::sprite(s, pos, delay, duration),
+        }
+    }
+
     pub fn move_to(
         e: Entity,
         p: Vec<WorldPos>,
@@ -30,16 +42,29 @@ impl Fx {
         dur_ms: u64,
         m: MovementModification,
     ) -> Self {
-        let d = Duration::from_millis(dur_ms);
-        Fx(start_after(delay), FxEffect::MoveTo(e, p, d, m))
+        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::MoveTo(e, p, m))
     }
 
     pub fn sprite(s: String, p: WorldPos, delay: u64, dur_ms: u64) -> Self {
-        Fx(start_after(delay), FxEffect::Sprite(s, p, dur_ms))
+        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::Sprite(s, p))
     }
 
-    pub fn text(txt: String, pos: &WorldPos, delay: u64) -> Self {
-        Fx(start_after(delay), FxEffect::Text(txt, *pos, 500 + delay))
+    pub fn say(txt: DisplayStr, pos: WorldPos, delay: u64, dur_ms: u64) -> Self {
+        let txt = Text::new(txt.to_string(), FontFace::Big).padding(5).color(21, 22, 23, 255);
+        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::Text(txt, pos))
+    }
+
+    pub fn scream(txt: DisplayStr, pos: WorldPos, delay: u64, dur_ms: u64) -> Self {
+        let txt = Text::new(txt.to_string(), FontFace::VeryBig).padding(5).color(195, 31, 42, 255);
+        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::Text(txt, pos))
+    }
+
+    pub fn duration_ms(&self) -> u64 {
+        self.1.as_millis() as u64
+    }
+
+    pub fn ends_at(&self) -> Instant {
+        self.0 + self.1
     }
 
     pub fn run(self, world: &World) {
@@ -63,44 +88,44 @@ impl<'a> System<'a> for FxSystem {
         let (entities, fx, updater, texture_map) = data;
         let now = Instant::now();
 
-        for (e, Fx(start_time, fx_eff)) in (&entities, &fx).join() {
+        for (e, Fx(start_time, duration, fx_eff)) in (&entities, &fx).join() {
             if now < *start_time {
                 continue;
             }
 
             match fx_eff {
-                FxEffect::Text(txt, pos, dur) => {
-                    updater
-                        .create_entity(&entities)
-                        .with(
-                            Text::new(txt.to_string(), FontFace::VeryBig)
-                                .padding(5)
-                                // .background(252, 251, 250, 155)
-                                .color(210, 31, 42, 255),
-                        )
-                        .with(Position(*pos))
-                        .with(MovementAnimation::new(
-                            Duration::from_millis(250),
-                            vec![*pos, animation_target_pos(pos)],
-                        ))
-                        .with(FadeAnimation::fadeout_after_ms(*dur))
-                        .with(EndOfLive::after_ms(*dur))
-                        .build();
-                }
+                FxEffect::Text(txt, pos) => 
+                    handle_text(&entities, txt.clone(), *pos, *duration, &updater),
 
-                FxEffect::Sprite(sprite, pos, duration) => {
-                    handle_sprite(sprite, *pos, *duration, &entities, &updater, &texture_map);
-                }
+                FxEffect::Sprite(sprite, pos) => 
+                    handle_sprite(sprite, *pos, *duration, &entities, &updater, &texture_map),
 
-                FxEffect::MoveTo(entity, path, duration, modification) => {
-                    handle_move_to(*entity, path.to_vec(), *duration, *modification, &updater);
-                }
+                FxEffect::MoveTo(entity, path, modification) =>
+                    handle_move_to(*entity, path.to_vec(), *duration, *modification, &updater),
             }
 
             let _ = entities.delete(e);
         }
     }
 }
+
+fn handle_text(
+    entities: &Entities,
+    txt: Text,
+    pos: WorldPos,
+    duration: Duration,
+    updater: &Read<LazyUpdate>,
+) {
+    updater
+        .create_entity(entities)
+        .with(txt)
+        .with(Position(pos))
+        .with(MovementAnimation::new(duration, vec![pos, animation_target_pos(&pos)]))
+        .with(FadeAnimation::fadeout_after(duration))
+        .with(EndOfLive::after(duration))
+        .build();
+}
+
 
 fn handle_move_to(
     target_entity: Entity,
@@ -109,9 +134,14 @@ fn handle_move_to(
     modification: MovementModification,
     updater: &Read<LazyUpdate>,
 ) {
+    assert!(path.len() > 1);
+    
+    let num_steps = path.len() as u64 - 1;
+    let time_per_step = Duration::from_millis(duration.as_millis() as u64 / num_steps);
+        
     updater.insert(
         target_entity,
-        MovementAnimation::new(duration, path).set_modification(modification),
+        MovementAnimation::new(time_per_step, path).set_modification(modification),
     );
 }
 
@@ -131,7 +161,7 @@ fn animation_target_pos(wp: &WorldPos) -> WorldPos {
 fn handle_sprite(
     sprite_name: &str,
     pos: WorldPos,
-    duration: u64,
+    duration: Duration,
     entities: &Entities,
     updater: &Read<LazyUpdate>,
     texture_map: &Read<TextureMap>,
@@ -141,7 +171,7 @@ fn handle_sprite(
             .create_entity(&entities)
             .with(Sprites::new(vec![sprite.clone()]))
             .with(Position(pos))
-            .with(EndOfLive::after_ms(duration))
+            .with(EndOfLive::after(duration))
             .with(ZLayerFX)
             .build();
     }

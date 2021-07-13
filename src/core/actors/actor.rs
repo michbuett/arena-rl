@@ -437,15 +437,25 @@ pub enum Condition {
 }
 
 #[derive(Debug, Clone)]
+pub enum CombatEventFx {
+    Text(DisplayStr, WorldPos, u64),
+    Scream(DisplayStr, WorldPos, u64),
+    Sprite(String, WorldPos, u64),
+}
+
+#[derive(Debug, Clone)]
 pub struct CombatEvent {
-    pub fx: Option<DisplayStr>,
+    pub fx: Option<CombatEventFx>,
     pub log: DisplayStr,
 }
 
 pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> CombatResult {
     let mut attack = attack.into_attack(&attacker);
     let mut to_hit_roll = D6::roll();
-    let mut combat_log = vec![];
+    let mut combat_log = vec![CombatEvent {
+        fx: Some(CombatEventFx::Sprite("fx-hit-1".to_string(), target.pos, 400)),
+        log: DisplayStr::new(format!("{} attacks {} with {}", attacker.name, target.name, attack.name)),
+    }];
     let attack_difficulty = target.attr(Attr::Defence).val() - attack.to_hit.val();
 
     let to_hit_result = if let Some(defence) = target.melee_defence() {
@@ -507,7 +517,7 @@ pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> CombatRes
 
             if let Condition::Dead(_, _) = target_condition {
                 combat_log.push(CombatEvent {
-                    fx: Some(DisplayStr::new("KILL")),
+                    fx: None,
                     log: DisplayStr::new(format!("{} was killed by {}", target.name, attacker.name)),
                 });
             }
@@ -516,17 +526,16 @@ pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> CombatRes
         _ => {}
     };
 
-    println!("[DEBUG] attack target at {:?}", target.pos);
-    println!(
-        "[DEBUG ATTACK]\n  attack to-hit: {:?}  attack to-wound: {:?}\n  defence: {:?}\n  attack_difficulty: {},  wound_difficulty: {}\n  attack roll: {:?}\n  result: {:?}",
-        attack.to_hit,
-        attack.to_wound,
-        target.attr(Attr::Defence),
-        attack_difficulty,
-        target.attr(Attr::Protection).val() - attack.to_wound.val(),
-        to_hit_roll,
-        to_hit_result,
-    );
+    // println!(
+    //     "[DEBUG ATTACK]\n  attack to-hit: {:?}  attack to-wound: {:?}\n  defence: {:?}\n  attack_difficulty: {},  wound_difficulty: {}\n  attack roll: {:?}\n  result: {:?}",
+    //     attack.to_hit,
+    //     attack.to_wound,
+    //     target.attr(Attr::Defence),
+    //     attack_difficulty,
+    //     target.attr(Attr::Protection).val() - attack.to_wound.val(),
+    //     to_hit_roll,
+    //     to_hit_result,
+    // );
 
     CombatResult {
         attacker: attacker_condition,
@@ -544,7 +553,7 @@ fn combat_event_attack_with_defence(
 ) -> CombatEvent {
     match (result_before_defence, result_after_defence) {
         (RR::SF, RR::FF(_)) | (RR::SS(_), RR::FF(_)) => CombatEvent {
-            fx: Some(DisplayStr::new("Block!")),
+            fx: say("Block!", target.pos),
             log: DisplayStr::new(format!(
                 "{} successfully blocks the attack with {}",
                 target.name, defence.name
@@ -570,29 +579,29 @@ fn combat_event_attack_without_defence(
     match roll_result {
         RR::FF(n) => if n > 1 {
             CombatEvent {
-                fx: Some(DisplayStr::new("CRITICAL MISS !!!")),
+                fx: scream("DAMNED !!!", attacker.pos),
                 log: DisplayStr::new(format!("{} misses badly and loses balance", attacker.name)),
             }
         } else {
             CombatEvent {
-                fx: Some(DisplayStr::new("Miss")),
+                fx: say("No", attacker.pos),
                 log: DisplayStr::new(format!("{} misses", attacker.name)),
             }
         },
 
         RR::SF => CombatEvent {
-            fx: Some(DisplayStr::new("Scratch")),
+            fx: None,
             log: DisplayStr::new(format!("{} hits but only briefly", attacker.name)),
         },
 
         RR::SS(n) => if n > 1 {
             CombatEvent {
-                fx: Some(DisplayStr::new("CRITICAL HIT !!!")),
+                fx: scream("YES! DIE!!!", attacker.pos),
                 log: DisplayStr::new(format!("{} scores a direct hit (+{})", attacker.name, n)),
             }
         } else {
             CombatEvent {
-                fx: Some(DisplayStr::new("Hit!")),
+                fx: say("Nice!", attacker.pos),
                 log: DisplayStr::new(format!("{} hits", attacker.name)),
             }
         },
@@ -605,25 +614,33 @@ fn combat_event_wound(
 ) -> CombatEvent {
     match roll_result {
         RR::FF(_) => CombatEvent {
-            fx: Some(DisplayStr::new("Klong")),
+            fx: say("Klong", target.pos),
             log: DisplayStr::new("The attack bounced harmlessly off the armor"),
         },
 
         RR::SF => CombatEvent {
-            fx: Some(DisplayStr::new("Ouch!")),
+            fx: say("Ouch!", target.pos),
             log: DisplayStr::new(format!("{} feels the pain but will not have a lasting insury", target.name)),
         },
 
         RR::SS(n) => if n > 1 {
             CombatEvent {
-                fx: Some(DisplayStr::new("AAAEIII!!!")),
+                fx: scream("AAAEIII!!!", target.pos),
                 log: DisplayStr::new(format!("{} suffered a critical wound", target.name)),
             }
         } else {
             CombatEvent {
-                fx: Some(DisplayStr::new("Aaarg!!!")),
+                fx: scream("Aaarg!!!", target.pos),
                 log: DisplayStr::new(format!("{} was wounded", target.name)),
             }
         },
     }
+}
+
+fn say(s: &str, p: WorldPos) -> Option<CombatEventFx> {
+    Some(CombatEventFx::Text(DisplayStr::new(s), p, 1000))
+}
+
+fn scream(s: &str, p: WorldPos) -> Option<CombatEventFx> {
+    Some(CombatEventFx::Scream(DisplayStr::new(s), p, 1000))
 }

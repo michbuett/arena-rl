@@ -152,10 +152,10 @@ pub struct FadeAnimation {
 }
 
 impl FadeAnimation {
-    pub fn fadeout_after_ms(dur_ms: u64) -> Self {
+    pub fn fadeout_after(duration: Duration) -> Self {
         Self {
             start: Instant::now(),
-            duration: Duration::from_millis(dur_ms),
+            duration,
             start_alpha: 255,
             end_alpha: 0,
         }

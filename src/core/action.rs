@@ -1,7 +1,3 @@
-// use std::cmp::max;
-use std::time::Duration;
-
-// use specs::prelude::Entity;
 use specs::prelude::*;
 
 use crate::components::{Fx, GameObjectCmp, Position, ObstacleCmp, MovementModification};
@@ -29,10 +25,6 @@ impl Action {
     pub fn end_turn(t: Team) -> Act {
         (Self::EndTurn(t), 0)
     }
-
-    // pub fn wait() -> Act {
-    //     (Self::Wait(), 1)
-    // }
 
     pub fn done() -> Act {
         (Self::Done(), 0)
@@ -72,11 +64,11 @@ pub enum Change {
 
 pub type Act = (Action, u8);
 pub type EA = (Entity, Actor);
-pub type ActionResult = (Vec<Change>, Duration, Option<DisplayStr>);
+pub type ActionResult = (Vec<Change>, Option<DisplayStr>);
 
 pub fn act((entity, actor, action, delay): (Entity, Actor, Action, u8), w: &World) -> ActionResult {
     if delay > 0 {
-        single_update(entity, actor.prepare((action, delay - 1)), 0)
+        (vec![update_actor(entity, actor.prepare((action, delay - 1)))], None)
     } else {
         run_action((entity, actor), action, w)
     }
@@ -87,20 +79,18 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
         Action::StartTurn() => {
             let (actor, pending_action) = actor.start_next_turn();
             let mut updates = vec![update_actor(entity, actor.clone())];
-            let mut wait_time = millis(0);
             let mut log = None;
 
             if let Some(pending_action) = pending_action {
                 let (action, delay) = pending_action;
-                let (mut more_updates, more_wait_time, log_entry) =
+                let (mut more_updates, log_entry) =
                     act((entity, actor, action, delay), w);
 
                 updates.append(&mut more_updates);
-                wait_time += more_wait_time;
                 log = log_entry;
             }
 
-            (updates, wait_time, log)
+            (updates, log)
         }
 
         Action::EndTurn(team) => {
@@ -115,7 +105,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                 }
             }
 
-            (updates, millis(0), None)
+            (updates, None)
         }
 
         Action::Done() => no_op(),
@@ -134,9 +124,8 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                                 .add_traits(&mut vec![t])
                                 .prepare(Action::done()),
                         ),
-                        Change::Fx(Fx::text(fx_str, &fx_pos, 100)),
+                        Change::Fx(Fx::say(DisplayStr::new(fx_str), fx_pos, 100, 1000)),
                     ],
-                    millis(100),
                     Some(DisplayStr::new(format!(
                         "{} used ability: {}",
                         actor_name, ability_name
@@ -161,7 +150,6 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     ),
                     fx_move(entity, get_steps(sp, path), 0),
                 ],
-                millis(400), // TODO: make this depend on the length of the path
                 None,
             )
         }
@@ -173,7 +161,6 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                         update_actor(entity, actor.deactivate()),
                         update_actor(target_e, target_a.activate()),
                     ],
-                    millis(0),
                     None,
                 )
             } else {
@@ -196,12 +183,12 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     return no_op();
                 }
 
-                let (mut changes, delay, log) =
+                let (mut changes, log) =
                     handle_attack((entity, actor), (target_entity, target_actor), attack);
 
                 changes.push(fx_move(entity, move_steps, 0));
 
-                (changes, delay, log)
+                (changes, log)
             } else {
                 no_op()
             }
@@ -246,12 +233,12 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                         update_actor(entity, actor.clone()),
                         fx_move(entity, vec![p1, p2, p3], 0),
                     ];
-                    let (mut combat_updates, delay, log) =
+                    let (mut combat_updates, log) =
                         handle_attack((entity, actor), (target_entity, target_actor), attack);
 
                     updates.append(&mut combat_updates);
 
-                    return (updates, delay, log);
+                    return (updates, log);
                 }
             }
 
@@ -265,7 +252,6 @@ fn handle_attack<'a>(
     target: (Entity, Actor),
     attack: AttackOption,
 ) -> ActionResult {
-    let fx_pos = target.1.pos.clone();
     let combat_result = super::actors::combat(attack, attacker.1, target.1);
     let mut changes = vec![];
     let mut log = vec![];
@@ -274,27 +260,18 @@ fn handle_attack<'a>(
     changes_for_condition(combat_result.attacker, attacker.0, &mut changes);
     changes_for_condition(combat_result.target, target.0, &mut changes);
 
-    changes.push(Change::Fx(Fx::sprite("fx-hit-1".to_string(), fx_pos, fx_delay_ms, 400)));
-    fx_delay_ms += 400;
-
     for event in combat_result.log.iter() {
         log.push(event.log.to_string());
 
-        if let Some(fx_txt) = &event.fx {
-            changes.push(Change::Fx(Fx::text(
-                fx_txt.to_string(),
-                &fx_pos,
-                fx_delay_ms,
-            )));
-            fx_delay_ms += 500;
+        if let Some(fx) = &event.fx {
+            let fx = Fx::from_combat_event(fx.clone(), fx_delay_ms);
+
+            fx_delay_ms += std::cmp::max(fx.duration_ms(), 500);
+            changes.push(Change::Fx(fx));
         }
     }
 
-    (changes, millis(1000), Some(DisplayStr::new(log.join("\n"))))
-}
-
-fn millis(ms: u64) -> Duration {
-    Duration::from_millis(ms)
+    (changes, Some(DisplayStr::new(log.join("\n"))))
 }
 
 fn update_actor(e: Entity, a: Actor) -> Change {
@@ -302,7 +279,8 @@ fn update_actor(e: Entity, a: Actor) -> Change {
 }
 
 fn fx_move(e: Entity, p: Vec<WorldPos>, delay: u64) -> Change {
-    Change::Fx(Fx::move_to(e, p, delay, 200, MovementModification::ParabolaJump(96)))
+    let duration_ms = (p.len() - 1) as u64 * 200;
+    Change::Fx(Fx::move_to(e, p, delay, duration_ms, MovementModification::ParabolaJump(96)))
 }
 
 fn get_actor(e: Entity, w: &World) -> Option<Actor> {
@@ -315,12 +293,7 @@ fn get_actor(e: Entity, w: &World) -> Option<Actor> {
 }
 
 fn no_op() -> ActionResult {
-    (vec![], millis(0), None)
-}
-
-/// Create an action result with a single update of the actor component
-fn single_update(e: Entity, a: Actor, ms: u64) -> ActionResult {
-    (vec![update_actor(e, a)], millis(ms), None)
+    (vec![], None)
 }
 
 fn changes_for_condition(c: Condition, e: Entity, changes: &mut Vec<Change>) {

@@ -124,6 +124,10 @@ impl Text {
 pub struct EndOfLive(pub Instant);
 
 impl EndOfLive {
+    pub fn after(d: Duration) -> Self {
+        EndOfLive(Instant::now() + d)
+    }
+
     pub fn after_ms(ms: u64) -> Self {
         EndOfLive(Instant::now() + Duration::from_millis(ms))
     }

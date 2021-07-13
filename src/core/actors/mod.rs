@@ -4,7 +4,7 @@ mod traits;
 
 pub use actor::{
     combat, Actor, ActorBuilder, AiBehaviour, Attack, AttackOption, CombatResult, Condition,
-    Effect, Item, Look, Attr, Team, Trait, TraitSource,
+    Effect, Item, Look, Attr, Team, Trait, TraitSource, CombatEvent, CombatEventFx,
 };
 pub use generator::*;
 
