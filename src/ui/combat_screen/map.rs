@@ -5,9 +5,9 @@ use specs::prelude::*;
 use crate::components::{Position, Sprites, Text, ZLayerFX, ZLayerFloor, ZLayerGameObject};
 use crate::core::{
     Action, CombatData, CombatState, DisplayStr, InputContext, Map, TextureMap, Tile, TileType,
-    UserInput, WorldPos,
+    UserInput, WorldPos, MapPos,
 };
-use crate::ui::{ClickArea, Scene, ScreenPos, ScreenSprite, ScreenText, TILE_WIDTH};
+use crate::ui::{ClickArea, Scene, ScreenPos, ScreenCoord, ScreenSprite, ScreenText, TILE_WIDTH};
 
 pub type SystemData<'a> = (
     ReadStorage<'a, Position>,
@@ -50,13 +50,14 @@ pub fn render(
         vec![ClickArea {
             clipping_area: viewport,
             action: Box::new(move |screen_pos| {
-                let screen_pos = ScreenPos(screen_pos.0 - TILE_WIDTH as i32 / 2, screen_pos.1);
-                let clicked_pos = screen_pos.to_world_pos(scroll_offset);
+                let screen_coord = ScreenCoord::new(
+                    screen_pos.0 - TILE_WIDTH as i32 / 2 - scroll_offset.0,
+                    screen_pos.1 - scroll_offset. 1
+                );
+                let clicked_pos = screen_coord.to_world_pos();
 
                 if let (Some(wp), Some((action, cost))) = &default_action {
-                    if clicked_pos.0.floor() == wp.0.floor()
-                        && clicked_pos.1.floor() == wp.1.floor()
-                    {
+                    if MapPos::from_world_pos(clicked_pos) == MapPos::from_world_pos(*wp) {
                         return UserInput::SelectAction((action.clone(), *cost));
                     }
                 }
@@ -75,7 +76,7 @@ fn render_floor_objects<'a>(
     zlayer_floor: &ReadStorage<ZLayerFloor>,
 ) {
     for (_, p, sprite_cmp) in (zlayer_floor, positions, visuals).join() {
-        for sprite in sprite_cmp.sample(ScreenPos::from_world_pos(p.0, offset)) {
+        for sprite in sprite_cmp.sample(ScreenCoord::from_world_pos(p.0).to_screen_pos(offset)) {
             scene.sprites.push(sprite);
         }
     }
@@ -89,7 +90,7 @@ fn render_fx<'a>(
     zlayer_fx: &ReadStorage<ZLayerFX>,
 ) {
     for (_, p, sprite_cmp) in (zlayer_fx, positions, visuals).join() {
-        for sprite in sprite_cmp.sample(ScreenPos::from_world_pos(p.0, offset)) {
+        for sprite in sprite_cmp.sample(ScreenCoord::from_world_pos(p.0).to_screen_pos(offset)) {
             scene.sprites.push(sprite);
         }
     }
@@ -104,11 +105,11 @@ fn render_game_objects<'a>(
 ) {
     let mut data = (zlayer_gameobj, positions, visuals)
         .join()
-        .map(|(_, Position(p), sc)| (ScreenPos::from_world_pos(*p, offset), sc))
+        .map(|(_, Position(p), sc)| (ScreenCoord::from_world_pos(*p), sc))
         .collect::<Vec<_>>();
 
     data.sort_by(|(p1, _), (p2, _)| {
-        if p1.1 < p2.1 {
+        if p1.z_layer() < p2.z_layer() {
             std::cmp::Ordering::Less
         } else {
             std::cmp::Ordering::Greater
@@ -116,7 +117,7 @@ fn render_game_objects<'a>(
     });
 
     for (p, sprite_cmp) in data {
-        for sprite in sprite_cmp.sample(p) {
+        for sprite in sprite_cmp.sample(p.to_screen_pos(offset)) {
             scene.sprites.push(sprite);
         }
     }
@@ -129,7 +130,7 @@ fn render_texts<'a>(
     texts: &ReadStorage<Text>,
 ) {
     for (pos, text) in (positions, texts).join() {
-        let ScreenPos(mut x, mut y) = ScreenPos::from_world_pos(pos.0, offset);
+        let ScreenPos(mut x, mut y) = ScreenCoord::from_world_pos(pos.0).to_screen_pos(offset);
         if let Some((dx, dy)) = text.offset {
             x += dx;
             y += dy;
@@ -160,7 +161,7 @@ fn render_map(
     for tile in map.tiles() {
         if let Some(sprite_config) = map_tile_to_texture(tile).and_then(|tn| texture_map.get(&tn)) {
             let tile_pos = tile.to_world_pos();
-            let p = ScreenPos::from_world_pos(tile_pos, offset);
+            let p = ScreenCoord::from_world_pos(tile_pos).to_screen_pos(offset);
 
             scene.sprites.push(ScreenSprite(p, sprite_config.sample(0)));
         }
@@ -168,7 +169,7 @@ fn render_map(
 
     for wp in get_highlighted_tiles(default_action) {
         if let Some(sprite_config) = texture_map.get("selected") {
-            let p = ScreenPos::from_world_pos(wp, offset);
+            let p = ScreenCoord::from_world_pos(wp).to_screen_pos(offset);
 
             scene.sprites.push(ScreenSprite(p, sprite_config.sample(0)));
         }

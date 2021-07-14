@@ -151,7 +151,7 @@ fn handle_wait_for_user_action(
                 // it is allowed
                 // => determine the new possible actions and wait for the next
                 //    user input
-                let pos = WorldPos(pos.0.floor(), pos.1.floor());
+                let pos = WorldPos::from_xy(pos.x().floor(), pos.y().floor());
                 let objects = find_objects_at(&pos, &w);
                 let actions = actions_at(e, pos, &w);
                 let ui = InputContext::SelectedArea(pos, objects, actions);
@@ -204,19 +204,18 @@ fn handle_wait_for_user_action(
 fn find_objects_at(pos: &WorldPos, world: &World) -> Vec<GameObject> {
     let game_objects: ReadStorage<GameObjectCmp> = world.system_data();
     let mut result = Vec::new();
+    let mpos = MapPos::from_world_pos(*pos);
 
     for GameObjectCmp(o) in (&game_objects).join() {
         match o {
             GameObject::Actor(a) => {
-                let WorldPos(x, y) = a.pos;
-
-                if x.floor() == pos.0.floor() && y.floor() == pos.1.floor() {
+                if mpos == MapPos::from_world_pos(a.pos) {
                     result.push(o.clone());
                 }
             }
 
-            GameObject::Item(WorldPos(x, y), _) => {
-                if x.floor() == pos.0.floor() && y.floor() == pos.1.floor() {
+            GameObject::Item(item_pos, _) => {
+                if mpos == MapPos::from_world_pos(*item_pos) {
                     result.push(o.clone());
                 }
             }
@@ -398,10 +397,10 @@ fn next_state<'a, 'b>(
 
 fn spawn_enemies(_turn: u64, w: &World) {
     vec![
-        GameObject::Actor(generate_enemy_easy(WorldPos(1.0, 6.0), TEAM_CPU)),
-        GameObject::Actor(generate_enemy_easy(WorldPos(1.0, 5.0), TEAM_CPU)),
-        GameObject::Actor(generate_enemy_easy(WorldPos(6.0, 0.0), TEAM_CPU)),
-        GameObject::Actor(generate_enemy_easy(WorldPos(7.0, 0.0), TEAM_CPU)),
+        GameObject::Actor(generate_enemy_easy(WorldPos::from_xy(1.0, 6.0), TEAM_CPU)),
+        GameObject::Actor(generate_enemy_easy(WorldPos::from_xy(1.0, 5.0), TEAM_CPU)),
+        GameObject::Actor(generate_enemy_easy(WorldPos::from_xy(6.0, 0.0), TEAM_CPU)),
+        GameObject::Actor(generate_enemy_easy(WorldPos::from_xy(7.0, 0.0), TEAM_CPU)),
     ]
     .drain(..)
     .for_each(move |enemy| insert_game_object_components(enemy, w));

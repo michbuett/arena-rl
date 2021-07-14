@@ -9,7 +9,7 @@ use sdl2::surface::Surface;
 use sdl2::ttf::Font as Sdl2Font;
 use sdl2::video::WindowContext;
 
-use crate::ui::types::ScreenText;
+use crate::ui::types::{ScreenPos, ScreenText};
 
 const ASCII: &str = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
 
@@ -108,12 +108,12 @@ impl<'a> Font<'a> {
         let cache_key = screen_txt.text.to_string();
 
         if let Some((ref mut tex, w, h)) = self.cached_texts.get_mut(&cache_key) {
-            let (x, y) = screen_txt.pos.to_xy();
+            let ScreenPos(x, y) = screen_txt.pos;
             tex.set_alpha_mod(screen_txt.alpha);
             return cvs.copy(tex, Rect::new(0, 0, *w, *h), Rect::new(x, y, *w, *h));
         }
 
-        let (x, y) = screen_txt.pos.to_xy();
+        let ScreenPos(x, y) = screen_txt.pos;
         let prepared_text = prepare(screen_txt, self);
         let (w, h) = prepared_text.dim;
         // let pixel_format = sdl2::pixels::PixelFormatEnum::RGBA8888;

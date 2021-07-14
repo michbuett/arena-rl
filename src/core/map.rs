@@ -28,7 +28,7 @@ impl Tile {
     }
 
     pub fn to_world_pos(self: &Self) -> WorldPos {
-        WorldPos(self.0 as f32, self.1 as f32)
+        WorldPos::from_xy(self.0 as f32, self.1 as f32)
     }
 
     pub fn to_map_pos(self: &Self) -> MapPos {
@@ -250,8 +250,8 @@ pub struct Obstacle(pub f32);
 pub struct MapPos(pub i32, pub i32);
 
 impl MapPos {
-    pub fn from_world_pos(WorldPos(x, y): WorldPos) -> Self {
-        Self(x.floor() as i32, y.floor() as i32)
+    pub fn from_world_pos(pos: WorldPos) -> Self {
+        Self(pos.x().floor() as i32, pos.y().floor() as i32)
     }
 
     pub fn distance(self, other: MapPos) -> usize {

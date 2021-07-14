@@ -1,11 +1,10 @@
-use crate::ui::ScreenPos;
 use std::time::Duration;
 use std::time::Instant;
 use std::cmp::{max, min};
 
 use specs::prelude::*;
 
-// use crate::ui::ScreenPos;
+use crate::ui::ScreenCoord;
 use crate::components::*;
 use crate::core::*;
 
@@ -108,39 +107,31 @@ fn animate(delta: Duration, anim: &MovementAnimation) -> WorldPos {
     let dt = (step_delta % step_dur) as f32 / step_dur as f32;
     let from: WorldPos = steps[step_idx];
     let to: WorldPos = steps[step_idx + 1];
-    let dx = dt * (to.0 - from.0);
-    let dy = dt * (to.1 - from.1);
-    let target_pos = WorldPos(from.0 + dx, from.1 + dy);
-    let no = (0, 0);
+    let dx = dt * (to.x() - from.x());
+    let dy = dt * (to.y() - from.y());
+    let target_pos = from.translate_xy(dx, dy);
 
     match modification {
         MovementModification::None => target_pos,
         MovementModification::ParabolaJump(max_height) => parabola_jump(
-            ScreenPos::from_world_pos(target_pos, no),
-            ScreenPos::from_world_pos(from, no),
-            ScreenPos::from_world_pos(to, no),
+            ScreenCoord::from_world_pos(target_pos),
+            ScreenCoord::from_world_pos(from),
+            ScreenCoord::from_world_pos(to),
             *max_height as f32,
         )
-        .to_world_pos(no),
+        .to_world_pos(),
     }
 }
 
-fn parabola_jump(target: ScreenPos, start: ScreenPos, end: ScreenPos, max_height: f32) -> ScreenPos {
-    let l = euclidian_distance(start, end); // the total distance
-    let dx = euclidian_distance(start, target); // the actual distance for the current animation step
+fn parabola_jump(target: ScreenCoord, start: ScreenCoord, end: ScreenCoord, max_height: f32) -> ScreenCoord {
+    let l = start.euclidian_distance(end); // the total distance
+    let dx = start.euclidian_distance(target); // the actual distance for the current animation step
     let hl = l / 2.0; // the half of the total distance; this is where the dy is maxed
     let damper = max_height / (hl * hl); // a dampening factor which ensures that dy <= max_height
     let dy = -damper * (hl * hl - (hl - dx) * (hl - dx));
 
-    ScreenPos(target.0, target.1 + dy.round() as i32)
+    target.translate(0, dy.round() as i32)
 }
-
-fn euclidian_distance(p1: ScreenPos, p2: ScreenPos) -> f32 {
-    let dx = (p2.0 - p1.0) as f32;
-    let dy = (p2.1 - p1.1) as f32;
-    f32::sqrt(dx * dx + dy * dy)
-}
-
 
 #[derive(Component, Debug, Clone)]
 #[storage(VecStorage)]

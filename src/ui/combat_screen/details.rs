@@ -30,7 +30,7 @@ fn draw_area_details(
     pos: WorldPos,
     objects: &Vec<GameObject>,
 ) {
-    let mut txt = format!("You look at ({}, {}).", pos.0, pos.1);
+    let mut txt = format!("You look at ({}, {}).", pos.x(), pos.y());
 
     if objects.is_empty() {
         txt += &"\nNothing special here.".to_string();

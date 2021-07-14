@@ -75,9 +75,9 @@ pub fn find_actor_at(w: &World, at: &WorldPos) -> Option<(Entity, Actor)> {
 
     for (e, GameObjectCmp(o)) in (&entities, &objects).join() {
         if let GameObject::Actor(a) = o {
-            let WorldPos(x, y) = a.pos;
+            let (x, y) = a.pos.as_xy();
 
-            if x.floor() == at.0.floor() && y.floor() == at.1.floor() {
+            if x.floor() == at.x().floor() && y.floor() == at.y().floor() {
                 return Some((e, a.clone()));
             }
         }

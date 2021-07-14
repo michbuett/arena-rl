@@ -3,7 +3,7 @@ use specs_derive::Component;
 
 use crate::components::*;
 use crate::core::*;
-use crate::ui::ScreenPos;
+use crate::ui::ScreenCoord;
 
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
@@ -152,10 +152,9 @@ fn animation_target_pos(wp: &WorldPos) -> WorldPos {
     let mut rng = rand::thread_rng();
     let range_x = rand::distributions::Uniform::from(-100..=100);
     let range_y = rand::distributions::Uniform::from(-150..=-100);
-    let ScreenPos(sx, sy) = ScreenPos::from_world_pos(*wp, (0, 0));
     let (dx, dy) = (rng.sample(range_x), rng.sample(range_y));
 
-    ScreenPos(sx + dx, sy + dy).to_world_pos((0, 0))
+    ScreenCoord::translate_world_pos(*wp, dx, dy)
 }
 
 fn handle_sprite(

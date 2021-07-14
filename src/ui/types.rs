@@ -2,40 +2,71 @@ use serde::Deserialize;
 
 use crate::core::{DisplayStr, UserInput, WorldPos, Sprite};
 
-#[derive(Clone, Copy, Debug)]
-pub struct ScreenPos(pub i32, pub i32);
-
 pub const TILE_WIDTH: u32 = 128;
 pub const TILE_HEIGHT: u32 = 128;
 
-impl ScreenPos {
-    pub fn to_xy(&self) -> (i32, i32) {
-        (self.0, self.1)
+#[derive(Clone, Copy, Debug)]
+pub struct ScreenCoord(i32, i32);
+
+impl ScreenCoord {
+    pub fn new(x: i32, y: i32) -> Self {
+        Self(x, y)
     }
 
-    pub fn to_world_pos(&self, scroll_offset: (i32, i32)) -> WorldPos {
-        let xs = (self.0 - scroll_offset.0) as f32;
-        let ys = (self.1 - scroll_offset.1) as f32;
-        let tw = TILE_WIDTH as f32;
-        let th = TILE_HEIGHT as f32;
-        let x = xs / tw + ys / th;
-        let y = ys / th - xs / tw;
-
-        WorldPos(x, y)
-    }
-
-    pub fn from_world_pos(wp: WorldPos, scroll_offset: (i32, i32)) -> Self {
-        let WorldPos(xw, yw) = wp;
+    pub fn from_world_pos(wp: WorldPos) -> Self {
+        let (xw, yw) = wp.as_xy();
         let tw = TILE_WIDTH as f32;
         let th = TILE_HEIGHT as f32;
         let x = tw * (xw - yw) / 2.0;
         let y = th * (xw + yw) / 2.0;
 
-        Self(
-            x.round() as i32 + scroll_offset.0,
-            y.round() as i32 + scroll_offset.1,
-        )
+        Self(x.round() as i32, y.round() as i32)
     }
+
+    pub fn to_world_pos(&self) -> WorldPos {
+        let (xs, ys) = (self.0 as f32, self.1 as f32);
+        let tw = TILE_WIDTH as f32;
+        let th = TILE_HEIGHT as f32;
+        let x = xs / tw + ys / th;
+        let y = ys / th - xs / tw;
+
+        WorldPos::from_xy(x, y)
+    }
+
+    pub fn to_screen_pos(&self, scroll_offset: (i32, i32)) -> ScreenPos {
+        ScreenPos(self.0 + scroll_offset.0, self.1 + scroll_offset.1)
+    }
+
+    pub fn translate(self, dx: i32, dy: i32) -> ScreenCoord {
+        Self(self.0 + dx, self.1 + dy)
+    }
+
+    pub fn translate_world_pos(wp: WorldPos, dx: i32, dy: i32) -> WorldPos {
+        Self::from_world_pos(wp).translate(dx, dy).to_world_pos()
+    }
+
+    pub fn euclidian_distance(self, other: Self) -> f32 {
+        let dx = (other.0 - self.0) as f32;
+        let dy = (other.1 - self.1) as f32;
+
+        f32::sqrt(dx * dx + dy * dy)
+    }
+
+    pub fn z_layer(self) -> i32 {
+        self.1
+    }
+}
+
+
+#[derive(Clone, Copy, Debug)]
+pub struct ScreenPos(pub i32, pub i32);
+
+#[test]
+fn mapping_between_world_and_screen_coordinates_is_isomorphic() {
+    let wp = WorldPos::from_xy(5.0, 10.0);
+    let sc = ScreenCoord::from_world_pos(wp);
+
+    assert_eq!(wp.as_xy(), sc.to_world_pos().as_xy());
 }
 
 pub struct ClickArea {
