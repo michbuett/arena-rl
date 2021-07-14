@@ -46,6 +46,7 @@ pub fn find_enemies(
     objects: &ReadStorage<GameObjectCmp>,
 ) -> Vec<(Entity, Actor)> {
     let mut result: Vec<(Entity, Actor)> = Vec::new();
+    let apos = MapPos::from_world_pos(actor.pos);
 
     for (te, GameObjectCmp(obj)) in (entities, objects).join() {
         if let GameObject::Actor(ta) = obj {
@@ -56,8 +57,8 @@ pub fn find_enemies(
     }
 
     result.sort_by(|(_, a1), (_, a2)| {
-        let d1 = WorldPos::distance(&actor.pos, &a1.pos);
-        let d2 = WorldPos::distance(&actor.pos, &a2.pos);
+        let d1 = apos.distance(MapPos::from_world_pos(a1.pos));
+        let d2 = apos.distance(MapPos::from_world_pos(a2.pos));
 
         if d1 <= d2 {
             Ordering::Less
