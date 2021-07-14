@@ -85,6 +85,7 @@ impl<'a> System<'a> for MovementAnimationSystem {
             }
 
             pos.0 = animate(delta, anim);
+            // println!("animate pos {:?}", pos.0);
         }
     }
 }
@@ -125,12 +126,12 @@ fn animate(delta: Duration, anim: &MovementAnimation) -> WorldPos {
 
 fn parabola_jump(target: ScreenCoord, start: ScreenCoord, end: ScreenCoord, max_height: f32) -> ScreenCoord {
     let l = start.euclidian_distance(end); // the total distance
-    let dx = start.euclidian_distance(target); // the actual distance for the current animation step
+    let li = start.euclidian_distance(target); // the actual distance for the current animation step
     let hl = l / 2.0; // the half of the total distance; this is where the dy is maxed
     let damper = max_height / (hl * hl); // a dampening factor which ensures that dy <= max_height
-    let dy = -damper * (hl * hl - (hl - dx) * (hl - dx));
+    let dz = -damper * (hl * hl - (hl - li) * (hl - li));
 
-    target.translate(0, dy.round() as i32)
+    target.translate(0, 0, dz.round() as i32)
 }
 
 #[derive(Component, Debug, Clone)]

@@ -151,7 +151,7 @@ fn handle_wait_for_user_action(
                 // it is allowed
                 // => determine the new possible actions and wait for the next
                 //    user input
-                let pos = WorldPos::from_xy(pos.x().floor(), pos.y().floor());
+                let pos = WorldPos::new(pos.x().floor(), pos.y().floor(), 0.0);
                 let objects = find_objects_at(&pos, &w);
                 let actions = actions_at(e, pos, &w);
                 let ui = InputContext::SelectedArea(pos, objects, actions);
@@ -397,10 +397,10 @@ fn next_state<'a, 'b>(
 
 fn spawn_enemies(_turn: u64, w: &World) {
     vec![
-        GameObject::Actor(generate_enemy_easy(WorldPos::from_xy(1.0, 6.0), TEAM_CPU)),
-        GameObject::Actor(generate_enemy_easy(WorldPos::from_xy(1.0, 5.0), TEAM_CPU)),
-        GameObject::Actor(generate_enemy_easy(WorldPos::from_xy(6.0, 0.0), TEAM_CPU)),
-        GameObject::Actor(generate_enemy_easy(WorldPos::from_xy(7.0, 0.0), TEAM_CPU)),
+        GameObject::Actor(generate_enemy_easy(WorldPos::new(1.0, 6.0, 0.0), TEAM_CPU)),
+        GameObject::Actor(generate_enemy_easy(WorldPos::new(1.0, 5.0, 0.0), TEAM_CPU)),
+        GameObject::Actor(generate_enemy_easy(WorldPos::new(6.0, 0.0, 0.0), TEAM_CPU)),
+        GameObject::Actor(generate_enemy_easy(WorldPos::new(7.0, 0.0, 0.0), TEAM_CPU)),
     ]
     .drain(..)
     .for_each(move |enemy| insert_game_object_components(enemy, w));

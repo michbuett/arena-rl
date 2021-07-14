@@ -28,7 +28,7 @@ impl Tile {
     }
 
     pub fn to_world_pos(self: &Self) -> WorldPos {
-        WorldPos::from_xy(self.0 as f32, self.1 as f32)
+        WorldPos::new(self.0 as f32, self.1 as f32, 0.0)
     }
 
     pub fn to_map_pos(self: &Self) -> MapPos {

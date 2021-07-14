@@ -6,11 +6,18 @@ pub const TILE_WIDTH: u32 = 128;
 pub const TILE_HEIGHT: u32 = 128;
 
 #[derive(Clone, Copy, Debug)]
-pub struct ScreenCoord(i32, i32);
+pub struct ScreenCoord(
+    /// the x coordinate
+    i32,
+    /// the y coordinate
+    i32,
+    /// the z coordinate
+    i32
+);
 
 impl ScreenCoord {
     pub fn new(x: i32, y: i32) -> Self {
-        Self(x, y)
+        Self(x, y, 0)
     }
 
     pub fn from_world_pos(wp: WorldPos) -> Self {
@@ -19,8 +26,9 @@ impl ScreenCoord {
         let th = TILE_HEIGHT as f32;
         let x = tw * (xw - yw) / 2.0;
         let y = th * (xw + yw) / 2.0;
+        let z = th * wp.z();
 
-        Self(x.round() as i32, y.round() as i32)
+        Self(x.round() as i32, y.round() as i32, z.round() as i32)
     }
 
     pub fn to_world_pos(&self) -> WorldPos {
@@ -29,20 +37,21 @@ impl ScreenCoord {
         let th = TILE_HEIGHT as f32;
         let x = xs / tw + ys / th;
         let y = ys / th - xs / tw;
+        let z = self.2 as f32 / th;
 
-        WorldPos::from_xy(x, y)
+        WorldPos::new(x, y, z)
     }
 
     pub fn to_screen_pos(&self, scroll_offset: (i32, i32)) -> ScreenPos {
-        ScreenPos(self.0 + scroll_offset.0, self.1 + scroll_offset.1)
+        ScreenPos(self.0 + scroll_offset.0, self.1 + scroll_offset.1 + self.2)
     }
 
-    pub fn translate(self, dx: i32, dy: i32) -> ScreenCoord {
-        Self(self.0 + dx, self.1 + dy)
+    pub fn translate(self, dx: i32, dy: i32, dz: i32) -> ScreenCoord {
+        Self(self.0 + dx, self.1 + dy, self.2 + dz)
     }
 
     pub fn translate_world_pos(wp: WorldPos, dx: i32, dy: i32) -> WorldPos {
-        Self::from_world_pos(wp).translate(dx, dy).to_world_pos()
+        Self::from_world_pos(wp).translate(dx, dy, 0).to_world_pos()
     }
 
     pub fn euclidian_distance(self, other: Self) -> f32 {
@@ -63,7 +72,7 @@ pub struct ScreenPos(pub i32, pub i32);
 
 #[test]
 fn mapping_between_world_and_screen_coordinates_is_isomorphic() {
-    let wp = WorldPos::from_xy(5.0, 10.0);
+    let wp = WorldPos::new(5.0, 10.0, 0.0);
     let sc = ScreenCoord::from_world_pos(wp);
 
     assert_eq!(wp.as_xy(), sc.to_world_pos().as_xy());
