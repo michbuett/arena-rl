@@ -27,7 +27,7 @@ fn start_step<'a, 'b>(g: ObjectGenerator, tm: TextureMap, i: &Option<UserInput>)
                 GameObject::Actor(g.generate_player_by_type(WorldPos::new(7.0, 6.0, 0.0), TEAM_PLAYER, ActorType::Tank)),
                 GameObject::Actor(g.generate_player_by_type(WorldPos::new(8.0, 6.0, 0.0), TEAM_PLAYER, ActorType::Saw)),
                 GameObject::Actor(g.generate_player_by_type(WorldPos::new(7.0, 7.0, 0.0), TEAM_PLAYER, ActorType::Spear)),
-                GameObject::Actor(g.generate_player_by_type(WorldPos::new(8.0, 7.0, 0.0), TEAM_PLAYER, ActorType::Healer)),
+                GameObject::Actor(g.generate_player_by_type(WorldPos::new(8.0, 7.0, 0.0), TEAM_PLAYER, ActorType::Gunner)),
             );
 
             Game::TeamSelection(g, tm, player_chars)

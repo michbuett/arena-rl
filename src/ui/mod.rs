@@ -214,8 +214,10 @@ fn draw_sprite(
     let (x, y) = sprite.source;
     let (dx, dy) = sprite.offset;
     let (w, h) = sprite.dim;
+    let tw = (w as f32 * sprite.scale).round() as u32;
+    let th = (h as f32 * sprite.scale).round() as u32;
     let from = Rect::new(x, y, w, h);
-    let to = Rect::new(pos.0 + dx, pos.1 + dy, w, h);
+    let to = Rect::new(pos.0 + dx, pos.1 + dy, tw, th);
 
     t.set_alpha_mod(sprite.alpha);
 

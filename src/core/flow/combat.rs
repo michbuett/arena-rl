@@ -21,6 +21,7 @@ pub fn init_combat_data<'a, 'b>(
         .with(FxSystem, "FxSystem", &[])
         .with(MovementAnimationSystem, "MovementAnimationSystem", &[])
         .with(FadeAnimationSystem, "FadeAnimatonSystem", &[])
+        .with(ScaleAnimationSystem, "ScaleAnimationSystem", &[])
         .with(EndOfLiveSystem, "EOL", &[])
         .build();
 

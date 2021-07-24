@@ -1,12 +1,12 @@
+use std::cmp::{max, min};
 use std::time::Duration;
 use std::time::Instant;
-use std::cmp::{max, min};
 
 use specs::prelude::*;
 
-use crate::ui::ScreenCoord;
 use crate::components::*;
 use crate::core::*;
+use crate::ui::ScreenCoord;
 
 /// The current map position (tile) of a given entity
 #[derive(Component, Debug, Clone)]
@@ -38,7 +38,10 @@ impl MovementAnimation {
     // }
 
     pub fn set_modification(self, modification: MovementModification) -> Self {
-        Self { modification, ..self }
+        Self {
+            modification,
+            ..self
+        }
     }
 }
 
@@ -76,16 +79,13 @@ impl<'a> System<'a> for MovementAnimationSystem {
 
             let delta: Duration = now - anim.start;
             if delta > (anim.duration) * anim.steps.len() as u32 {
-                // if anim.loops > 0 && delta > anim.duration * anim.loops as u32 {
                 // animation completed -> remove component
                 pos.0 = *anim.steps.last().unwrap();
-                // pos.0 = anim.to;
                 updater.remove::<MovementAnimation>(e);
                 continue;
             }
 
             pos.0 = animate(delta, anim);
-            // println!("animate pos {:?}", pos.0);
         }
     }
 }
@@ -124,7 +124,12 @@ fn animate(delta: Duration, anim: &MovementAnimation) -> WorldPos {
     }
 }
 
-fn parabola_jump(target: ScreenCoord, start: ScreenCoord, end: ScreenCoord, max_height: f32) -> ScreenCoord {
+fn parabola_jump(
+    target: ScreenCoord,
+    start: ScreenCoord,
+    end: ScreenCoord,
+    max_height: f32,
+) -> ScreenCoord {
     let l = start.euclidian_distance(end); // the total distance
     let li = start.euclidian_distance(target); // the actual distance for the current animation step
     let hl = l / 2.0; // the half of the total distance; this is where the dy is maxed
@@ -184,7 +189,70 @@ impl<'a> System<'a> for FadeAnimationSystem {
             let da = dt * (anim.end_alpha as f32 - anim.start_alpha as f32);
             let new_alpha = anim.start_alpha as i32 + da.round() as i32;
 
-            text.alpha = max(0, min( 255, new_alpha)) as u8;
+            text.alpha = max(0, min(255, new_alpha)) as u8;
         }
     }
+}
+
+#[derive(Component, Debug, Clone)]
+#[storage(VecStorage)]
+pub struct ScaleAnimation {
+    start: Instant,
+    duration: Duration,
+    start_scale: f32,
+    end_scale: f32,
+}
+
+impl ScaleAnimation {
+    pub fn new(start_scale: f32, end_scale: f32, duration: Duration) -> Self {
+        Self {
+            start: Instant::now(),
+            duration,
+            start_scale,
+            end_scale,
+        }
+    }
+}
+pub struct ScaleAnimationSystem;
+
+impl<'a> System<'a> for ScaleAnimationSystem {
+    type SystemData = (
+        Entities<'a>,
+        ReadStorage<'a, ScaleAnimation>,
+        WriteStorage<'a, Text>,
+        WriteStorage<'a, Sprites>,
+        Read<'a, LazyUpdate>,
+    );
+
+    fn run(&mut self, data: Self::SystemData) {
+        let (entities, animations, mut texts, mut sprites, updater) = data;
+        let now = Instant::now();
+
+        for (anim, e) in (&animations, &entities).join() {
+            if anim.start > now {
+                // animation not started yet -> skip it
+                continue;
+            }
+
+            let delta: Duration = now - anim.start;
+            if delta > anim.duration {
+                // animation completed -> remove component
+                updater.remove::<ScaleAnimation>(e);
+                continue;
+            }
+
+            if let Some(ref mut text) = texts.get_mut(e) {
+                text.scale = animate_scale(delta, anim);
+            }
+
+            if let Some(ref mut s) = sprites.get_mut(e) {
+                s.set_scale(animate_scale(delta, anim));
+            }
+        }
+    }
+}
+
+fn animate_scale(delta: Duration, anim: &ScaleAnimation) -> f32 {
+    let dt = delta.as_millis() as f32 / anim.duration.as_millis() as f32;
+    anim.start_scale + dt * (anim.end_scale - anim.start_scale)
 }

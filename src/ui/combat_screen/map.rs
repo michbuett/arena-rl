@@ -147,6 +147,7 @@ fn render_texts<'a>(
             alpha: text.alpha,
             min_width: 0,
             max_width: u32::max_value(),
+            scale: text.scale,
         });
     }
 }

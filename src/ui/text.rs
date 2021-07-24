@@ -109,8 +109,11 @@ impl<'a> Font<'a> {
 
         if let Some((ref mut tex, w, h)) = self.cached_texts.get_mut(&cache_key) {
             let ScreenPos(x, y) = screen_txt.pos;
+            let (tw, th) = scale_dim(screen_txt.scale, *w, *h);
+
             tex.set_alpha_mod(screen_txt.alpha);
-            return cvs.copy(tex, Rect::new(0, 0, *w, *h), Rect::new(x, y, *w, *h));
+            cvs.copy(tex, Rect::new(0, 0, *w, *h), Rect::new(x, y, tw, th))?;
+            return Ok(())
         }
 
         let ScreenPos(x, y) = screen_txt.pos;
@@ -332,4 +335,11 @@ fn draw_text(
     cvs.copy(&target, Rect::new(0, 0, w, h), Rect::new(x, y, w, h))?;
 
     Ok(())
+}
+
+fn scale_dim(scale_factor: f32, w: u32, h: u32) -> (u32, u32) {
+    (
+        (w as f32 * scale_factor).round() as u32,
+        (h as f32 * scale_factor).round() as u32,
+    )
 }

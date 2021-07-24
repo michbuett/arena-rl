@@ -116,6 +116,7 @@ pub struct ScreenText {
     pub background: Option<(u8, u8, u8, u8)>,
     pub padding: u32,
     pub alpha: u8,
+    pub scale: f32,
 
     /// e.g.
     /// Some(width, (red, green, blue, alpha))
@@ -138,6 +139,7 @@ impl ScreenText {
             border: None,
             min_width: 0,
             max_width: u32::max_value(),
+            scale: 1.0,
         }
     }
 

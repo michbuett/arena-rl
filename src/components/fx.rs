@@ -19,6 +19,8 @@ pub enum FxEffect {
     MoveTo(Entity, Vec<WorldPos>, MovementModification),
 
     Sprite(String, WorldPos),
+
+    Projectile(String, WorldPos, WorldPos),
 }
 
 impl Fx {
@@ -32,6 +34,9 @@ impl Fx {
                         
             CombatEventFx::Sprite(s, pos, duration) =>
                 Self::sprite(s, pos, delay, duration),
+
+            CombatEventFx::Projectile(s, from_pos, to_pos, duration) =>
+                Self::projectile(s, from_pos, to_pos, delay, duration),
         }
     }
 
@@ -47,6 +52,10 @@ impl Fx {
 
     pub fn sprite(s: String, p: WorldPos, delay: u64, dur_ms: u64) -> Self {
         Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::Sprite(s, p))
+    }
+
+    pub fn projectile(s: String, f: WorldPos, t: WorldPos, delay: u64, dur_ms: u64) -> Self {
+        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::Projectile(s, f, t))
     }
 
     pub fn say(txt: DisplayStr, pos: WorldPos, delay: u64, dur_ms: u64) -> Self {
@@ -100,6 +109,9 @@ impl<'a> System<'a> for FxSystem {
                 FxEffect::Sprite(sprite, pos) => 
                     handle_sprite(sprite, *pos, *duration, &entities, &updater, &texture_map),
 
+                FxEffect::Projectile(sprite, from, to) => 
+                    handle_projectile(sprite, *from, *to, *duration, &entities, &updater, &texture_map),
+
                 FxEffect::MoveTo(entity, path, modification) =>
                     handle_move_to(*entity, path.to_vec(), *duration, *modification, &updater),
             }
@@ -122,6 +134,7 @@ fn handle_text(
         .with(Position(pos))
         .with(MovementAnimation::new(duration, vec![pos, animation_target_pos(&pos)]))
         .with(FadeAnimation::fadeout_after(duration))
+        .with(ScaleAnimation::new(1.0, 2.0, duration))
         .with(EndOfLive::after(duration))
         .build();
 }
@@ -170,6 +183,28 @@ fn handle_sprite(
             .create_entity(&entities)
             .with(Sprites::new(vec![sprite.clone()]))
             .with(Position(pos))
+            .with(EndOfLive::after(duration))
+            .with(ZLayerFX)
+            .build();
+    }
+}
+
+fn handle_projectile(
+    sprite_name: &str,
+    from: WorldPos,
+    to: WorldPos,
+    duration: Duration,
+    entities: &Entities,
+    updater: &Read<LazyUpdate>,
+    texture_map: &Read<TextureMap>,
+) {
+    if let Some(sprite) = texture_map.get(sprite_name) {
+        updater
+            .create_entity(&entities)
+            .with(Sprites::new(vec![sprite.clone()]))
+            .with(Position(from))
+            .with(MovementAnimation::new(duration, vec![from, to]))
+            .with(ScaleAnimation::new(1.0, 2.0, duration))
             .with(EndOfLive::after(duration))
             .with(ZLayerFX)
             .build();

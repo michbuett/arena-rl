@@ -6,6 +6,7 @@ pub struct SpriteConfig {
     pub offset: (i32, i32),
     pub dim: (u32, u32),
     pub alpha: u8,
+    pub scale: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -14,6 +15,7 @@ pub struct Sprite {
     pub offset: (i32, i32),
     pub dim: (u32, u32),
     pub alpha: u8,
+    pub scale: f32,
 }
 
 impl SpriteConfig {
@@ -23,6 +25,7 @@ impl SpriteConfig {
             offset: self.offset,
             dim: self.dim,
             alpha: self.alpha,
+            scale: self.scale,
         }
     }
 }

@@ -163,6 +163,21 @@ pub fn can_charge(
     None
 }
 
+pub fn can_attack_at_range(
+    actor: &Actor,
+    target: &Actor,
+    // TODO: implement cover
+    _map: &Read<Map>,
+    _positions: &ReadStorage<Position>,
+    _obstacles: &ReadStorage<ObstacleCmp>,
+) -> Option<AttackOption> {
+    let from = MapPos::from_world_pos(actor.pos);
+    let to = MapPos::from_world_pos(target.pos);
+    let d = from.distance(to);
+
+    actor.range_attack(d as u8)
+}
+
 pub fn can_move_towards(
     actor: &Actor,
     target: &Actor,

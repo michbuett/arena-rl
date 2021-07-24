@@ -102,6 +102,7 @@ fn display_text((action, delay): &(Action, u8), is_first: bool) -> DisplayStr {
         Action::MoveTo(..) => format!("Move Here"),
         Action::Activate(_) => format!("Activate"),
         Action::MeleeAttack(_, a) => format!("{} ({})", a.name, delay),
+        Action::RangeAttack(_, a) => format!("{}", a.name),
         Action::Charge(_, _) => "Charge!".to_string(),
         Action::UseAbility(_, name, _) => format!("Use ability: {}", name),
         _ => format!("Unnamed action: {:?}", action),

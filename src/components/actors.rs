@@ -78,6 +78,7 @@ fn map_action_to_sprite(a: &Action) -> String {
     match a {
         Action::MoveTo(_) => "icon-action-MoveTo",
         Action::MeleeAttack(..) => "icon-action-MeleeAttack",
+        Action::RangeAttack(..) => "icon-action-RangedAttack",
         Action::Charge(..) => "icon-action-Charge",
         Action::Done(..) => "icon-action-Done",
         _ => "icon-action-Unknown",

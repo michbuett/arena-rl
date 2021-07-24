@@ -238,7 +238,7 @@ impl Actor {
         }
     }
 
-    pub fn range_attack(&self, distance: u8) -> Option<AttackOption> {
+    pub fn range_attack(&self, _distance: u8) -> Option<AttackOption> {
         for (_, eff) in self.effects.iter() {
             match eff {
                 Effect::RangeAttack(name, min_distance, max_distance, to_hit, to_wound) => {
@@ -441,6 +441,7 @@ pub enum CombatEventFx {
     Text(DisplayStr, WorldPos, u64),
     Scream(DisplayStr, WorldPos, u64),
     Sprite(String, WorldPos, u64),
+    Projectile(String, WorldPos, WorldPos, u64),
 }
 
 #[derive(Debug, Clone)]
@@ -540,6 +541,28 @@ pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> CombatRes
     CombatResult {
         attacker: attacker_condition,
         target: target_condition,
+        log: combat_log,
+    }
+}
+
+pub fn ranged_combat(attack: AttackOption, attacker: Actor, target: Actor) -> CombatResult {
+    // println!("[DEBUG] ranged combat: attacker={:?}, target={:?}, attack={:?}", attacker, target, attack);
+
+    let attack = attack.into_attack(&attacker);
+    let to_hit_roll = D6::roll();
+    let attack_difficulty = target.attr(Attr::Defence).val() - attack.to_hit.val();
+    let to_hit_result = RR::from_roll(to_hit_roll, attack_difficulty);
+
+    let mut combat_log = vec![CombatEvent {
+        fx: Some(CombatEventFx::Projectile("fx-projectile-1".to_string(), attacker.pos, target.pos, 2000)),
+        log: DisplayStr::new(format!("{} shoots at {}", attacker.name, target.name)),
+    }];
+
+    combat_log.push(combat_event_attack_without_defence(&attacker, to_hit_result));
+
+    CombatResult {
+        attacker: Condition::Alive(attacker),
+        target: Condition::Alive(target),
         log: combat_log,
     }
 }

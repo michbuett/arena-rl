@@ -137,6 +137,7 @@ fn compile_texture_map(
                     dim: (*w, *h),
                     offset: proto_cfg.offset,
                     alpha: proto_cfg.alpha,
+                    scale: 1.0,
                 },
             );
         } else {
@@ -158,6 +159,7 @@ fn compile_texture_map(
                     dim: (*w, *h),
                     offset: proto_cfg.offset,
                     alpha: proto_cfg.alpha,
+                    scale: 1.0,
                 },
             );
         }

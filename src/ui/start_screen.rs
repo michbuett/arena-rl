@@ -17,6 +17,7 @@ pub fn render(viewport: (i32, i32, u32, u32)) -> (Scene, ClickAreas) {
                 dim: (width, height),
                 offset: (0, 0),
                 alpha: 255,
+                scale: 1.0,
             },
         ),
     ));

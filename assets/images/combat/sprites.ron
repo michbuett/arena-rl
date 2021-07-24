@@ -25,6 +25,11 @@
             offset: (40, 24),
             alpha: 255,
         )),
+    ("head_6", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_(heads)-19.png"],
+            offset: (40, 24),
+            alpha: 255,
+        )),
     ("head-heavy_1", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-15.png"],
             offset: (40, 24),
@@ -55,6 +60,11 @@
         )),
     ("body-light_3", ProtoSpriteConfig(
             files: ["ArenaRL_Assets-9.png"],
+            offset: (16, 16),
+            alpha: 255,
+        )),
+    ("body-light_4", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets-11.png"],
             offset: (16, 16),
             alpha: 255,
         )),
@@ -94,6 +104,11 @@
         )),
     ("shild_2", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_Weapons_-7.png"],
+            offset: (16, 16),
+            alpha: 255,
+        )),
+    ("gun-2h_1", ProtoSpriteConfig(
+            files: ["ArenaRL_Assets_Weapons_-2.png"],
             offset: (16, 16),
             alpha: 255,
         )),
@@ -177,5 +192,10 @@
             offset: (-64, -64),
             alpha: 255,
             frame_durration: Some(150),
+        )),
+    ("fx-projectile-1", ProtoSpriteConfig(
+            files: ["projectile-01.png"],
+            offset: (48, 48),
+            alpha: 255,
         )),
 ]

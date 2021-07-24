@@ -8,6 +8,7 @@ pub enum ActorType {
     Saw,
     Spear,
     Healer,
+    Gunner,
 }
 
 pub fn generate_enemy_easy(pos: WorldPos, t: Team) -> Actor {
@@ -99,6 +100,7 @@ impl ObjectGenerator {
             ActorType::Saw => self.generate_player_saw(pos, t),
             ActorType::Spear => self.generate_player_spear(pos, t),
             ActorType::Healer => self.generate_player_healer(pos, t),
+            ActorType::Gunner => self.generate_player_gunner(pos, t),
         }
     }
 
@@ -148,6 +150,16 @@ impl ObjectGenerator {
             .traits(vec![
                 self.get_trait("Item_Armor_ChainMail").unwrap(),
                 self.get_trait("Item_Weapon_Injector").unwrap(),
+            ])
+            .build()
+    }
+
+    fn generate_player_gunner(&self, pos: WorldPos, t: Team) -> Actor {
+        ActorBuilder::new(generate_name(), pos, t)
+            .look(vec![("body-light", 4), ("head", 6), ("gun-2h", 1)])
+            .traits(vec![
+                self.get_trait("Item_Armor_ChainMail").unwrap(),
+                self.get_trait("Item_Weapon_IonGun").unwrap(),
             ])
             .build()
     }
@@ -205,6 +217,15 @@ fn init_traits() -> HashMap<String, Trait> {
         Trait {
             name: DisplayStr::new("Flail"),
             effects: vec![Effect::MeleeAttack(DisplayStr::new("Swing Flail"), 1, 0, 2)],
+            source: TraitSource::IntrinsicProperty,
+        },
+    );
+
+    traits.insert(
+        "Item_Weapon_IonGun".to_string(),
+        Trait {
+            name: DisplayStr::new("Ion Guna"),
+            effects: vec![Effect::RangeAttack(DisplayStr::new("Shoot Ion Gun"), 1, 8, 2, 1)],
             source: TraitSource::IntrinsicProperty,
         },
     );

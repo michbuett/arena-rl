@@ -46,6 +46,10 @@ impl Action {
         (Self::MeleeAttack(target, attack), 1)
     }
 
+    pub fn ranged_attack(target: Entity, attack: AttackOption) -> Act {
+        (Self::RangeAttack(target, attack), 1)
+    }
+
     pub fn charge(target: Entity, attack: AttackOption) -> Act {
         (Self::Charge(target, attack), 1)
     }
@@ -168,8 +172,12 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             }
         }
 
-        Action::RangeAttack(_target_entity, _attack) => {
-            no_op()
+        Action::RangeAttack(target_entity, attack) => {
+            if let Some(target_actor) = get_actor(target_entity, w) {
+                handle_ranged_attack((entity, actor), (target_entity, target_actor), attack)
+            } else {
+                no_op()
+            }
         }
         
         Action::MeleeAttack(target_entity, attack) => {
@@ -253,6 +261,33 @@ fn handle_attack<'a>(
     attack: AttackOption,
 ) -> ActionResult {
     let combat_result = super::actors::combat(attack, attacker.1, target.1);
+    let mut changes = vec![];
+    let mut log = vec![];
+    let mut fx_delay_ms = 100;
+
+    changes_for_condition(combat_result.attacker, attacker.0, &mut changes);
+    changes_for_condition(combat_result.target, target.0, &mut changes);
+
+    for event in combat_result.log.iter() {
+        log.push(event.log.to_string());
+
+        if let Some(fx) = &event.fx {
+            let fx = Fx::from_combat_event(fx.clone(), fx_delay_ms);
+
+            fx_delay_ms += std::cmp::max(fx.duration_ms(), 500);
+            changes.push(Change::Fx(fx));
+        }
+    }
+
+    (changes, Some(DisplayStr::new(log.join("\n"))))
+}
+
+fn handle_ranged_attack<'a>(
+    attacker: (Entity, Actor),
+    target: (Entity, Actor),
+    attack: AttackOption,
+) -> ActionResult {
+    let combat_result = super::actors::ranged_combat(attack, attacker.1, target.1);
     let mut changes = vec![];
     let mut log = vec![];
     let mut fx_delay_ms = 100;

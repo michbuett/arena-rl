@@ -36,6 +36,12 @@ impl Sprites {
             sprites: self.1.iter(),
         }
     }
+
+    pub fn set_scale(&mut self, new_scale: f32) {
+        for sprite in self.1.iter_mut() {
+            sprite.scale = new_scale;
+        }
+    }
 }
 
 pub struct SpriteIter<'a> {

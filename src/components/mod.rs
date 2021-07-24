@@ -26,6 +26,7 @@ pub fn register(world: &mut World) {
     // from animation module
     world.register::<MovementAnimation>();
     world.register::<FadeAnimation>();
+    world.register::<ScaleAnimation>();
 
     // from sprites module
     world.register::<Sprites>();
@@ -77,6 +78,7 @@ pub struct Text {
     pub background: Option<(u8, u8, u8, u8)>, // (r, g, b, a)
     pub border: Option<(u32, (u8, u8, u8, u8))>,
     pub alpha: u8,
+    pub scale: f32,
 }
 
 impl Text {
@@ -90,6 +92,7 @@ impl Text {
             background: None,
             border: None,
             alpha: 255,
+            scale: 1.0,
         }
     }
 
@@ -126,10 +129,6 @@ pub struct EndOfLive(pub Instant);
 impl EndOfLive {
     pub fn after(d: Duration) -> Self {
         EndOfLive(Instant::now() + d)
-    }
-
-    pub fn after_ms(ms: u64) -> Self {
-        EndOfLive(Instant::now() + Duration::from_millis(ms))
     }
 }
 

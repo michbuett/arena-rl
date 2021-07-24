@@ -77,6 +77,12 @@ pub fn actions_at(
                 {
                     result.push(Action::charge(other_entity, attack));
                 }
+
+                if let Some(attack) = 
+                    can_attack_at_range(actor, &other_actor, &map, &positions, &obstacle_cmp)
+                {
+                    result.push(Action::ranged_attack(other_entity, attack));
+                }
             }
         }
     }
