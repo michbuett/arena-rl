@@ -23,6 +23,7 @@ pub fn init_combat_data<'a, 'b>(
         .with(FadeAnimationSystem, "FadeAnimatonSystem", &[])
         .with(ScaleAnimationSystem, "ScaleAnimationSystem", &[])
         .with(EndOfLiveSystem, "EOL", &[])
+        .with(DelayedSpawnSystem, "DelayedSpawnSystem", &[])
         .build();
 
     let mut world = World::new();

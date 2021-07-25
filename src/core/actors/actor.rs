@@ -442,11 +442,12 @@ pub enum CombatEventFx {
     Scream(DisplayStr, WorldPos, u64),
     Sprite(String, WorldPos, u64),
     Projectile(String, WorldPos, WorldPos, u64),
+    BloodSplatter(String, WorldPos, WorldPos, u64),
 }
 
 #[derive(Debug, Clone)]
 pub struct CombatEvent {
-    pub fx: Option<CombatEventFx>,
+    pub fx: Option<(u64, CombatEventFx)>,
     pub log: DisplayStr,
 }
 
@@ -454,7 +455,7 @@ pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> CombatRes
     let mut attack = attack.into_attack(&attacker);
     let mut to_hit_roll = D6::roll();
     let mut combat_log = vec![CombatEvent {
-        fx: Some(CombatEventFx::Sprite("fx-hit-1".to_string(), target.pos, 400)),
+        fx: Some((400, CombatEventFx::Sprite("fx-hit-1".to_string(), target.pos, 400))),
         log: DisplayStr::new(format!("{} attacks {} with {}", attacker.name, target.name, attack.name)),
     }];
     let attack_difficulty = target.attr(Attr::Defence).val() - attack.to_hit.val();
@@ -518,7 +519,7 @@ pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> CombatRes
 
             if let Condition::Dead(_, _) = target_condition {
                 combat_log.push(CombatEvent {
-                    fx: None,
+                    fx: fx_blood(target.pos),
                     log: DisplayStr::new(format!("{} was killed by {}", target.name, attacker.name)),
                 });
             }
@@ -554,7 +555,7 @@ pub fn ranged_combat(attack: AttackOption, attacker: Actor, target: Actor) -> Co
     let to_hit_result = RR::from_roll(to_hit_roll, attack_difficulty);
 
     let mut combat_log = vec![CombatEvent {
-        fx: Some(CombatEventFx::Projectile("fx-projectile-1".to_string(), attacker.pos, target.pos, 2000)),
+        fx: Some((300, CombatEventFx::Projectile("fx-projectile-1".to_string(), attacker.pos, target.pos, 300))),
         log: DisplayStr::new(format!("{} shoots at {}", attacker.name, target.name)),
     }];
 
@@ -648,22 +649,26 @@ fn combat_event_wound(
 
         RR::SS(n) => if n > 1 {
             CombatEvent {
-                fx: scream("AAAEIII!!!", target.pos),
+                fx: fx_blood(target.pos),
                 log: DisplayStr::new(format!("{} suffered a critical wound", target.name)),
             }
         } else {
             CombatEvent {
-                fx: scream("Aaarg!!!", target.pos),
+                fx: fx_blood(target.pos),
                 log: DisplayStr::new(format!("{} was wounded", target.name)),
             }
         },
     }
 }
 
-fn say(s: &str, p: WorldPos) -> Option<CombatEventFx> {
-    Some(CombatEventFx::Text(DisplayStr::new(s), p, 1000))
+fn say(s: &str, p: WorldPos) -> Option<(u64, CombatEventFx)> {
+    Some((300, CombatEventFx::Text(DisplayStr::new(s), p, 1000)))
 }
 
-fn scream(s: &str, p: WorldPos) -> Option<CombatEventFx> {
-    Some(CombatEventFx::Scream(DisplayStr::new(s), p, 1000))
+fn scream(s: &str, p: WorldPos) -> Option<(u64, CombatEventFx)> {
+    Some((300, CombatEventFx::Scream(DisplayStr::new(s), p, 1000)))
+}
+
+fn fx_blood(p: WorldPos) -> Option<(u64, CombatEventFx)> {
+    Some((150, CombatEventFx::BloodSplatter("blood-splatter-1".to_string(), p, p, 500)))
 }

@@ -6,6 +6,12 @@ use specs_derive::Component;
 use crate::ui::{ScreenPos, ScreenSprite};
 use crate::core::SpriteConfig;
 
+pub enum ZLayer {
+    Floor,
+    // GameObject,
+    // Fx
+}
+
 #[derive(Component)]
 #[storage(VecStorage)]
 pub struct ZLayerFloor;

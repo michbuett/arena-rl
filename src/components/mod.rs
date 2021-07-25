@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use specs::prelude::*;
 use specs_derive::Component;
 
-use crate::core::{GameObject, Team, WorldPos};
+use crate::core::{GameObject, SpriteConfig, Team, WorldPos};
 
 pub use crate::components::actors::*;
 pub use crate::components::animation::*;
@@ -19,6 +19,7 @@ pub use crate::components::sprites::*;
 pub fn register(world: &mut World) {
     world.register::<Text>();
     world.register::<EndOfLive>();
+    world.register::<DelayedSpawn>();
     world.register::<GameObjectCmp>();
     world.register::<ObstacleCmp>();
     world.register::<Position>();
@@ -144,6 +145,50 @@ impl<'a> System<'a> for EndOfLiveSystem {
         for (e, EndOfLive(moment)) in (&entities, &eol).join() {
             if now >= *moment {
                 let _ = entities.delete(e);
+            }
+        }
+    }
+}
+
+#[derive(Component)]
+#[storage(VecStorage)]
+pub struct DelayedSpawn {
+    pub start_at: Instant,
+    pub pos: WorldPos,
+    pub z_layer: ZLayer,
+    pub sprites: Vec<SpriteConfig>,
+}
+
+pub struct DelayedSpawnSystem;
+
+impl<'a> System<'a> for DelayedSpawnSystem {
+    type SystemData = (
+        ReadStorage<'a, DelayedSpawn>,
+        Entities<'a>,
+        Read<'a, LazyUpdate>,
+    );
+
+    fn run(&mut self, data: Self::SystemData) {
+        let (delayed_runs, entities, updater) = data;
+        let now = Instant::now();
+
+        for (spawn, e) in (&delayed_runs, &entities).join() {
+            if now >= spawn.start_at {
+                let mut builder = updater
+                    .create_entity(&entities)
+                    .with(Sprites::new(spawn.sprites.clone()))
+                    .with(Position(spawn.pos));
+
+
+                builder = match spawn.z_layer {
+                    ZLayer::Floor => builder.with(ZLayerFloor),
+                    // ZLayer::GameObject => builder.with(ZLayerGameObject),
+                    // ZLayer::Fx => builder.with(ZLayerFX),
+                };
+
+                builder.build();
+
+                let _ = updater.remove::<DelayedSpawn>(e);
             }
         }
     }

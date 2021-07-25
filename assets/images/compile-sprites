@@ -16,6 +16,7 @@ mogrify -resize 48x48   $PARAMS $PATH_IN/ArenaRL_Assets_\(heads\)-*.png
 mogrify -resize 96x96   $PARAMS $PATH_IN/ArenaRL_Assets_Weapons_-*.png
 mogrify -resize 96x96   $PARAMS $PATH_IN/ArenaRL_Assets-*.png
 mogrify -resize 96x96   $PARAMS $PATH_IN/Background-*.png
+mogrify -resize 96x96   $PARAMS $PATH_IN/blood/*.png
 mogrify -resize 32x32   $PARAMS $PATH_IN/icons/*.png
 mogrify -resize 32x32   $PARAMS $PATH_IN/projectiles/*.png
 mogrify -resize 96x96   $PARAMS $PATH_IN/floor.png

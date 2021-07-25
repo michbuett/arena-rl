@@ -271,10 +271,10 @@ fn handle_attack<'a>(
     for event in combat_result.log.iter() {
         log.push(event.log.to_string());
 
-        if let Some(fx) = &event.fx {
+        if let Some((delay, fx)) = &event.fx {
             let fx = Fx::from_combat_event(fx.clone(), fx_delay_ms);
 
-            fx_delay_ms += std::cmp::max(fx.duration_ms(), 500);
+            fx_delay_ms += delay;
             changes.push(Change::Fx(fx));
         }
     }
@@ -298,10 +298,10 @@ fn handle_ranged_attack<'a>(
     for event in combat_result.log.iter() {
         log.push(event.log.to_string());
 
-        if let Some(fx) = &event.fx {
+        if let Some((delay, fx)) = &event.fx {
             let fx = Fx::from_combat_event(fx.clone(), fx_delay_ms);
 
-            fx_delay_ms += std::cmp::max(fx.duration_ms(), 500);
+            fx_delay_ms += delay;
             changes.push(Change::Fx(fx));
         }
     }

@@ -174,7 +174,7 @@
             alpha: 255,
         )),
 
-    // === BEGIN SECTION corpses ================================
+    // === BEGIN SECTION blood and gore ================================
     ("corpses_1", ProtoSpriteConfig(
             files: ["ArenaRL_Assets-3.png"],
             offset: (16, 16),
@@ -182,6 +182,21 @@
         )),
     ("corpses_2", ProtoSpriteConfig(
             files: ["ArenaRL_Assets-4.png"],
+            offset: (16, 16),
+            alpha: 255,
+        )),
+    ("blood-splatter-1", ProtoSpriteConfig(
+            files: ["blood-2.png"],
+            offset: (16, 16),
+            alpha: 255,
+        )),
+    ("blood-splatter-2", ProtoSpriteConfig(
+            files: ["blood-3.png"],
+            offset: (16, 16),
+            alpha: 255,
+        )),
+    ("blood-splatter-3", ProtoSpriteConfig(
+            files: ["blood-4.png"],
             offset: (16, 16),
             alpha: 255,
         )),
