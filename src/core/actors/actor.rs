@@ -223,6 +223,7 @@ impl Actor {
                         max_distance: *reach,
                         to_hit: *to_hit,
                         to_wound: *to_wound,
+                        attack_type: AttackType::Melee("fx-hit-1".to_string()),
                     }
                 }
                 _ => {}
@@ -235,6 +236,7 @@ impl Actor {
             max_distance: 1,
             to_hit: 0,
             to_wound: 0,
+            attack_type: AttackType::Melee("fx-hit-1".to_string()),
         }
     }
 
@@ -248,6 +250,7 @@ impl Actor {
                         max_distance: *max_distance,
                         to_hit: *to_hit,
                         to_wound: *to_wound,
+                        attack_type: AttackType::Ranged("fx-projectile-1".to_string()),
                     })
                 }
                 _ => {}
@@ -295,26 +298,47 @@ impl Actor {
         }
     }
 
-    fn wound(self, w: Wound) -> Condition {
-        let default_wounds_num = 3 + self.attr(Attr::Wound).val();
-        let max_wounds = max(1, default_wounds_num) as u8;
+    pub fn wound(self, w: Wound) -> Self {
+    // pub fn wound(self, w: Wound) -> Condition {
+        // let default_wounds_num = 3 + self.attr(Attr::Wound).val();
+        // let max_wounds = max(1, default_wounds_num) as u8;
         let wounds = self.wounds + w.wound;
         let pain = self.pain + w.pain;
 
-        if wounds < max_wounds {
-            Condition::Alive(Self {
-                wounds,
-                pain,
-                ..self
-            })
-        } else {
-            Condition::Dead(
-                self.pos,
-                Item {
-                    name: format!("Corpse of {}", self.name),
-                    look: vec![("corpses", 1)],
-                },
-            )
+        // if wounds < max_wounds {
+        //     Condition::Alive(Self {
+        //         wounds,
+        //         pain,
+        //         ..self
+        //     })
+        // } else {
+        //     Condition::Dead(
+        //         self.pos,
+        //         Item {
+        //             name: format!("Corpse of {}", self.name),
+        //             look: vec![("corpses", 1)],
+        //         },
+        //     )
+        // }
+
+        Self {
+            wounds,
+            pain,
+            ..self
+        }
+    }
+
+    pub fn is_alive(&self) -> bool {
+        let default_wounds_num = 3 + self.attr(Attr::Wound).val();
+        let max_wounds = max(1, default_wounds_num) as u8;
+
+        self.wounds < max_wounds
+    }
+    
+    pub fn corpse(&self) -> Item {
+        Item {
+            name: format!("Corpse of {}", self.name),
+            look: vec![("corpses", 1)],
         }
     }
 
@@ -376,25 +400,36 @@ pub struct AttackOption {
     pub max_distance: u8,
     pub to_hit: i8,
     pub to_wound: i8,
+    pub attack_type: AttackType,
 }
 
 impl AttackOption {
-    fn into_attack(self, a: &Actor) -> Attack {
+    pub fn into_attack(self, a: &Actor) -> Attack {
         Attack {
             to_hit: a.attr(Attr::ToHit).modify(self.name.clone(), self.to_hit),
             to_wound: a
                 .attr(Attr::ToWound)
                 .modify(self.name.clone(), self.to_wound),
             name: self.name,
+            attack_type: self.attack_type,
+            num_dice: 3 // TODO use wounds/stress/skills
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Attack {
-    name: DisplayStr,
-    to_hit: AttrVal,
-    to_wound: AttrVal,
+    pub name: DisplayStr,
+    pub to_hit: AttrVal,
+    pub to_wound: AttrVal,
+    pub num_dice: u8,
+    pub attack_type: AttackType,
+}
+
+#[derive(Debug, Clone)]
+pub enum AttackType {
+    Melee(String),
+    Ranged(String),
 }
 
 #[derive(Debug, Clone)]
@@ -404,271 +439,20 @@ pub struct Defence {
 }
 
 #[derive(Debug, Clone)]
-struct Wound {
+pub struct Wound {
     pain: u8,
     wound: u8,
 }
 
 impl Wound {
-    fn from_roll(rr: &RR) -> Self {
-        match rr {
-            RR::FF(_) => Self { pain: 0, wound: 0 },
-            RR::SF => Self { pain: 1, wound: 0 },
-            RR::SS(n) => Self {
-                pain: *n,
-                wound: *n,
+    pub fn from_wound_roll(r: &Roll) -> Self {
+        match r.successes() {
+            0 => Self { pain: 0, wound: 0 },
+            1 => Self { pain: 1, wound: 0 },
+            n => Self {
+                pain: n,
+                wound: n -1,
             },
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct CombatResult {
-    pub attacker: Condition,
-    pub target: Condition,
-    pub log: Vec<CombatEvent>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Condition {
-    Unchanged,
-    Alive(Actor),
-    Dead(WorldPos, Item),
-}
-
-#[derive(Debug, Clone)]
-pub enum CombatEventFx {
-    Text(DisplayStr, WorldPos, u64),
-    Scream(DisplayStr, WorldPos, u64),
-    Sprite(String, WorldPos, u64),
-    Projectile(String, WorldPos, WorldPos, u64),
-    BloodSplatter(String, WorldPos, WorldPos, u64),
-}
-
-#[derive(Debug, Clone)]
-pub struct CombatEvent {
-    pub fx: Option<(u64, CombatEventFx)>,
-    pub log: DisplayStr,
-}
-
-pub fn combat(attack: AttackOption, attacker: Actor, target: Actor) -> CombatResult {
-    let mut attack = attack.into_attack(&attacker);
-    let mut to_hit_roll = D6::roll();
-    let mut combat_log = vec![CombatEvent {
-        fx: Some((400, CombatEventFx::Sprite("fx-hit-1".to_string(), target.pos, 400))),
-        log: DisplayStr::new(format!("{} attacks {} with {}", attacker.name, target.name, attack.name)),
-    }];
-    let attack_difficulty = target.attr(Attr::Defence).val() - attack.to_hit.val();
-
-    let to_hit_result = if let Some(defence) = target.melee_defence() {
-        let defence_roll = D6::roll();
-        let result_before_defence = RR::from_roll(to_hit_roll, attack_difficulty);
-
-        to_hit_roll = to_hit_roll.modify(-1 * defence_roll.0 as i8);
-
-        let result_after_defence = RR::from_roll(to_hit_roll, attack_difficulty);
-
-        combat_log.push(combat_event_attack_with_defence(
-            &attacker,
-            &target,
-            &defence,
-            result_before_defence,
-            result_after_defence,
-        ));
-
-        result_after_defence
-    } else {
-        let roll_result = RR::from_roll(to_hit_roll, attack_difficulty);
-
-        combat_log.push(combat_event_attack_without_defence(&attacker, roll_result));
-
-        roll_result
-    };
-
-    let mut attacker_condition = Condition::Unchanged;
-    let mut target_condition = Condition::Unchanged;
-
-    match to_hit_result {
-        RR::FF(n) if n > 1 => {
-            attacker_condition = Condition::Alive(attacker.clone().add_traits(&mut vec![Trait {
-                name: DisplayStr::new("Off balance"),
-                effects: vec![Effect::AttrMod(Attr::Defence, -1 * n as i8)],
-                source: TraitSource::Temporary(1),
-            }]));
-        }
-
-        RR::SF => {
-            attack.to_wound = attack.to_wound.modify(DisplayStr::new("Scratch hit"), -1);
-        }
-
-        RR::SS(n) if n > 1 => {
-            attack.to_wound = attack.to_wound.modify(DisplayStr::new("Critical hit"), n as i8);
-        }
-
-        _ => {}
-    };
-
-    match to_hit_result {
-        RR::SF | RR::SS(_) => {
-            let to_wound_difficulty = target.attr(Attr::Protection).val() - attack.to_wound.val();
-            let to_wound_result = RR::from_roll(D6::roll(), to_wound_difficulty);
-
-            combat_log.push(combat_event_wound(&target, to_wound_result));
-
-            target_condition = target.clone().wound(Wound::from_roll(&to_wound_result));
-
-            if let Condition::Dead(_, _) = target_condition {
-                combat_log.push(CombatEvent {
-                    fx: fx_blood(target.pos),
-                    log: DisplayStr::new(format!("{} was killed by {}", target.name, attacker.name)),
-                });
-            }
-        }
-
-        _ => {}
-    };
-
-    // println!(
-    //     "[DEBUG ATTACK]\n  attack to-hit: {:?}  attack to-wound: {:?}\n  defence: {:?}\n  attack_difficulty: {},  wound_difficulty: {}\n  attack roll: {:?}\n  result: {:?}",
-    //     attack.to_hit,
-    //     attack.to_wound,
-    //     target.attr(Attr::Defence),
-    //     attack_difficulty,
-    //     target.attr(Attr::Protection).val() - attack.to_wound.val(),
-    //     to_hit_roll,
-    //     to_hit_result,
-    // );
-
-    CombatResult {
-        attacker: attacker_condition,
-        target: target_condition,
-        log: combat_log,
-    }
-}
-
-pub fn ranged_combat(attack: AttackOption, attacker: Actor, target: Actor) -> CombatResult {
-    // println!("[DEBUG] ranged combat: attacker={:?}, target={:?}, attack={:?}", attacker, target, attack);
-
-    let attack = attack.into_attack(&attacker);
-    let to_hit_roll = D6::roll();
-    let attack_difficulty = target.attr(Attr::Defence).val() - attack.to_hit.val();
-    let to_hit_result = RR::from_roll(to_hit_roll, attack_difficulty);
-
-    let mut combat_log = vec![CombatEvent {
-        fx: Some((300, CombatEventFx::Projectile("fx-projectile-1".to_string(), attacker.pos, target.pos, 300))),
-        log: DisplayStr::new(format!("{} shoots at {}", attacker.name, target.name)),
-    }];
-
-    combat_log.push(combat_event_attack_without_defence(&attacker, to_hit_result));
-
-    CombatResult {
-        attacker: Condition::Alive(attacker),
-        target: Condition::Alive(target),
-        log: combat_log,
-    }
-}
-
-fn combat_event_attack_with_defence(
-    attacker: &Actor,
-    target: &Actor,
-    defence: &Defence,
-    result_before_defence: RR,
-    result_after_defence: RR,
-) -> CombatEvent {
-    match (result_before_defence, result_after_defence) {
-        (RR::SF, RR::FF(_)) | (RR::SS(_), RR::FF(_)) => CombatEvent {
-            fx: say("Block!", target.pos),
-            log: DisplayStr::new(format!(
-                "{} successfully blocks the attack with {}",
-                target.name, defence.name
-            )),
-        },
-
-        (RR::SS(_), RR::SF) => CombatEvent {
-            fx: None,
-            log: DisplayStr::new(format!(
-                "{} uses {} but cannot avoid the attack completely",
-                target.name, defence.name,
-            )),
-        },
-
-        _ => combat_event_attack_without_defence(attacker, result_before_defence),
-    }
-}
-
-fn combat_event_attack_without_defence(
-    attacker: &Actor,
-    roll_result: RR,
-) -> CombatEvent {
-    match roll_result {
-        RR::FF(n) => if n > 1 {
-            CombatEvent {
-                fx: scream("DAMNED !!!", attacker.pos),
-                log: DisplayStr::new(format!("{} misses badly and loses balance", attacker.name)),
-            }
-        } else {
-            CombatEvent {
-                fx: say("No", attacker.pos),
-                log: DisplayStr::new(format!("{} misses", attacker.name)),
-            }
-        },
-
-        RR::SF => CombatEvent {
-            fx: None,
-            log: DisplayStr::new(format!("{} hits but only briefly", attacker.name)),
-        },
-
-        RR::SS(n) => if n > 1 {
-            CombatEvent {
-                fx: scream("YES! DIE!!!", attacker.pos),
-                log: DisplayStr::new(format!("{} scores a direct hit (+{})", attacker.name, n)),
-            }
-        } else {
-            CombatEvent {
-                fx: say("Nice!", attacker.pos),
-                log: DisplayStr::new(format!("{} hits", attacker.name)),
-            }
-        },
-    }
-}
-
-fn combat_event_wound(
-    target: &Actor,
-    roll_result: RR,
-) -> CombatEvent {
-    match roll_result {
-        RR::FF(_) => CombatEvent {
-            fx: say("Klong", target.pos),
-            log: DisplayStr::new("The attack bounced harmlessly off the armor"),
-        },
-
-        RR::SF => CombatEvent {
-            fx: say("Ouch!", target.pos),
-            log: DisplayStr::new(format!("{} feels the pain but will not have a lasting insury", target.name)),
-        },
-
-        RR::SS(n) => if n > 1 {
-            CombatEvent {
-                fx: fx_blood(target.pos),
-                log: DisplayStr::new(format!("{} suffered a critical wound", target.name)),
-            }
-        } else {
-            CombatEvent {
-                fx: fx_blood(target.pos),
-                log: DisplayStr::new(format!("{} was wounded", target.name)),
-            }
-        },
-    }
-}
-
-fn say(s: &str, p: WorldPos) -> Option<(u64, CombatEventFx)> {
-    Some((300, CombatEventFx::Text(DisplayStr::new(s), p, 1000)))
-}
-
-fn scream(s: &str, p: WorldPos) -> Option<(u64, CombatEventFx)> {
-    Some((300, CombatEventFx::Scream(DisplayStr::new(s), p, 1000)))
-}
-
-fn fx_blood(p: WorldPos) -> Option<(u64, CombatEventFx)> {
-    Some((150, CombatEventFx::BloodSplatter("blood-splatter-1".to_string(), p, p, 500)))
 }

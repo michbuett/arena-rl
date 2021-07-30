@@ -13,7 +13,7 @@ pub enum ActorType {
 
 pub fn generate_enemy_easy(pos: WorldPos, t: Team) -> Actor {
     ActorBuilder::new(generate_name(), pos, t)
-        .look(vec![("body-light", between(1, 3)), ("head", between(1, 4))])
+        .look(vec![("body-light", between(1, 3)), ("head", between(1, 4)), ("claw-L", 1), ("claw-R", 1)])
         .behaviour(AiBehaviour::Default)
         .traits(vec![Trait {
             name: DisplayStr::new("Fragile physiology"),
@@ -109,8 +109,8 @@ impl ObjectGenerator {
             .look(vec![
                 ("body-heavy", 1),
                 ("head-heavy", 1),
-                ("melee-1h", 1),
                 ("shild", 1),
+                ("melee-1h", 1),
             ])
             .traits(vec![
                 self.get_trait("Item_Armor_PlateMail").unwrap(),
@@ -146,7 +146,7 @@ impl ObjectGenerator {
 
     fn generate_player_healer(&self, pos: WorldPos, t: Team) -> Actor {
         ActorBuilder::new(generate_name(), pos, t)
-            .look(vec![("body-light", 1), ("head", 5), ("melee-1h", 2)])
+            .look(vec![("body-light", 1), ("head", 5), ("staff", 1)])
             .traits(vec![
                 self.get_trait("Item_Armor_ChainMail").unwrap(),
                 self.get_trait("Item_Weapon_Injector").unwrap(),

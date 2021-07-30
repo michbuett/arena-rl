@@ -228,6 +228,6 @@ pub struct ScreenSprite(pub ScreenPos, pub Sprite);
 pub struct ProtoSpriteConfig {
     pub files: Vec<String>,
     pub offset: (i32, i32),
-    pub alpha: u8,
+    pub alpha: Option<u8>,
     pub frame_durration: Option<u32>,
 }

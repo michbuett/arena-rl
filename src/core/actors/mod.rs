@@ -1,8 +1,10 @@
 mod actor;
 mod generator;
+mod combat;
 mod traits;
 
 pub use actor::*;
+pub use combat::*;
 pub use generator::*;
 
 use crate::core::WorldPos;

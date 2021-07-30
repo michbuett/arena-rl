@@ -24,31 +24,12 @@ pub enum FxEffect {
 
     Sprite(String, WorldPos),
 
-    BloodSplatter(String, WorldPos, WorldPos),
+    BloodSplatter(WorldPos),
 
     Projectile(String, WorldPos, WorldPos),
 }
 
 impl Fx {
-    pub fn from_combat_event(ev: CombatEventFx, delay: u64) -> Self {
-        match ev {
-            CombatEventFx::Text(txt, pos, duration) =>
-                Self::say(txt, pos, delay, duration),
-
-            CombatEventFx::Scream(txt, pos, duration) =>
-                Self::scream(txt, pos, delay, duration),
-                        
-            CombatEventFx::Sprite(s, pos, duration) =>
-                Self::sprite(s, pos, delay, duration),
-
-            CombatEventFx::Projectile(s, from_pos, to_pos, duration) =>
-                Self::projectile(s, from_pos, to_pos, delay, duration),
-
-            CombatEventFx::BloodSplatter(s, from_pos, to_pos, duration) =>
-                Self::blood_splatter(s, from_pos, to_pos, delay, duration),
-        }
-    }
-
     pub fn move_to(
         e: Entity,
         p: Vec<WorldPos>,
@@ -59,16 +40,16 @@ impl Fx {
         Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::MoveTo(e, p, m))
     }
 
-    pub fn sprite(s: String, p: WorldPos, delay: u64, dur_ms: u64) -> Self {
-        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::Sprite(s, p))
+    pub fn sprite(s: impl ToString, p: WorldPos, delay: u64, dur_ms: u64) -> Self {
+        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::Sprite(s.to_string(), p))
     }
 
     pub fn projectile(s: String, f: WorldPos, t: WorldPos, delay: u64, dur_ms: u64) -> Self {
         Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::Projectile(s, f, t))
     }
 
-    pub fn blood_splatter(s: String, f: WorldPos, t: WorldPos, delay: u64, dur_ms: u64) -> Self {
-        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::BloodSplatter(s, f, t))
+    pub fn rnd_blood_splatter(p: WorldPos, delay: u64, dur_ms: u64) -> Self {
+        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::BloodSplatter(p))
     }
 
     pub fn say(txt: DisplayStr, pos: WorldPos, delay: u64, dur_ms: u64) -> Self {
@@ -118,8 +99,8 @@ impl<'a> System<'a> for FxSystem {
                 FxEffect::Sprite(sprite, pos) => 
                     handle_sprite(sprite, *pos, *duration, &entities, &updater, &texture_map),
 
-                FxEffect::BloodSplatter(sprite, from, to) => 
-                    handle_blood_splatter(sprite, *from, *to, *duration, &entities, &updater, &texture_map),
+                FxEffect::BloodSplatter(pos) => 
+                    handle_blood_splatter(*pos, *duration, &entities, &updater, &texture_map),
 
                 FxEffect::Projectile(sprite, from, to) => 
                     handle_projectile(sprite, *from, *to, *duration, &entities, &updater, &texture_map),
@@ -199,9 +180,7 @@ fn handle_sprite(
 }
 
 fn handle_blood_splatter(
-    _sprite_name: &str,
-    from: WorldPos,
-    _to: WorldPos,
+    pos: WorldPos,
     duration: Duration,
     entities: &Entities,
     updater: &Read<LazyUpdate>,
@@ -209,13 +188,13 @@ fn handle_blood_splatter(
 ) {
     for i in 1..=3 {
         let sprite = texture_map.get(&format!("blood-splatter-{}", i)).unwrap();
-        let to = random_neighbor_pos(&from);
+        let to = random_neighbor_pos(&pos);
 
         updater
             .create_entity(&entities)
             .with(Sprites::new(vec![sprite.clone()]))
-            .with(Position(from))
-            .with(MovementAnimation::new(duration, vec![from, to]).set_modification(MovementModification::ParabolaJump(100)))
+            .with(Position(pos))
+            .with(MovementAnimation::new(duration, vec![pos, to]).set_modification(MovementModification::ParabolaJump(100)))
             .with(ScaleAnimation::new(0.0, 1.0, duration))
             .with(EndOfLive::after(duration))
             .with(ZLayerGameObject)
@@ -226,15 +205,6 @@ fn handle_blood_splatter(
                 sprites: vec![sprite.clone()],
             })
             .build();
-
-        // updater
-        //     .create_entity(&entities)
-        //     .with(Sprites::new(vec![sprite.clone()]))
-        //     .with(Position(from))
-        //     .with(MovementAnimation::new(duration, vec![from, to]).set_modification(MovementModification::ParabolaJump(100)))
-        //     .with(ScaleAnimation::new(0.0, 1.0, duration))
-        //     .with(ZLayerFloor)
-        //     .build();
     }
 }
 
