@@ -37,7 +37,6 @@ impl Tile {
 
     pub fn distance(&self, o: &Self) -> f32 {
         distance(self.to_map_pos(), o.to_map_pos())
-        // distance(self.0 as f32, self.1 as f32, o.0 as f32, o.1 as f32)
     }
 }
 
@@ -210,6 +209,10 @@ impl Map {
         Some(p)
     }
 
+    pub fn tiles_along_line(&self, p1: MapPos, p2: MapPos) -> LineIter {
+        LineIter::new(self, p1, p2)
+    }
+
     // pub fn find_path_neighborhood(
     //     &self,
     //     from: WorldPos,
@@ -239,7 +242,7 @@ impl Map {
 }
 
 #[derive(Debug, Clone)]
-pub struct Obstacle(pub f32);
+pub struct Obstacle(pub i8);
 
 // pub enum Obstacle {
 //     Inaccessible(),
@@ -252,6 +255,10 @@ pub struct MapPos(pub i32, pub i32);
 impl MapPos {
     pub fn from_world_pos(pos: WorldPos) -> Self {
         Self(pos.x().floor() as i32, pos.y().floor() as i32)
+    }
+
+    pub fn to_world_pos(self) -> WorldPos {
+        WorldPos::new(self.0 as f32, self.1 as f32, 0.0)
     }
 
     pub fn distance(self, other: MapPos) -> usize {
@@ -275,6 +282,38 @@ impl ObstacleSet {
         let mut hm = self.0;
         hm.remove(&pos);
         Self(hm)
+    }
+}
+
+pub struct LineIter<'a> {
+    map: &'a Map,
+    p1: MapPos,
+    p2: MapPos,
+    distance: usize,
+    step: usize,
+}
+
+impl<'a> LineIter<'a> {
+    pub fn new(map: &'a Map, p1: MapPos, p2: MapPos) -> Self {
+        Self {
+            map,
+            p1,
+            p2,
+            distance: p1.distance(p2),
+            step: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for LineIter<'a> {
+    type Item = Tile;
+
+    fn next(&mut self) -> Option<Tile> {
+        let delta = self.step as f32 / self.distance as f32;
+        let next_pos = MapPos::lerp(&self.p1, &self.p2, delta);
+
+        self.step += 1;
+        self.map.get_tile(next_pos)
     }
 }
 
@@ -521,5 +560,5 @@ fn distance(MapPos(x1, y1): MapPos, MapPos(x2, y2): MapPos) -> f32 {
 }
 
 fn costs(t: &Tile, obstacles: &ObstacleSet) -> f32 {
-    obstacles.0.get(&t.to_map_pos()).map(|Obstacle(costs)| *costs).unwrap_or(1.0)
+    obstacles.0.get(&t.to_map_pos()).map(|Obstacle(costs)| *costs as f32).unwrap_or(1.0)
 }

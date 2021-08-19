@@ -139,6 +139,14 @@
             files: ["selected.png"],
             offset: (0, 0),
         )),
+    ("wall-1", ProtoSpriteConfig(
+            files: ["wall-1.png"],
+            offset: (0, 0),
+        )),
+    ("barricade-NW", ProtoSpriteConfig(
+            files: ["barricade_NW-1.png"],
+            offset: (0, 0),
+        )),
 
     // === BEGIN SECTION icons ================================
     ("icon-action-Done", ProtoSpriteConfig(
@@ -160,6 +168,22 @@
     ("icon-action-Defend", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_Icons-5.png"],
             offset: (64, 0),
+        )),
+
+    ("icon-floor-MoveTo", ProtoSpriteConfig(
+            files: ["icon_big_move.png"],
+            offset: (16, 16),
+            alpha: Some(100),  
+        )),
+    ("icon-floor-RangedAttack-1", ProtoSpriteConfig(
+            files: ["icon_big_shoot.png"],
+            offset: (16, 16),
+            alpha: Some(100),  
+        )),
+    ("icon-floor-RangedAttack-2", ProtoSpriteConfig(
+            files: ["icon_big_shoot_obstacle.png"], 
+            offset: (16, 16),
+            alpha: Some(200),  
         )),
 
     // === BEGIN SECTION blood and gore ================================
@@ -186,7 +210,7 @@
 
     // === BEGIN SECTION Fx ================================
     ("fx-hit-1", ProtoSpriteConfig(
-            files: ["Fx-1.png", "Fx-2.png", "Fx-3.png"],
+            files: ["fx_hit_1-1.png", "fx_hit_1-2.png", "fx_hit_1-3.png"],
             offset: (-64, -64),
             frame_durration: Some(150),
         )),
@@ -203,7 +227,8 @@
             offset: (48, 48),
         )),
     ("fx-impact-1", ProtoSpriteConfig(
-            files: ["projectile-03-1.png"],
-            offset: (48, 48),
+            files: ["fx_impact_1-1.png", "fx_impact_1-2.png", "fx_impact_1-3.png"],
+            offset: (-64, -64),
+            frame_durration: Some(100),
         )),
 ]

@@ -171,7 +171,7 @@ fn init_traits() -> HashMap<String, Trait> {
         "Item_Armor_ChainMail".to_string(),
         Trait {
             name: DisplayStr::new("Chain mail"),
-            effects: vec![Effect::AttrMod(Attr::Protection, 2)],
+            effects: vec![Effect::AttrMod(Attr::Protection, 4)],
             source: TraitSource::IntrinsicProperty,
         },
     );
@@ -180,7 +180,7 @@ fn init_traits() -> HashMap<String, Trait> {
         "Item_Armor_PlateMail".to_string(),
         Trait {
             name: DisplayStr::new("Plate Mail"),
-            effects: vec![Effect::AttrMod(Attr::Protection, 3)],
+            effects: vec![Effect::AttrMod(Attr::Protection, 5)],
             source: TraitSource::IntrinsicProperty,
         },
     );
@@ -189,7 +189,7 @@ fn init_traits() -> HashMap<String, Trait> {
         "Item_Weapon_PowerSaw".to_string(),
         Trait {
             name: DisplayStr::new("Power Saw"),
-            effects: vec![Effect::MeleeAttack(DisplayStr::new("Swing"), 1, 0, 3)],
+            effects: vec![Effect::MeleeAttack(DisplayStr::new("Swing"), 1, 2, 5)],
             source: TraitSource::IntrinsicProperty,
         },
     );
@@ -198,7 +198,7 @@ fn init_traits() -> HashMap<String, Trait> {
         "Item_Weapon_Injector".to_string(),
         Trait {
             name: DisplayStr::new("Injector"),
-            effects: vec![Effect::MeleeAttack(DisplayStr::new("Stab"), 2, 0, 1)],
+            effects: vec![Effect::MeleeAttack(DisplayStr::new("Stab"), 2, 3, 3)],
             source: TraitSource::IntrinsicProperty,
         },
     );
@@ -207,7 +207,22 @@ fn init_traits() -> HashMap<String, Trait> {
         "Item_Weapon_Spear".to_string(),
         Trait {
             name: DisplayStr::new("Spear"),
-            effects: vec![Effect::MeleeAttack(DisplayStr::new("Stab"), 2, 0, 1)],
+            effects: vec![
+                Effect::MeleeAttack(DisplayStr::new("Stab"), 2, 4, 3),
+                Effect::GiveTrait(
+                    DisplayStr::new("Parry"),
+                    AbilityTarget::OnSelf,
+                    Trait {
+                        name: DisplayStr::new("Parry"),
+                        effects: vec![Effect::Defence(
+                            DisplayStr::new("Parry with spear"),
+                            3,
+                            DefenceType::Parry,
+                        )],
+                        source: TraitSource::Temporary(1),
+                    },
+                )
+            ],
             source: TraitSource::IntrinsicProperty,
         },
     );
@@ -216,7 +231,22 @@ fn init_traits() -> HashMap<String, Trait> {
         "Item_Weapon_Flail".to_string(),
         Trait {
             name: DisplayStr::new("Flail"),
-            effects: vec![Effect::MeleeAttack(DisplayStr::new("Swing Flail"), 1, 0, 2)],
+            effects: vec![
+                Effect::MeleeAttack(DisplayStr::new("Swing Flail"), 1, 3, 4),
+                Effect::GiveTrait(
+                    DisplayStr::new("Parry"),
+                    AbilityTarget::OnSelf,
+                    Trait {
+                        name: DisplayStr::new("Parry"),
+                        effects: vec![Effect::Defence(
+                            DisplayStr::new("Parry with flail"),
+                            2,
+                            DefenceType::Parry,
+                        )],
+                        source: TraitSource::Temporary(1),
+                    },
+                )
+            ],
             source: TraitSource::IntrinsicProperty,
         },
     );
@@ -224,8 +254,8 @@ fn init_traits() -> HashMap<String, Trait> {
     traits.insert(
         "Item_Weapon_IonGun".to_string(),
         Trait {
-            name: DisplayStr::new("Ion Guna"),
-            effects: vec![Effect::RangeAttack(DisplayStr::new("Shoot Ion Gun"), 1, 8, 2, 1)],
+            name: DisplayStr::new("Ion Gun"),
+            effects: vec![Effect::RangeAttack(DisplayStr::new("Shoot Ion Gun"), 2, 8, 4, 4)],
             source: TraitSource::IntrinsicProperty,
         },
     );
@@ -242,9 +272,10 @@ fn init_traits() -> HashMap<String, Trait> {
                     AbilityTarget::OnSelf,
                     Trait {
                         name: DisplayStr::new("Shield raised"),
-                        effects: vec![Effect::MeleeDefence(
+                        effects: vec![Effect::Defence(
                             DisplayStr::new("Block with shield"),
                             1,
+                            DefenceType::Block,
                         )],
                         source: TraitSource::Temporary(1),
                     },

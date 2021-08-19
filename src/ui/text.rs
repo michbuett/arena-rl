@@ -119,12 +119,13 @@ impl<'a> Font<'a> {
         let ScreenPos(x, y) = screen_txt.pos;
         let prepared_text = prepare(screen_txt, self);
         let (w, h) = prepared_text.dim;
-        // let pixel_format = sdl2::pixels::PixelFormatEnum::RGBA8888;
-        let pixel_format = self.texture_creator.default_pixel_format();
+        let pixel_format = sdl2::pixels::PixelFormatEnum::RGBA8888;
+        // let pixel_format = self.texture_creator.default_pixel_format();
         let mut target_tex = self
             .texture_creator
             // !!! ATTENSION: there seems to be a very wierd issue if texture is to small
             // the background/transparency of small textures is broken
+            // .create_texture_target(pixel_format, w, h)
             .create_texture_target(pixel_format, max(w, 65), max(h, 65))
             .map_err(to_string)?;
 

@@ -42,7 +42,7 @@ pub fn init_combat_data<'a, 'b>(
         world,
         dispatcher,
         state: CombatState::Init(game_objects),
-        log: vec!(),
+        log: vec![],
     }
 }
 
@@ -251,6 +251,7 @@ fn next_state<'a, 'b>(
                 insert_game_object_components(o.clone(), w);
             }
 
+            spawn_obstacles(w);
             spawn_enemies(round, w);
 
             (round, active_team_idx, Some(CombatState::StartTurn()), None)
@@ -259,8 +260,18 @@ fn next_state<'a, 'b>(
         CombatState::StartTurn() => {
             let mut entity_actions = Vec::new();
             let (entities, objects): (Entities, ReadStorage<GameObjectCmp>) = w.system_data();
-
             let active_team: &Team = teams.get(active_team_idx).unwrap();
+
+            // first run all pending action (e.g. an attack or charge action)
+            for (e, GameObjectCmp(o)) in (&entities, &objects).join() {
+                if let GameObject::Actor(a) = o {
+                    if &a.team == active_team {
+                        entity_actions.push((e, a.clone(), Action::ResolvePendingActions(), 0));
+                    }
+                }
+            }
+
+            // afterwards init a new turn for each actor of the current team
             for (e, GameObjectCmp(o)) in (&entities, &objects).join() {
                 if let GameObject::Actor(a) = o {
                     if &a.team == active_team {
@@ -299,7 +310,12 @@ fn next_state<'a, 'b>(
             if let Some(ea) = find_active_actor(w) {
                 // there is an active actor
                 // -> check if it can do some action
-                return (round, active_team_idx, Some(CombatState::SelectAction(ea)), None);
+                return (
+                    round,
+                    active_team_idx,
+                    Some(CombatState::SelectAction(ea)),
+                    None,
+                );
             }
 
             let active_team: &Team = teams.get(active_team_idx).unwrap();
@@ -312,7 +328,12 @@ fn next_state<'a, 'b>(
                 // there are no more entities with a turn left...
                 if active_team_idx < teams.len() - 1 {
                     // ... then continue with next team
-                    (round, active_team_idx + 1, Some(CombatState::StartTurn()), None)
+                    (
+                        round,
+                        active_team_idx + 1,
+                        Some(CombatState::StartTurn()),
+                        None,
+                    )
                 } else {
                     // ... or start a new round beginning with the first team
                     (round + 1, 0, Some(CombatState::StartTurn()), None)
@@ -389,7 +410,6 @@ fn next_state<'a, 'b>(
         ),
 
         CombatState::WaitUntil(t, ol) => (round, active_team_idx, handle_wait_until(t, ol), None),
-
         // CombatState::Win(_) => {
         //     // ignore
         //     (round, active_team_idx, None)
@@ -406,4 +426,29 @@ fn spawn_enemies(_turn: u64, w: &World) {
     ]
     .drain(..)
     .for_each(move |enemy| insert_game_object_components(enemy, w));
+}
+
+fn spawn_obstacles(w: &World) {
+    let (_map, texture_map, updater, entities): (
+        Read<Map>,
+        Read<TextureMap>,
+        Read<LazyUpdate>,
+        Entities,
+    ) = w.system_data();
+    let pos = vec![(5.0, 6.0), (7.0, 4.0), (5.0, 9.0), (10.0, 4.0), (8.0, 9.0), (10.0, 7.0)];
+    let sprite = texture_map.get("wall-1").unwrap();
+
+    for (x, y) in pos.iter() {
+        updater
+            .create_entity(&entities)
+            .with(Sprites::new(vec![sprite.clone()]))
+            .with(Position(WorldPos::new(*x, *y, 0.0)))
+            .with(ZLayerGameObject)
+            .with(ObstacleCmp {
+                restrict_melee_attack: Restriction::ForAll(Some(i8::MAX)),
+                restrict_movement: Restriction::ForAll(Some(i8::MAX)),
+                restrict_ranged_attack: Restriction::ForAll(Some(i8::MAX)),
+            })
+            .build();
+    }
 }

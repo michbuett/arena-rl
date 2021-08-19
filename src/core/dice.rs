@@ -28,6 +28,9 @@ pub struct Roll {
     dice: Vec<D6>,
     advantage: RollAdvantage,
     extra: Option<D6>,
+    normal_successes: u8,
+    extra_successes: u8,
+    fails: u8,
 }
 
 impl Roll {
@@ -41,23 +44,32 @@ impl Roll {
             None
         };
 
+        let normal_successes = dice.iter().filter(|die| die.0 >= 4).count() as u8;
+        let extra_successes = match extra {
+            Some(D6(d)) if d >= 4 => 1,
+            _ => 0
+        };
+        
         Self {
             dice,
             advantage,
             extra,
+            normal_successes,
+            extra_successes,
+            fails: num_dice - normal_successes,
         }
     }
 
+    pub fn normal_successes(&self) -> u8 {
+        self.normal_successes
+    }
+
     pub fn successes(&self) -> u8 {
-        let extra = match self.extra {
-            Some(D6(d)) if d >= 4 => 1,
-            _ => 0
-        };
-                
-        extra + self.dice
-            .iter()
-            .filter(|die| die.0 >= 4)
-            .count() as u8
+        self.normal_successes + self.extra_successes
+    }
+
+    pub fn fails(&self) -> u8 {
+        self.fails
     }
 }
 
@@ -66,6 +78,7 @@ pub struct RollAdvantage(i8);
 
 impl RollAdvantage {
     pub fn new(skill: i8, difficulty: i8) -> Self {
-        Self(i8::signum(skill - difficulty))
+        // Self(i8::signum(skill - difficulty))
+        Self(min(3, max(-3, skill - difficulty)))
     }
 }

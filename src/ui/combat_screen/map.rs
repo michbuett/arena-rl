@@ -1,11 +1,9 @@
-use std::iter::once;
-
 use specs::prelude::*;
 
 use crate::components::{Position, Sprites, Text, ZLayerFX, ZLayerFloor, ZLayerGameObject};
 use crate::core::{
     Action, CombatData, CombatState, DisplayStr, InputContext, Map, TextureMap, Tile, TileType,
-    UserInput, WorldPos, MapPos,
+    UserInput, WorldPos, MapPos, 
 };
 use crate::ui::{ClickArea, Scene, ScreenPos, ScreenCoord, ScreenSprite, ScreenText, TILE_WIDTH};
 
@@ -41,7 +39,7 @@ pub fn render(
 
     render_floor_objects(&mut scene, scroll_offset, &pos, &sprites, &zlayer_floor);
     render_game_objects(&mut scene, scroll_offset, &pos, &sprites, &zlayer_gameobj);
-    render_fx(&mut scene, scroll_offset, &pos, &sprites, &zlayer_fx);
+    render_fx(&mut scene, scroll_offset, &default_action, &texture_map, &pos, &sprites, &zlayer_fx);
 
     render_texts(&mut scene, scroll_offset, &pos, &texts);
 
@@ -85,6 +83,8 @@ fn render_floor_objects<'a>(
 fn render_fx<'a>(
     scene: &mut Scene,
     offset: (i32, i32),
+    default_action: &DefaultAction,
+    texture_map: &TextureMap,
     positions: &ReadStorage<Position>,
     visuals: &ReadStorage<Sprites>,
     zlayer_fx: &ReadStorage<ZLayerFX>,
@@ -93,6 +93,13 @@ fn render_fx<'a>(
         for sprite in sprite_cmp.sample(ScreenCoord::from_world_pos(p.0).to_screen_pos(offset)) {
             scene.sprites.push(sprite);
         }
+    }
+
+    for (wp, icon_name) in get_icons(default_action) {
+        let icon_sprite = texture_map.get(&icon_name).unwrap();
+        let p = ScreenCoord::from_world_pos(wp).to_screen_pos(offset);
+
+        scene.sprites.push(ScreenSprite(p, icon_sprite.sample(0)));
     }
 }
 
@@ -168,13 +175,20 @@ fn render_map(
         }
     }
 
-    for wp in get_highlighted_tiles(default_action) {
+    if let Some(wp) = get_selected_tile(default_action) {
         if let Some(sprite_config) = texture_map.get("selected") {
             let p = ScreenCoord::from_world_pos(wp).to_screen_pos(offset);
 
             scene.sprites.push(ScreenSprite(p, sprite_config.sample(0)));
         }
     }
+    // for wp in get_highlighted_tiles(default_action) {
+    //     if let Some(sprite_config) = texture_map.get("selected") {
+    //         let p = ScreenCoord::from_world_pos(wp).to_screen_pos(offset);
+
+    //         scene.sprites.push(ScreenSprite(p, sprite_config.sample(0)));
+    //     }
+    // }
 }
 
 fn map_tile_to_texture(t: Tile) -> Option<String> {
@@ -201,13 +215,33 @@ fn get_default_action(game: &CombatData) -> DefaultAction {
     }
 }
 
-fn get_highlighted_tiles(default_action: &DefaultAction) -> Vec<WorldPos> {
+fn get_selected_tile(default_action: &DefaultAction) -> Option<WorldPos> {
     match default_action {
-        (Some(pos), Some((Action::MoveTo(p), _))) => once(*pos)
-            .chain(p.iter().map(|t| t.to_world_pos()))
+        (Some(pos), _) => Some(*pos),
+        _ => None,
+    }
+}
+
+
+fn get_icons(action: &DefaultAction) -> Vec<(WorldPos, String)> {
+    match action {
+        (_, Some((Action::MoveTo(p), _))) => p
+            .iter()
+            .map(|tile| (tile.to_world_pos(), "icon-floor-MoveTo".to_string()))
             .collect(),
 
-        (Some(pos), _) => vec![*pos],
+        (_, Some((Action::RangeAttack(_, _, attack_vector), _))) => attack_vector
+            .iter()
+            .map(|(map_pos, _is_target, obs)| {
+                let num = if let Some(..) = obs {
+                    2
+                } else {
+                    1
+                };
+
+                (map_pos.to_world_pos(), format!("icon-floor-RangedAttack-{}", num))
+            })
+            .collect(),
 
         _ => vec![],
     }

@@ -102,8 +102,9 @@ fn display_text((action, delay): &(Action, u8), is_first: bool) -> DisplayStr {
         Action::MoveTo(..) => format!("Move Here"),
         Action::Activate(_) => format!("Activate"),
         Action::MeleeAttack(_, a) => format!("{} ({})", a.name, delay),
-        Action::RangeAttack(_, a) => format!("{}", a.name),
-        Action::Charge(_, _) => "Charge!".to_string(),
+        Action::RangeAttack(_, a, _) => format!("{}", a.name),
+        Action::Charge(..) => "Charge!".to_string(),
+        Action::Dodge(..) => "Dodge".to_string(),
         Action::UseAbility(_, name, _) => format!("Use ability: {}", name),
         _ => format!("Unnamed action: {:?}", action),
     };
@@ -118,7 +119,7 @@ fn display_text((action, delay): &(Action, u8), is_first: bool) -> DisplayStr {
 }
 
 fn describe_actor(a: &Actor) -> String {
-    let (pain, wounds) = a.health();
+    let (pain, wounds, ..) = a.health();
     let condition = match (pain, wounds) {
         (0, 0) => "perfect condition",
         (_, 0) => "unharmed but in some pain",

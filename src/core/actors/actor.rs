@@ -53,8 +53,7 @@ impl ActorBuilder {
             behaviour: self.behaviour,
             team: self.team,
             look: self.look,
-            turn: 0,
-            quick_action_available: true,
+            engaged_in_combat: false,
         }
         .add_traits(&mut self.traits)
     }
@@ -98,13 +97,12 @@ pub type Look = Vec<(&'static str, u16)>;
 pub struct Actor {
     pain: u8,
     wounds: u8,
-    pub effects: Vec<(DisplayStr, Effect)>,
     traits: Vec<Trait>,
     look: Look,
-    quick_action_available: bool,
 
+    pub effects: Vec<(DisplayStr, Effect)>,
+    pub engaged_in_combat: bool,
     pub name: String,
-    pub turn: u64,
     pub active: bool,
     pub team: Team,
     pub pos: WorldPos,
@@ -114,17 +112,15 @@ pub struct Actor {
 
 impl Actor {
     pub fn move_to(self, to: Tile) -> Self {
-        assert!(self.can_move(), "Actor cannot move: {:?}", self);
-
+        // assert!(self.can_move(), "Actor cannot move: {:?}", self);
         Self {
             pos: to.to_world_pos(),
-            quick_action_available: false,
             ..self
         }
     }
 
     pub fn can_move(&self) -> bool {
-        self.quick_action_available
+        !self.engaged_in_combat && self.pending_action.is_none()
     }
 
     pub fn move_distance(&self) -> u8 {
@@ -156,39 +152,35 @@ impl Actor {
     pub fn prepare(self, action: (Action, u8)) -> Actor {
         Actor {
             pending_action: Some(action),
-            quick_action_available: false,
             active: false,
             ..self
         }
     }
 
-    pub fn start_next_turn(self) -> (Actor, Option<(Action, u8)>) {
+    pub fn start_next_turn(self, engaged_in_combat: bool) -> Actor {
         let mut new_traits = Vec::new();
 
+        // handle temporary traits
         for t in self.traits.iter() {
-            if let Trait {
-                source: TraitSource::Temporary(time),
-                ..
-            } = t
-            {
-                if *time > 1 {
-                    new_traits.push(t.clone());
+            if let TraitSource::Temporary(time) = t.source {
+                if time > 1 {
+                    let mut new_t = t.clone();
+                    new_t.source = TraitSource::Temporary(time - 1);
+                    new_traits.push(new_t);
                 }
             } else {
+                // not a temporary trait
                 new_traits.push(t.clone());
             }
         }
 
-        let pending_action = self.pending_action;
-        let next_turn_actor = Self {
+        Self {
+            engaged_in_combat,
             pending_action: None,
-            quick_action_available: true,
             traits: Vec::new(),
             ..self
         }
-        .add_traits(&mut new_traits);
-
-        (next_turn_actor, pending_action)
+        .add_traits(&mut new_traits)
     }
 
     pub fn ability_self(&self) -> Vec<(DisplayStr, Trait, u8)> {
@@ -260,16 +252,26 @@ impl Actor {
         None
     }
 
-    pub fn melee_defence(&self) -> Option<Defence> {
+    pub fn defence(&self, attack: &Attack) -> Option<Defence> {
         for (_, eff) in self.effects.iter() {
             match eff {
-                Effect::MeleeDefence(name, modifier) => {
-                    return Some(Defence {
-                        name: name.clone(),
-                        defence: self
-                            .attr(Attr::MeleeDefence)
-                            .modify(name.clone(), *modifier),
-                    });
+                Effect::Defence(name, modifier, defence_type) => {
+                    match attack.attack_type {
+                        AttackType::Melee(..) => {
+                            return Some(Defence {
+                                defence_type: defence_type.clone(),
+                                name: name.clone(),
+                                defence: self
+                                    .attr(Attr::MeleeDefence)
+                                    .modify(name.clone(), *modifier),
+                                num_dice: 3, // TODO
+                            });
+                        }
+
+                        AttackType::Ranged(..) => {
+                            // TODO: implement "take cover"
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -299,7 +301,7 @@ impl Actor {
     }
 
     pub fn wound(self, w: Wound) -> Self {
-    // pub fn wound(self, w: Wound) -> Condition {
+        // pub fn wound(self, w: Wound) -> Condition {
         // let default_wounds_num = 3 + self.attr(Attr::Wound).val();
         // let max_wounds = max(1, default_wounds_num) as u8;
         let wounds = self.wounds + w.wound;
@@ -334,7 +336,7 @@ impl Actor {
 
         self.wounds < max_wounds
     }
-    
+
     pub fn corpse(&self) -> Item {
         Item {
             name: format!("Corpse of {}", self.name),
@@ -342,9 +344,12 @@ impl Actor {
         }
     }
 
-    /// Describes the current health condition of an actor (pain, wounds, ...)
-    pub fn health(&self) -> (u8, u8) {
-        (self.pain, self.wounds)
+    /// Describes the current health condition of an actor (pain, wounds, max_distance)
+    pub fn health(&self) -> (u8, u8, u8) {
+        let default_wounds_num = 3 + self.attr(Attr::Wound).val();
+        let max_wounds = max(1, default_wounds_num) as u8;
+
+        (self.pain, self.wounds, max_wounds)
     }
 
     pub fn look(&self) -> &Look {
@@ -405,6 +410,8 @@ pub struct AttackOption {
 
 impl AttackOption {
     pub fn into_attack(self, a: &Actor) -> Attack {
+        let (pain, wounds, max_wounds) = a.health();
+
         Attack {
             to_hit: a.attr(Attr::ToHit).modify(self.name.clone(), self.to_hit),
             to_wound: a
@@ -412,7 +419,7 @@ impl AttackOption {
                 .modify(self.name.clone(), self.to_wound),
             name: self.name,
             attack_type: self.attack_type,
-            num_dice: 3 // TODO use wounds/stress/skills
+            num_dice: max(1, max_wounds.checked_sub(wounds + pain).unwrap_or(0)),
         }
     }
 }
@@ -436,6 +443,8 @@ pub enum AttackType {
 pub struct Defence {
     pub name: DisplayStr,
     pub defence: AttrVal,
+    pub defence_type: DefenceType,
+    pub num_dice: u8,
 }
 
 #[derive(Debug, Clone)]
@@ -445,13 +454,24 @@ pub struct Wound {
 }
 
 impl Wound {
+    // pub fn new(num_hits: u8) -> Self {
+    //     match num_hits {
+    //         0 => Self { pain: 0, wound: 0 },
+    //         1 => Self { pain: 1, wound: 0 },
+    //         n => Self {
+    //             pain: n,
+    //             wound: n -1,
+    //         },
+    //     }
+    // }
+
     pub fn from_wound_roll(r: &Roll) -> Self {
         match r.successes() {
             0 => Self { pain: 0, wound: 0 },
             1 => Self { pain: 1, wound: 0 },
             n => Self {
                 pain: n,
-                wound: n -1,
+                wound: n - 1,
             },
         }
     }

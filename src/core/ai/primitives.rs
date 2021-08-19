@@ -7,16 +7,21 @@ use super::super::actors::*;
 use crate::components::*;
 use crate::core::*;
 
+pub type AttackVector = Vec<(MapPos, bool, Option<(Entity, Obstacle)>)>;
+
 pub fn find_obstacles<F>(
     positions: &ReadStorage<Position>,
     obstacles: &ReadStorage<ObstacleCmp>,
-    allow: F,
-)  -> ObstacleSet where F: Fn(&ObstacleCmp) -> bool {
+    costs: F,
+) -> ObstacleSet
+where
+    F: Fn(&ObstacleCmp) -> Option<i8>,
+{
     let mut result = HashMap::new();
 
     for (o, Position(p)) in (obstacles, positions).join() {
-        if !allow(o) {
-            result.insert(MapPos::from_world_pos(*p), Obstacle(f32::MAX));
+        if let Some(c) = costs(o) {
+            result.insert(MapPos::from_world_pos(*p), Obstacle(c));
         }
     }
 
@@ -28,16 +33,9 @@ pub fn find_movement_obstacles(
     obstacles: &ReadStorage<ObstacleCmp>,
     team: &Team,
 ) -> ObstacleSet {
-    find_obstacles(
-        &positions,
-        &obstacles,
-        | ObstacleCmp { restrict_movement, .. } |
-        match restrict_movement {
-            Restriction::AllowAll => true,
-            Restriction::AllowTeam(allowed_team) => allowed_team == team,
-            _ => false,
-        }
-    )
+    find_obstacles(&positions, &obstacles, |obs| {
+        restriction_costs(&obs.restrict_movement, team)
+    })
 }
 
 pub fn find_enemies(
@@ -102,20 +100,11 @@ fn can_attack_with(
         return false;
     } else {
         let attackers_team = &actor.team;
-        let obstacles = find_obstacles(
-            &positions,
-            &obstacles,
-            | ObstacleCmp { restrict_melee_attack, .. } | {
-                match restrict_melee_attack {
-                    Restriction::AllowAll => true,
-                    Restriction::AllowTeam(allowed_team) => {
-                        allowed_team == attackers_team
-                    }
-                    _ => false,
-                }
-            }
-        ).ignore(to);
-        
+        let obstacles = find_obstacles(&positions, &obstacles, |obs| {
+            restriction_costs(&obs.restrict_melee_attack, attackers_team)
+        })
+        .ignore(to);
+
         if let Some(_) = map.find_straight_path(from, to, &obstacles) {
             return true;
         }
@@ -150,7 +139,6 @@ pub fn can_charge(
     let from = MapPos::from_world_pos(actor.pos);
     let to = MapPos::from_world_pos(target.pos);
     let d = from.distance(to);
-    // let reach: usize = attack.reach.into();
     let move_distance: usize = actor.move_distance().into();
 
     if actor.can_move() && 1 < d && d <= 1 + move_distance {
@@ -165,14 +153,10 @@ pub fn can_charge(
 
 pub fn can_attack_at_range(
     actor: &Actor,
-    target: &Actor,
-    // TODO: implement cover
-    _map: &Read<Map>,
-    _positions: &ReadStorage<Position>,
-    _obstacles: &ReadStorage<ObstacleCmp>,
+    target_pos: &WorldPos,
 ) -> Option<AttackOption> {
     let from = MapPos::from_world_pos(actor.pos);
-    let to = MapPos::from_world_pos(target.pos);
+    let to = MapPos::from_world_pos(*target_pos);
     let d = from.distance(to);
 
     actor.range_attack(d as u8)
@@ -193,7 +177,14 @@ pub fn can_move_towards(
     let tt = map.find_tile(target.pos);
 
     if let (Some(source_tile), Some(target_tile)) = (st, tt) {
-        find_path_next_to_tile(&source_tile, &target_tile, &actor.team, map, positions, obstacles)
+        find_path_next_to_tile(
+            &source_tile,
+            &target_tile,
+            &actor.team,
+            map,
+            positions,
+            obstacles,
+        )
     } else {
         None
     }
@@ -225,37 +216,125 @@ fn find_path_next_to_tile(
     .map(|p| p.iter().take(p.len() - 1).cloned().collect())
 }
 
-// pub fn find_attack_options(
-//     attacker: &Actor,
-//     target: &Actor,
-//     map: &Read<Map>,
-//     objects: &ReadStorage<GameObjectCmp>,
-// ) -> Vec<AttackOption> {
-//     let distance = WorldPos::distance(&attacker.pos, &target.pos);
-//     let source_tile = map.find_tile(attacker.pos).unwrap();
-//     let _target_tile = map.find_tile(target.pos).unwrap();
+fn restriction_costs(restriction: &Restriction, actual_team: &Team) -> Option<i8> {
+    match restriction {
+        Restriction::ForAll(costs) => *costs,
+        Restriction::ForTeam(allowed_team, costs_for_members, costs_for_others) => {
+            if allowed_team == actual_team {
+                *costs_for_members
+            } else {
+                *costs_for_others
+            }
+        }
+    }
+}
 
-//     for a in attacker.attacks.iter() {}
+pub fn attack_vector(
+    attacker: &Actor,
+    target: &Actor,
+    attack: &AttackOption,
+    data: (
+        Entities,
+        Read<Map>,
+        ReadStorage<Position>,
+        ReadStorage<ObstacleCmp>,
+    ),
+) -> Vec<(MapPos, bool, Option<(Entity, Obstacle)>)> {
+    match attack.attack_type {
+        AttackType::Ranged(..) => ranged_attack_vector(attacker, target, data),
 
-//     attacker
-//         .attacks
-//         .iter()
-//         .filter(|o| o.distance.0 <= distance && distance <= o.distance.1)
-//         .cloned()
-//         .collect()
+        AttackType::Melee(..) => melee_attack_vector(
+            attacker,
+            MapPos::from_world_pos(target.pos),
+            attack.max_distance,
+            data,
+        ),
+    }
+}
 
-//     // result
-// }
+fn melee_attack_vector(
+    attacker: &Actor,
+    target_pos: MapPos,
+    max_distance: u8,
+    (entities, map, positions, obstacles): (
+        Entities,
+        Read<Map>,
+        ReadStorage<Position>,
+        ReadStorage<ObstacleCmp>,
+    ),
+) -> Vec<(MapPos, bool, Option<(Entity, Obstacle)>)> {
+    let from = MapPos::from_world_pos(attacker.pos);
+    let attacker_team = &attacker.team;
+    let mut result = vec![];
+    let obstacles = collect_relevant_obstacles(&entities, &positions, &obstacles, |_, obs| {
+        restriction_costs(&obs.restrict_melee_attack, &attacker_team)
+    });
 
-// fn flatten<T>(oot: Option<Option<T>>) -> Option<T> {
-//     oot.and_then(std::convert::identity)
-// }
-//
-// fn flat_map<T, U, F>(ot: Option<T>, f: F) -> Option<U>
-//     where F: FnOnce(T) -> Option<U>
-// {
-//     match ot {
-//         Some(t) => f(t),
-//         None => None,
-//     }
-// }
+    for (d, t) in map.tiles_along_line(from, target_pos).enumerate() {
+        let mp = t.to_map_pos();
+        let target = obstacles.get(&mp);
+
+        if target.is_some() {
+            result.push((mp, true, target.cloned()));
+        }
+
+        if d == max_distance as usize {
+            break;
+        }
+    }
+
+    // println!("melee_attack_vector {:?}", result);
+    result
+}
+
+fn ranged_attack_vector(
+    attacker: &Actor,
+    target: &Actor,
+    (entities, map, positions, obstacles): (
+        Entities,
+        Read<Map>,
+        ReadStorage<Position>,
+        ReadStorage<ObstacleCmp>,
+    ),
+) -> Vec<(MapPos, bool, Option<(Entity, Obstacle)>)> {
+    let from = MapPos::from_world_pos(attacker.pos);
+    let to = MapPos::from_world_pos(target.pos);
+    let attacker_team = &attacker.team;
+    let mut result = vec![];
+    let obstacles = collect_relevant_obstacles(&entities, &positions, &obstacles, |pos, obs| {
+        if from.distance(MapPos::from_world_pos(*pos)) <= 1 {
+            None
+        } else {
+            restriction_costs(&obs.restrict_ranged_attack, &attacker_team)
+        }
+    });
+
+    for t in map.tiles_along_line(from, to) {
+        let mp = t.to_map_pos();
+        let is_target_pos = mp == to;
+
+        result.push((mp, is_target_pos, obstacles.get(&mp).cloned()));
+    }
+
+    result
+}
+
+fn collect_relevant_obstacles<F>(
+    entities: &Entities,
+    positions: &ReadStorage<Position>,
+    obstacles: &ReadStorage<ObstacleCmp>,
+    costs: F,
+) -> HashMap<MapPos, (Entity, Obstacle)>
+where
+    F: Fn(&WorldPos, &ObstacleCmp) -> Option<i8>,
+{
+    let mut result = HashMap::new();
+
+    for (e, Position(p), obs) in (entities, positions, obstacles).join() {
+        if let Some(c) = costs(p, obs) {
+            result.insert(MapPos::from_world_pos(*p), (e, Obstacle(c)));
+        }
+    }
+
+    result
+}

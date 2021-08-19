@@ -47,18 +47,18 @@ fn lazy_insert_components<'a>(
 
     if let GameObject::Actor(a) = &obj {
         updater.insert(entity, ObstacleCmp {
-            restrict_movement: Restriction::AllowNone,
-            restrict_melee_attack: Restriction::AllowTeam(a.team.clone()),
-            restrict_ranged_attack: Restriction::AllowTeam(a.team.clone()),
+            restrict_movement: Restriction::ForAll(Some(i8::MAX)),
+            restrict_melee_attack: Restriction::ForTeam(a.team.clone(), None, Some(3)),
+            restrict_ranged_attack: Restriction::ForAll(Some(3)),
         });
 
         updater.insert(entity, ZLayerGameObject);
 
     } else {
         updater.insert(entity, ObstacleCmp {
-            restrict_movement: Restriction::AllowNone,
-            restrict_melee_attack: Restriction::AllowAll,
-            restrict_ranged_attack: Restriction::AllowAll,
+            restrict_movement: Restriction::ForAll(Some(i8::MAX)),
+            restrict_melee_attack: Restriction::ForAll(None),
+            restrict_ranged_attack: Restriction::ForAll(None),
         });
 
         updater.insert(entity, ZLayerFloor);
@@ -89,7 +89,7 @@ fn map_action_to_sprite(a: &Action) -> String {
 fn get_txt(obj: &GameObject) -> Option<Text> {
     match obj {
         GameObject::Actor(a) => {
-            let (pain, wounds) = a.health();
+            let (pain, wounds, ..) = a.health();
             return Some(
                 Text::new(format!("{} - {}", pain, wounds), FontFace::Normal)
                     .offset(39,85)

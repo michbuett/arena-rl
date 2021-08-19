@@ -50,9 +50,8 @@ pub struct GameObjectCmp(pub GameObject);
 
 #[derive(Debug, Clone)]
 pub enum Restriction {
-    AllowAll,
-    AllowTeam(Team),
-    AllowNone,
+    ForAll(Option<i8>),
+    ForTeam(Team, Option<i8>, Option<i8>),
 }
 
 #[derive(Component, Debug)]

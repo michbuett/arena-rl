@@ -2,6 +2,8 @@ use std::io::Result;
 use std::process::Command;
 
 fn main() {
+    println!("cargo:rerun-if-changed=assets/images");
+
     let result = Command::new("sh").arg("assets/images/compile-sprites").output();
 
     match result {

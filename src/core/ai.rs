@@ -6,7 +6,10 @@ use crate::components::*;
 use crate::core::*;
 use primitives::*;
 
-pub use primitives::{can_attack_melee, can_charge, can_move_towards, find_movement_obstacles};
+pub use primitives::{
+    attack_vector, can_attack_melee, can_charge, can_move_towards, find_movement_obstacles,
+    AttackVector,
+};
 
 pub fn action(e: &(Entity, Actor), w: &World) -> (Action, u8) {
     zombi_action(&e, w)
@@ -67,21 +70,27 @@ pub fn actions_at(
                     result.push(Action::activate(other_entity));
                 }
             } else {
+                if let Some(attack_option) = can_attack_at_range(actor, &selected_pos) {
+                    let attack_vector =
+                        attack_vector(actor, &other_actor, &attack_option, world.system_data());
+
+                    result.push(Action::ranged_attack(
+                        other_entity,
+                        attack_option,
+                        attack_vector,
+                    ));
+                }
+
                 if let Some(attack) =
                     can_attack_melee(actor, &other_actor, &map, &positions, &obstacle_cmp)
                 {
                     result.push(Action::melee_attack(other_entity, attack));
                 }
+
                 if let Some(attack) =
                     can_charge(actor, &other_actor, &map, &positions, &obstacle_cmp)
                 {
                     result.push(Action::charge(other_entity, attack));
-                }
-
-                if let Some(attack) = 
-                    can_attack_at_range(actor, &other_actor, &map, &positions, &obstacle_cmp)
-                {
-                    result.push(Action::ranged_attack(other_entity, attack));
                 }
             }
         }
@@ -95,6 +104,18 @@ pub fn actions_at(
         if let Some(path) = map.find_path(from, to, &obstacles) {
             if path.len() > 0 && path.len() <= actor.move_distance().into() {
                 result.push(Action::move_to(path));
+            }
+        }
+    }
+
+    if actor.engaged_in_combat {
+        let from = MapPos::from_world_pos(actor.pos);
+        let to = MapPos::from_world_pos(selected_pos);
+        let obstacles = find_movement_obstacles(&positions, &obstacle_cmp, &actor.team);
+
+        if from.distance(to) == 1 && !obstacles.0.contains_key(&to) {
+            if let Some(tile) = map.get_tile(to) {
+                result.push(Action::dodge(tile));
             }
         }
     }

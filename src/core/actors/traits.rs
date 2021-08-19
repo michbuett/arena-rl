@@ -1,4 +1,4 @@
-use crate::core::DisplayStr;
+use crate::core::{Tile, DisplayStr};
 
 #[derive(Debug, Clone)]
 pub struct Trait {
@@ -24,11 +24,20 @@ pub enum Effect {
     /// (name, min-distance, max-distance, to-hit, to-wound)
     RangeAttack(DisplayStr, u8, u8, i8, i8),
 
-    MeleeDefence(DisplayStr, i8),
+    Defence(DisplayStr, i8, DefenceType),
+
     GiveTrait(DisplayStr, AbilityTarget, Trait),
     // Ability(DisplayStr, AbilityTarget, Ability),
     Recovering,
     // Dying,
+}
+
+#[derive(Debug, Clone)]
+pub enum DefenceType {
+    Dodge(Tile),
+    Block,
+    Parry,
+    TakeCover,
 }
 
 #[derive(Debug, Clone)]
@@ -58,7 +67,6 @@ pub enum Attr {
     RangeDefence,
     ToHit,
     ToWound,
-    Defence,
     Protection,
 }
 
