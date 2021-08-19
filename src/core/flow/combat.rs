@@ -372,7 +372,7 @@ fn next_state<'a, 'b>(
         }
 
         CombatState::ResolveAction(entity_action, remaining_actions) => {
-            let (change, log_entry) = act(entity_action.clone(), w);
+            let (change, fx_seq, log_entry) = act(entity_action.clone(), w);
             let mut wait_until = Instant::now();
 
             for c in change {
@@ -380,14 +380,15 @@ fn next_state<'a, 'b>(
                     Change::Update(e, o) => update_components(e, o, w),
                     Change::Insert(o) => insert_game_object_components(o, w),
                     Change::Remove(e) => remove_components(e, w),
-                    Change::Fx(fx) => {
-                        if wait_until < fx.ends_at() {
-                            wait_until = fx.ends_at();
-                        }
-
-                        fx.run(w);
-                    }
                 }
+            }
+
+            for fx in fx_seq.into_vec().drain(..) {
+                if wait_until < fx.ends_at() {
+                    wait_until = fx.ends_at();
+                }
+
+                fx.run(w);
             }
 
             (

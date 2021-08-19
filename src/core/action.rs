@@ -1,6 +1,8 @@
 use specs::prelude::*;
 
-use crate::components::{Fx, GameObjectCmp, MovementModification, ObstacleCmp, Position};
+use crate::components::{
+    FxEffect, FxSequence, GameObjectCmp, ObstacleCmp, Position,
+};
 use crate::core::ai::{attack_vector, find_movement_obstacles, AttackVector};
 use crate::core::*;
 
@@ -65,7 +67,6 @@ impl Action {
 }
 
 pub enum Change {
-    Fx(Fx),
     Update(Entity, GameObject),
     Insert(GameObject),
     Remove(Entity),
@@ -73,12 +74,13 @@ pub enum Change {
 
 pub type Act = (Action, u8);
 pub type EA = (Entity, Actor);
-pub type ActionResult = (Vec<Change>, Option<DisplayStr>);
+pub type ActionResult = (Vec<Change>, FxSequence, Option<DisplayStr>);
 
 pub fn act((entity, actor, action, delay): (Entity, Actor, Action, u8), w: &World) -> ActionResult {
     if delay > 0 {
         (
             vec![update_actor(entity, actor.prepare((action, delay - 1)))],
+            FxSequence::new(),
             None,
         )
     } else {
@@ -98,7 +100,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     actor.start_next_turn(engaged_in_combat),
                 )];
 
-                (updates, None)
+                (updates, FxSequence::new(), None)
             } else {
                 no_op()
             }
@@ -125,7 +127,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                 }
             }
 
-            (updates, None)
+            (updates, FxSequence::new(), None)
         }
 
         Action::Done() => no_op(),
@@ -135,21 +137,15 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                 let fx_pos = target_actor.pos.clone();
                 let fx_str = t.name.to_string();
                 let actor_name = target_actor.name.clone();
+                let target_actor = target_actor
+                    .add_traits(&mut vec![t])
+                    .prepare(Action::done());
+                let log = DisplayStr::new(format!("{} used ability: {}", actor_name, ability_name));
 
                 (
-                    vec![
-                        update_actor(
-                            target_entity,
-                            target_actor
-                                .add_traits(&mut vec![t])
-                                .prepare(Action::done()),
-                        ),
-                        Change::Fx(Fx::say(DisplayStr::new(fx_str), fx_pos, 100, 1000)),
-                    ],
-                    Some(DisplayStr::new(format!(
-                        "{} used ability: {}",
-                        actor_name, ability_name
-                    ))),
+                    vec![update_actor(target_entity, target_actor)],
+                    FxSequence::new().then(FxEffect::say(fx_str, fx_pos)),
+                    Some(log),
                 )
             } else {
                 no_op()
@@ -162,14 +158,11 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             }
 
             let sp = actor.pos;
+            let na = actor.move_to(*path.last().unwrap()).prepare(Action::done());
+
             (
-                vec![
-                    update_actor(
-                        entity,
-                        actor.move_to(*path.last().unwrap()).prepare(Action::done()),
-                    ),
-                    fx_move(entity, get_steps(sp, path), 0),
-                ],
+                vec![update_actor(entity, na)],
+                FxSequence::new().then(FxEffect::jump(entity, get_steps(sp, path))),
                 None,
             )
         }
@@ -181,6 +174,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                         update_actor(entity, actor.deactivate()),
                         update_actor(target_e, target_a.activate()),
                     ],
+                    FxSequence::new(),
                     None,
                 )
             } else {
@@ -190,7 +184,14 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
 
         Action::RangeAttack(te, attack, _) => {
             if let Some(ta) = get_actor(te, w) {
-                handle_attack((entity, actor), (te, ta), attack, w, 0, vec![])
+                handle_attack(
+                    (entity, actor),
+                    (te, ta),
+                    attack,
+                    w,
+                    vec![],
+                    FxSequence::new(),
+                )
             } else {
                 no_op()
             }
@@ -199,9 +200,11 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
         Action::MeleeAttack(te, attack) => {
             if let Some(ta) = get_actor(te, w) {
                 let move_steps = vec![actor.pos, ta.pos, actor.pos];
-                let changes = vec![fx_move(entity, move_steps, 0)];
+                let fx_seq = FxSequence::new()
+                    .then(FxEffect::jump(entity, move_steps))
+                    .wait(200);
 
-                handle_attack((entity, actor), (te, ta), attack, w, 200, changes)
+                handle_attack((entity, actor), (te, ta), attack, w, vec![], fx_seq)
             } else {
                 no_op()
             }
@@ -243,18 +246,18 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                         source: TraitSource::Temporary(1),
                     }]);
 
-                    let changes = vec![
-                        update_actor(entity, actor.clone()),
-                        fx_move(entity, vec![p1, p2, p3], 0),
-                    ];
+                    let changes = vec![update_actor(entity, actor.clone())];
+                    let fx_seq = FxSequence::new()
+                        .then(FxEffect::jump(entity, vec![p1, p2, p3]))
+                        .wait(200);
 
                     return handle_attack(
                         (entity, actor),
                         (target_entity, target_actor),
                         attack,
                         w,
-                        200,
                         changes,
+                        fx_seq,
                     );
                 }
             }
@@ -264,37 +267,30 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
 
         Action::Dodge(target_pos) => {
             let actor_pos = actor.pos;
-            let actor = actor.add_traits(&mut vec![Trait {
-                name: DisplayStr::new("Dodging"),
-                effects: vec![Effect::Defence(
-                    DisplayStr::new("Dodge"),
-                    3,
-                    DefenceType::Dodge(target_pos),
-                )],
-                source: TraitSource::Temporary(1),
-            }]).prepare(Action::done());
+            let actor = actor
+                .add_traits(&mut vec![Trait {
+                    name: DisplayStr::new("Dodging"),
+                    effects: vec![Effect::Defence(
+                        DisplayStr::new("Dodge"),
+                        3,
+                        DefenceType::Dodge(target_pos),
+                    )],
+                    source: TraitSource::Temporary(1),
+                }])
+                .prepare(Action::done());
 
-            let mut changes = vec![update_actor(entity, actor)];
-            fx_say("Dodging", actor_pos, 0, &mut changes);
+            let changes = vec![update_actor(entity, actor)];
+            let fx_seq = FxSequence::new()
+                .then(FxEffect::say("Dodging", actor_pos))
+                .wait(300);
 
-            (changes, None)
+            (changes, fx_seq, None)
         }
     }
 }
 
 fn update_actor(e: Entity, a: Actor) -> Change {
     Change::Update(e, GameObject::Actor(a))
-}
-
-fn fx_move(e: Entity, p: Vec<WorldPos>, delay: u64) -> Change {
-    let duration_ms = (p.len() - 1) as u64 * 200;
-    Change::Fx(Fx::move_to(
-        e,
-        p,
-        delay,
-        duration_ms,
-        MovementModification::ParabolaJump(96),
-    ))
 }
 
 fn get_actor(e: Entity, w: &World) -> Option<Actor> {
@@ -307,7 +303,7 @@ fn get_actor(e: Entity, w: &World) -> Option<Actor> {
 }
 
 fn no_op() -> ActionResult {
-    (vec![], None)
+    (vec![], FxSequence::new(), None)
 }
 
 fn changes_for_condition(e: Entity, a: Actor, changes: &mut Vec<Change>) {
@@ -323,19 +319,20 @@ fn add_fx_changes_for_attack(
     attack: &Attack,
     attack_vector: &AttackVector,
     hits: &Vec<Hit<Entity>>,
-    mut fx_delay_ms: u64,
-    mut changes: &mut Vec<Change>,
-) -> u64 {
+    mut fx_seq: FxSequence,
+) -> FxSequence {
     match &attack.attack_type {
-        AttackType::Melee(sprite) => {
+        AttackType::Melee(s) => {
             for h in hits.iter() {
-                fx_delay_ms +=
-                    fx_sprite(sprite, h.pos.to_world_pos(), fx_delay_ms, 400, &mut changes);
+                fx_seq = fx_seq
+                    .then(FxEffect::sprite(s, h.pos.to_world_pos(), 400))
+                    .wait_until_finished();
             }
-            fx_delay_ms
+
+            fx_seq
         }
 
-        AttackType::Ranged(sprite) => {
+        AttackType::Ranged(s) => {
             let first_pos = attack_vector.first().unwrap().0;
             let mut last_pos = attack_vector.last().unwrap().0;
 
@@ -348,110 +345,52 @@ fn add_fx_changes_for_attack(
                 }
             }
 
-            let distance = first_pos.distance(last_pos);
-
-            fx_projectile(
-                sprite.to_string(),
+            fx_seq.then(FxEffect::projectile(
+                s,
                 first_pos.to_world_pos(),
                 last_pos.to_world_pos(),
-                fx_delay_ms,
-                (50 * distance) as u64,
-                &mut changes,
-            );
-
-            0
+            ))
         }
     }
 }
+
 fn add_fx_changes_for_hit<T>(
     attacker_pos: WorldPos,
     hit: &Hit<T>,
-    mut fx_delay_ms: u64,
-    mut changes: &mut Vec<Change>,
-) -> u64 {
+    fx_seq: FxSequence,
+) -> FxSequence {
     if hit.successes() > 0 {
-        fx_delay_ms += fx_sprite(
+        fx_seq.then(FxEffect::sprite(
             "fx-impact-1",
             hit.pos.to_world_pos(),
-            fx_delay_ms,
             300,
-            &mut changes,
-        );
+        )).wait_until_finished()
     } else {
-        fx_delay_ms += fx_say("Curses!", attacker_pos, fx_delay_ms, &mut changes);
+        fx_seq.then(FxEffect::say("Curses!", attacker_pos)).wait(300)
     }
-
-    fx_delay_ms
 }
 
 fn add_fx_changes_for_wound(
     wound_roll: Roll,
     attacker_pos: WorldPos,
     target_pos: WorldPos,
-    mut fx_delay_ms: u64,
-    mut changes: &mut Vec<Change>,
-) -> u64 {
-    if wound_roll.successes() == 0 {
-        fx_delay_ms += fx_say("Klong", target_pos, fx_delay_ms, &mut changes);
+    fx_seq: FxSequence,
+) -> FxSequence {
+    match wound_roll.successes() {
+        0 => fx_seq.then(FxEffect::say("Klong", target_pos)).wait(300),
+
+        1 => fx_seq.then(FxEffect::say("Uff!", target_pos)).wait(300),
+
+        2 => fx_seq
+            .then(FxEffect::blood_splatter(target_pos)).wait(50)
+            .then(FxEffect::say("Arrgh!", target_pos)).wait(300),
+
+        _ => fx_seq
+            .then(FxEffect::blood_splatter(target_pos)).wait(50)
+            .then(FxEffect::blood_splatter(target_pos)).wait(50)
+            .then(FxEffect::scream("AIIEEE!", target_pos)).wait(100)
+            .then(FxEffect::say("Yeah!", attacker_pos)).wait(300),
     }
-
-    if wound_roll.successes() == 1 {
-        fx_delay_ms += fx_say("Uff!", target_pos, fx_delay_ms, &mut changes);
-    }
-
-    if wound_roll.successes() == 2 {
-        fx_delay_ms += fx_blood(target_pos, fx_delay_ms, &mut changes);
-        fx_delay_ms += fx_say("Arrgh!", target_pos, fx_delay_ms, &mut changes);
-    }
-
-    if wound_roll.successes() > 2 {
-        fx_delay_ms += fx_blood(target_pos, fx_delay_ms, &mut changes);
-        fx_delay_ms += fx_blood(target_pos, fx_delay_ms, &mut changes);
-        fx_delay_ms += fx_scream("AIIEEE!", target_pos, fx_delay_ms, &mut changes);
-        fx_delay_ms += fx_say("Yeah!", attacker_pos, fx_delay_ms, &mut changes);
-    }
-
-    fx_delay_ms
-}
-
-fn fx_say(s: &str, p: WorldPos, delay: u64, changes: &mut Vec<Change>) -> u64 {
-    changes.push(Change::Fx(Fx::say(DisplayStr::new(s), p, delay, 1000)));
-    300
-}
-
-fn fx_scream(s: &str, p: WorldPos, delay: u64, changes: &mut Vec<Change>) -> u64 {
-    changes.push(Change::Fx(Fx::scream(DisplayStr::new(s), p, delay, 1000)));
-    300
-}
-
-fn fx_sprite(
-    sprite: impl ToString,
-    p: WorldPos,
-    delay: u64,
-    duration: u64,
-    changes: &mut Vec<Change>,
-) -> u64 {
-    changes.push(Change::Fx(Fx::sprite(sprite, p, delay, duration)));
-    duration
-}
-
-fn fx_projectile(
-    sprite: String,
-    from: WorldPos,
-    to: WorldPos,
-    delay: u64,
-    duration: u64,
-    changes: &mut Vec<Change>,
-) -> u64 {
-    changes.push(Change::Fx(Fx::projectile(
-        sprite, from, to, delay, duration,
-    )));
-    duration
-}
-
-fn fx_blood(p: WorldPos, delay: u64, changes: &mut Vec<Change>) -> u64 {
-    changes.push(Change::Fx(Fx::rnd_blood_splatter(p, delay, 1000)));
-    50
 }
 
 fn get_steps(start: WorldPos, path: Path) -> Vec<WorldPos> {
@@ -480,8 +419,8 @@ fn handle_attack(
     target: (Entity, Actor),
     attack_option: AttackOption,
     w: &World,
-    mut delay: u64,
     mut changes: Vec<Change>,
+    mut fx_seq: FxSequence,
 ) -> ActionResult {
     let log = DisplayStr::new("TODO");
     let v = attack_vector(&attacker.1, &target.1, &attack_option, w.system_data());
@@ -491,7 +430,7 @@ fn handle_attack(
         // => cancel attack and do nothing
         return no_op();
     }
-    
+
     let attack = attack_option.into_attack(&attacker.1);
     let mut hits = resolve_to_hit(&attack, filter_attack_vector(&v));
 
@@ -499,10 +438,10 @@ fn handle_attack(
     // println!("hits={:?}", hits);
     // println!("attacker pos = {:?}", actor.pos);
     // println!("attack_vector = {:?}", v);
-    delay = add_fx_changes_for_attack(&attack, &v, &hits, delay, &mut changes);
+    fx_seq = add_fx_changes_for_attack(&attack, &v, &hits, fx_seq);
 
     for h in hits.drain(..) {
-        delay = add_fx_changes_for_hit(attacker.1.pos, &h, delay, &mut changes);
+        fx_seq = add_fx_changes_for_hit(attacker.1.pos, &h, fx_seq);
 
         if let Some(target) = get_actor(h.target, w) {
             let target_entity = h.target;
@@ -513,21 +452,21 @@ fn handle_attack(
                 let a = (attacker.0, &attacker.1);
                 let t = (target_entity, w.target);
 
-                delay = handle_defence(a, t, d, hit_roll, delay, &mut changes);
+                fx_seq = handle_defence(a, t, d, hit_roll, &mut changes, fx_seq);
             } else {
-                delay = add_fx_changes_for_wound(
+                fx_seq = add_fx_changes_for_wound(
                     w.roll,
                     attacker.1.pos,
                     w.target.pos,
-                    delay,
-                    &mut changes,
+                    fx_seq
                 );
 
                 changes_for_condition(target_entity, w.target, &mut changes);
             }
         }
     }
-    (changes, Some(log))
+
+    (changes, fx_seq, Some(log))
 }
 
 fn handle_defence(
@@ -535,9 +474,9 @@ fn handle_defence(
     target: (Entity, Actor),
     defence: (Defence, Roll),
     hit_roll: Roll,
-    mut delay: u64,
     changes: &mut Vec<Change>,
-) -> u64 {
+    mut fx_seq: FxSequence,
+) -> FxSequence {
     // println!("[DEBUG] handle_defence {:?}", defence);
     // println!("  - defence roll: ({}/{}) - {:?}", defence_roll.successes(), defence_roll.fails(), defence_roll);
     // println!("  - hit roll: ({}) - {:?}", hit_roll.successes(), hit_roll);
@@ -546,13 +485,14 @@ fn handle_defence(
     match defence.0.defence_type {
         DefenceType::Dodge(tile) => {
             let target_pos = target_actor.pos;
-            target_actor = target_actor
-                .clone()
-                .move_to(tile);
+            let dodge_path = vec![target_pos, tile.to_world_pos()];
 
-            changes.push(fx_move(target.0, vec![target_pos, tile.to_world_pos()], delay));
-            delay += fx_say("Dodged", target_pos, delay, changes);
-            delay += 100;
+            target_actor = target_actor.clone().move_to(tile);
+
+            fx_seq = fx_seq
+                .then(FxEffect::jump(target.0, dodge_path))
+                .then(FxEffect::say("Dodged!", target_pos))
+                .wait(100);
         }
 
         DefenceType::Parry => {
@@ -564,7 +504,9 @@ fn handle_defence(
                     .clone()
                     .prepare((Action::MeleeAttack(attacker.0, attack), 0));
 
-                delay += fx_say("Counter Attack!", target_pos, delay, changes);
+                fx_seq = fx_seq
+                    .then(FxEffect::say("Counter Attack!", target_pos))
+                    .wait(300);
             }
         }
 
@@ -573,7 +515,7 @@ fn handle_defence(
 
     changes_for_condition(target.0, target_actor, changes);
 
-    delay
+    fx_seq
 }
 
 fn check_engaged_in_combat(a: &Actor, w: &World) -> bool {

@@ -9,9 +9,53 @@ use crate::components::*;
 use crate::core::*;
 use crate::ui::ScreenCoord;
 
+#[derive(Debug)]
+pub struct FxSequence(Instant, Vec<Fx>);
+
+impl FxSequence {
+    pub fn new() -> Self {
+        Self(Instant::now(), vec![])
+    }
+
+    pub fn wait_until_finished(mut self) -> Self {
+        if let Some(Fx(_, dur, _)) = self.1.last() {
+            self.0 += *dur
+        }
+
+        self
+    }
+
+    pub fn wait(mut self, ms: u64) -> Self {
+        self.0 += Duration::from_millis(ms);
+        self
+    }
+
+    pub fn then(mut self, fx: FxEffect) -> Self {
+        self.1.push(Fx(self.0, duration(&fx), fx));
+        self
+    }
+
+    pub fn into_vec(self) -> Vec<Fx> {
+        self.1
+    }
+}
+
+
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
 pub struct Fx(Instant, Duration, FxEffect);
+
+impl Fx {
+    pub fn ends_at(&self) -> Instant {
+        self.0 + self.1
+    }
+
+    pub fn run(self, world: &World) {
+        let (entities, updater): (Entities, Read<LazyUpdate>) = world.system_data();
+
+        updater.create_entity(&entities).with(self).build();
+    }
+}
 
 #[derive(Debug)]
 pub enum FxEffect {
@@ -29,49 +73,34 @@ pub enum FxEffect {
     Projectile(String, WorldPos, WorldPos),
 }
 
-impl Fx {
-    pub fn move_to(
-        e: Entity,
-        p: Vec<WorldPos>,
-        delay: u64,
-        dur_ms: u64,
-        m: MovementModification,
-    ) -> Self {
-        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::MoveTo(e, p, m))
-    }
-
-    pub fn sprite(s: impl ToString, p: WorldPos, delay: u64, dur_ms: u64) -> Self {
-        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::Sprite(s.to_string(), p))
-    }
-
-    pub fn projectile(s: String, f: WorldPos, t: WorldPos, delay: u64, dur_ms: u64) -> Self {
-        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::Projectile(s, f, t))
-    }
-
-    pub fn rnd_blood_splatter(p: WorldPos, delay: u64, dur_ms: u64) -> Self {
-        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::BloodSplatter(p))
-    }
-
-    pub fn say(txt: DisplayStr, pos: WorldPos, delay: u64, dur_ms: u64) -> Self {
+impl FxEffect {
+    pub fn say(txt: impl ToString, pos: WorldPos) -> FxEffect {
         let txt = Text::new(txt.to_string(), FontFace::Big).padding(5).color(21, 22, 23, 255);
-        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::Text(txt, pos))
+        FxEffect::Text(txt, pos)
     }
 
-    pub fn scream(txt: DisplayStr, pos: WorldPos, delay: u64, dur_ms: u64) -> Self {
+    pub fn scream(txt: impl ToString, pos: WorldPos) -> FxEffect {
         let txt = Text::new(txt.to_string(), FontFace::VeryBig).padding(5).color(195, 31, 42, 255);
-        Fx(start_after(delay), Duration::from_millis(dur_ms), FxEffect::Text(txt, pos))
+        FxEffect::Text(txt, pos)
     }
 
-    pub fn ends_at(&self) -> Instant {
-        self.0 + self.1
+    pub fn jump(e: Entity, p: Vec<WorldPos>) -> Self {
+        FxEffect::MoveTo(e, p, MovementModification::ParabolaJump(96))
     }
 
-    pub fn run(self, world: &World) {
-        let (entities, updater): (Entities, Read<LazyUpdate>) = world.system_data();
+    pub fn sprite(s: impl ToString, p: WorldPos, _d: u64) -> Self {
+        FxEffect::Sprite(s.to_string(), p)
+    }
+                            
+    pub fn projectile(s: impl ToString, from: WorldPos, to: WorldPos) -> Self {
+        FxEffect::Projectile(s.to_string(), from, to)
+    }
 
-        updater.create_entity(&entities).with(self).build();
+    pub fn blood_splatter(p: WorldPos) -> Self {
+        FxEffect::BloodSplatter(p)
     }
 }
+
 
 pub struct FxSystem;
 
@@ -239,10 +268,25 @@ fn handle_projectile(
     }
 }
 
-fn start_after(ms: u64) -> Instant {
-    Instant::now() + Duration::from_millis(ms)
-}
-
 fn one_of<'a, T>(v: &'a Vec<T>) -> &'a T {
     v.choose(&mut rand::thread_rng()).unwrap()
+}
+
+fn duration(fx: &FxEffect) -> Duration {
+    let millis = match fx {
+        FxEffect::Text(..) | FxEffect::BloodSplatter(..) => 1000,
+
+        FxEffect::MoveTo(_, p, _) => p.len().checked_sub(1).unwrap_or(0) as u64 * 200,
+
+        FxEffect::Projectile(_, from, to) => {
+            let p1 = MapPos::from_world_pos(*from);
+            let p2 = MapPos::from_world_pos(*to);
+
+            50 * p1.distance(p2) as u64
+        }
+
+        FxEffect::Sprite(..) => 300,
+    };
+
+    Duration::from_millis(millis)
 }
