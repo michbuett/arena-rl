@@ -230,7 +230,7 @@ fn get_icons(action: &DefaultAction) -> Vec<(WorldPos, String)> {
             .map(|tile| (tile.to_world_pos(), "icon-floor-MoveTo".to_string()))
             .collect(),
 
-        (_, Some((Action::RangeAttack(_, _, attack_vector), _))) => attack_vector
+        (_, Some((Action::RangeAttack(_, _, attack_vector, _), _))) => attack_vector
             .iter()
             .map(|(map_pos, _is_target, obs)| {
                 let num = if let Some(..) = obs {

@@ -1,8 +1,6 @@
 use specs::prelude::*;
 
-use crate::components::{
-    FxEffect, FxSequence, GameObjectCmp, ObstacleCmp, Position,
-};
+use crate::components::{FxEffect, FxSequence, GameObjectCmp, ObstacleCmp, Position};
 use crate::core::ai::{attack_vector, find_movement_obstacles, AttackVector};
 use crate::core::*;
 
@@ -14,12 +12,12 @@ pub enum Action {
     StartTurn(),
     ResolvePendingActions(),
     EndTurn(Team),
-    Done(),
+    Done(String),
     MoveTo(Path),
     Activate(Entity),
-    MeleeAttack(Entity, AttackOption),
-    RangeAttack(Entity, AttackOption, AttackVector),
-    Charge(Entity, AttackOption),
+    MeleeAttack(Entity, AttackOption, String),
+    RangeAttack(Entity, AttackOption, AttackVector, String),
+    Charge(Entity, AttackOption, String),
     UseAbility(Entity, DisplayStr, Trait),
     Dodge(Tile),
 }
@@ -29,12 +27,12 @@ impl Action {
         (Self::EndTurn(t), 0)
     }
 
-    pub fn done() -> Act {
-        (Self::Done(), 0)
+    pub fn done(msg: impl ToString) -> Act {
+        (Self::Done(msg.to_string()), 0)
     }
 
     pub fn recover() -> Act {
-        (Self::Done(), 1)
+        (Self::Done("Recovering".to_string()), 1)
     }
 
     pub fn activate(e: Entity) -> Act {
@@ -45,16 +43,16 @@ impl Action {
         (Self::MoveTo(p), 0)
     }
 
-    pub fn melee_attack(target: Entity, attack: AttackOption) -> Act {
-        (Self::MeleeAttack(target, attack), 1)
+    pub fn melee_attack(target: Entity, attack: AttackOption, target_name: String) -> Act {
+        (Self::MeleeAttack(target, attack, target_name), 1)
     }
 
-    pub fn ranged_attack(target: Entity, ao: AttackOption, av: AttackVector) -> Act {
-        (Self::RangeAttack(target, ao, av), 1)
+    pub fn ranged_attack(target: Entity, ao: AttackOption, av: AttackVector, n: String) -> Act {
+        (Self::RangeAttack(target, ao, av, n), 1)
     }
 
-    pub fn charge(target: Entity, attack: AttackOption) -> Act {
-        (Self::Charge(target, attack), 1)
+    pub fn charge(target: Entity, attack: AttackOption, n: String) -> Act {
+        (Self::Charge(target, attack, n), 1)
     }
 
     pub fn dodge(to_pos: Tile) -> Act {
@@ -122,7 +120,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             for (e, o) in (&entities, &actors).join() {
                 if let GameObject::Actor(a) = &o.0 {
                     if a.team == team && a.pending_action.is_none() {
-                        updates.push(update_actor(e, a.clone().prepare(Action::done())));
+                        updates.push(update_actor(e, a.clone().prepare(Action::done("Waiting for next turn..."))));
                     }
                 }
             }
@@ -130,7 +128,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             (updates, FxSequence::new(), None)
         }
 
-        Action::Done() => no_op(),
+        Action::Done(_) => no_op(),
 
         Action::UseAbility(target_entity, ability_name, t) => {
             if let Some(target_actor) = get_actor(target_entity, w) {
@@ -139,7 +137,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                 let actor_name = target_actor.name.clone();
                 let target_actor = target_actor
                     .add_traits(&mut vec![t])
-                    .prepare(Action::done());
+                    .prepare(Action::done(format!("Used ability {}", ability_name)));
                 let log = DisplayStr::new(format!("{} used ability: {}", actor_name, ability_name));
 
                 (
@@ -158,7 +156,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             }
 
             let sp = actor.pos;
-            let na = actor.move_to(*path.last().unwrap()).prepare(Action::done());
+            let na = actor.move_to(*path.last().unwrap()).prepare(Action::done("Did move..."));
 
             (
                 vec![update_actor(entity, na)],
@@ -182,7 +180,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             }
         }
 
-        Action::RangeAttack(te, attack, _) => {
+        Action::RangeAttack(te, attack, _, _) => {
             if let Some(ta) = get_actor(te, w) {
                 handle_attack(
                     (entity, actor),
@@ -197,7 +195,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             }
         }
 
-        Action::MeleeAttack(te, attack) => {
+        Action::MeleeAttack(te, attack, _) => {
             if let Some(ta) = get_actor(te, w) {
                 let move_steps = vec![actor.pos, ta.pos, actor.pos];
                 let fx_seq = FxSequence::new()
@@ -210,7 +208,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             }
         }
 
-        Action::Charge(target_entity, attack) => {
+        Action::Charge(target_entity, attack, _) => {
             if let Some(target_actor) = get_actor(target_entity, w) {
                 let from = MapPos::from_world_pos(actor.pos);
                 let to = MapPos::from_world_pos(target_actor.pos);
@@ -277,7 +275,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     )],
                     source: TraitSource::Temporary(1),
                 }])
-                .prepare(Action::done());
+                .prepare(Action::done("Prepared dodging"));
 
             let changes = vec![update_actor(entity, actor)];
             let fx_seq = FxSequence::new()
@@ -360,13 +358,13 @@ fn add_fx_changes_for_hit<T>(
     fx_seq: FxSequence,
 ) -> FxSequence {
     if hit.successes() > 0 {
-        fx_seq.then(FxEffect::sprite(
-            "fx-impact-1",
-            hit.pos.to_world_pos(),
-            300,
-        )).wait_until_finished()
+        fx_seq
+            .then(FxEffect::sprite("fx-impact-1", hit.pos.to_world_pos(), 300))
+            .wait_until_finished()
     } else {
-        fx_seq.then(FxEffect::say("Curses!", attacker_pos)).wait(300)
+        fx_seq
+            .then(FxEffect::say("Curses!", attacker_pos))
+            .wait(300)
     }
 }
 
@@ -382,14 +380,20 @@ fn add_fx_changes_for_wound(
         1 => fx_seq.then(FxEffect::say("Uff!", target_pos)).wait(300),
 
         2 => fx_seq
-            .then(FxEffect::blood_splatter(target_pos)).wait(50)
-            .then(FxEffect::say("Arrgh!", target_pos)).wait(300),
+            .then(FxEffect::blood_splatter(target_pos))
+            .wait(50)
+            .then(FxEffect::say("Arrgh!", target_pos))
+            .wait(300),
 
         _ => fx_seq
-            .then(FxEffect::blood_splatter(target_pos)).wait(50)
-            .then(FxEffect::blood_splatter(target_pos)).wait(50)
-            .then(FxEffect::scream("AIIEEE!", target_pos)).wait(100)
-            .then(FxEffect::say("Yeah!", attacker_pos)).wait(300),
+            .then(FxEffect::blood_splatter(target_pos))
+            .wait(50)
+            .then(FxEffect::blood_splatter(target_pos))
+            .wait(50)
+            .then(FxEffect::scream("AIIEEE!", target_pos))
+            .wait(100)
+            .then(FxEffect::say("Yeah!", attacker_pos))
+            .wait(300),
     }
 }
 
@@ -454,12 +458,7 @@ fn handle_attack(
 
                 fx_seq = handle_defence(a, t, d, hit_roll, &mut changes, fx_seq);
             } else {
-                fx_seq = add_fx_changes_for_wound(
-                    w.roll,
-                    attacker.1.pos,
-                    w.target.pos,
-                    fx_seq
-                );
+                fx_seq = add_fx_changes_for_wound(w.roll, attacker.1.pos, w.target.pos, fx_seq);
 
                 changes_for_condition(target_entity, w.target, &mut changes);
             }
@@ -502,7 +501,7 @@ fn handle_defence(
 
                 target_actor = target_actor
                     .clone()
-                    .prepare((Action::MeleeAttack(attacker.0, attack), 0));
+                    .prepare((Action::MeleeAttack(attacker.0, attack, target_actor.name.clone()), 0));
 
                 fx_seq = fx_seq
                     .then(FxEffect::say("Counter Attack!", target_pos))

@@ -26,10 +26,10 @@ fn zombi_action((_, a): &(Entity, Actor), w: &World) -> (Action, u8) {
 
     for (te, ta) in find_enemies(a, &entities, &game_objects) {
         if let Some(attack) = can_attack_melee(a, &ta, &map, &positions, &obstacle_cmp) {
-            return Action::melee_attack(te, attack);
+            return Action::melee_attack(te, attack, ta.name);
         }
         if let Some(attack) = can_charge(a, &ta, &map, &positions, &obstacle_cmp) {
-            return Action::charge(te, attack);
+            return Action::charge(te, attack, ta.name);
         }
 
         if a.can_move() {
@@ -78,19 +78,20 @@ pub fn actions_at(
                         other_entity,
                         attack_option,
                         attack_vector,
+                        other_actor.name.clone(),
                     ));
                 }
 
                 if let Some(attack) =
                     can_attack_melee(actor, &other_actor, &map, &positions, &obstacle_cmp)
                 {
-                    result.push(Action::melee_attack(other_entity, attack));
+                    result.push(Action::melee_attack(other_entity, attack, other_actor.name.clone()));
                 }
 
                 if let Some(attack) =
                     can_charge(actor, &other_actor, &map, &positions, &obstacle_cmp)
                 {
-                    result.push(Action::charge(other_entity, attack));
+                    result.push(Action::charge(other_entity, attack, other_actor.name.clone()));
                 }
             }
         }

@@ -1,4 +1,7 @@
-use crate::core::{Action, Actor, CombatData, CombatState, DisplayStr, GameObject, InputContext, Trait, TraitSource, UserInput, WorldPos};
+use crate::core::{
+    Action, Actor, CombatData, CombatState, DisplayStr, GameObject, InputContext, Trait,
+    TraitSource, UserInput, WorldPos,
+};
 use crate::ui::types::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenText};
 
 const DLG_WIDTH: u32 = 400;
@@ -52,7 +55,7 @@ fn draw_area_details(
     let x = (viewport_width - DLG_WIDTH) as i32;
 
     scene.texts.push(
-    // scene.texts[FontFace::Normal as usize].push(
+        // scene.texts[FontFace::Normal as usize].push(
         ScreenText::new(DisplayStr::new(txt), ScreenPos(x, 0))
             .width(DLG_WIDTH)
             .padding(10)
@@ -74,7 +77,7 @@ fn draw_action_buttons(
 
     for (text, action) in action_buttons.drain(..) {
         scene.texts.push(
-        // scene.texts[FontFace::Normal as usize].push(
+            // scene.texts[FontFace::Normal as usize].push(
             ScreenText::new(text, ScreenPos(x, y))
                 .padding(10)
                 .border(3, (23, 22, 21, 255))
@@ -95,14 +98,13 @@ fn draw_action_buttons(
 // PRIVATE HELPER
 //
 
-
-fn display_text((action, delay): &(Action, u8), is_first: bool) -> DisplayStr {
+fn display_text((action, _): &(Action, u8), is_first: bool) -> DisplayStr {
     let str = match action {
-        Action::Done() => format!("Do nothing"),
+        Action::Done(_) => format!("Do nothing"),
         Action::MoveTo(..) => format!("Move Here"),
         Action::Activate(_) => format!("Activate"),
-        Action::MeleeAttack(_, a) => format!("{} ({})", a.name, delay),
-        Action::RangeAttack(_, a, _) => format!("{}", a.name),
+        Action::MeleeAttack(_, a, _) => format!("{}", a.name),
+        Action::RangeAttack(_, a, _, _) => format!("{}", a.name),
         Action::Charge(..) => "Charge!".to_string(),
         Action::Dodge(..) => "Dodge".to_string(),
         Action::UseAbility(_, name, _) => format!("Use ability: {}", name),
@@ -127,13 +129,30 @@ fn describe_actor(a: &Actor) -> String {
         _ => "critically wounded",
     };
 
+    let action_str = match &a.pending_action {
+        Some((Action::MeleeAttack(_, attack, name), _)) => format!("{} at {}", attack.name, name),
+
+        Some((Action::RangeAttack(_, attack, _, name), _)) => format!("{} at {}", attack.name, name),
+
+        Some((Action::Charge(_, _, name), _)) => format!("Charging at {}", name),
+
+        Some((Action::Done(msg), _)) => format!("{}", msg),
+
+        None => "Waiting for instructions...".to_string(),
+
+        _ => "".to_string(),
+    };
+
     let traits_str: String = a
         .active_traits()
         .map(describe_trait)
         .collect::<Vec<_>>()
         .join("\n");
 
-    format!("\n{} ({})\n{}", a.name, condition, traits_str)
+    format!(
+        "\n{} ({})\n\n{}\n\n{}",
+        a.name, condition, action_str, traits_str
+    )
 }
 
 fn describe_trait(t: &Trait) -> String {
