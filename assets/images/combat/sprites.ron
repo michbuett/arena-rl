@@ -111,6 +111,10 @@
             files: ["weapons_claw_R-1.png"],
             offset: (16, 16),
         )),
+    ("claws_1", ProtoSpriteConfig( // both claws in one image
+            files: ["weapons_claws-1.png"],
+            offset: (16, 16),
+        )),
 
     // === BEGIN SECTION team backgrounds ================================
     ("team_1_active", ProtoSpriteConfig(

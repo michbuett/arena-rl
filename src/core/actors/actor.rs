@@ -79,7 +79,7 @@ impl ActorBuilder {
     }
 }
 
-pub type Look = Vec<(&'static str, u16)>;
+pub type Look = Vec<(u8, String)>;
 
 // const VISUAL_BODY: u8 = 0;
 // const VISUAL_HEAD: u8 = 1;
@@ -132,6 +132,7 @@ impl Actor {
                 Effect::AttrMod(Attr::ToWound, 1),
             ],
             source: TraitSource::Temporary(1),
+            visuals: None,
         });
         result.traits.insert("ability#charge-debuff".to_string(), Trait {
             name: DisplayStr::new("Did charge"),
@@ -139,6 +140,7 @@ impl Actor {
                 Effect::AttrMod(Attr::MeleeDefence, -1),
             ],
             source: TraitSource::Temporary(2),
+            visuals: None,
         });
         result.update_effects()
     }
@@ -227,6 +229,7 @@ impl Actor {
                 name: DisplayStr::new("Recovering"),
                 effects: vec![Effect::Recovering],
                 source: TraitSource::Temporary(1),
+                visuals: None,
             },
             0,
         ));
@@ -400,7 +403,7 @@ impl Actor {
     pub fn corpse(&self) -> Item {
         Item {
             name: format!("Corpse of {}", self.name),
-            look: vec![("corpses", 1)],
+            look: vec![(1, "corpses".to_string())],
         }
     }
 
@@ -412,8 +415,17 @@ impl Actor {
         (self.pain, self.wounds, max_wounds)
     }
 
-    pub fn look(&self) -> &Look {
-        &self.look
+    pub fn look(&self) -> Vec<String> {
+        let mut result = self.look.clone();
+
+        for Trait { visuals, .. } in self.traits.values() {
+            if let Some(v) = visuals {
+                result.push(v.clone());
+            }
+        }
+
+        result.sort();
+        result.drain(..).map(|(_, v)| v).collect()
     }
 
     /// -3 => None

@@ -112,7 +112,7 @@ fn get_sprites(obj: &GameObject, texture_map: &TextureMap) -> Sprites {
             }
 
             for l in a.look() {
-                visual_elements.push(visual_element(l));
+                visual_elements.push(l);
             }
 
             if let Some((action, _)) = &a.pending_action {
@@ -122,7 +122,7 @@ fn get_sprites(obj: &GameObject, texture_map: &TextureMap) -> Sprites {
             visual_elements
         }
 
-        GameObject::Item(_, item) => item.look.iter().map(visual_element).collect(),
+        GameObject::Item(_, item) => item.look.iter().map(|(_, v)| v.clone()).collect(),
     };
     
     let sprites = visual_components
@@ -132,8 +132,4 @@ fn get_sprites(obj: &GameObject, texture_map: &TextureMap) -> Sprites {
         .collect();
 
     Sprites::new(sprites)
-}
-
-fn visual_element((name, num): &(&str, u16)) -> String {
-    format!("{}_{}", name, num)
 }

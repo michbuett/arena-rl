@@ -266,6 +266,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     name: DisplayStr::new("Dodging"),
                     effects: vec![Effect::Defence(3, DefenceType::Dodge(target_pos))],
                     source: TraitSource::Temporary(1),
+                    visuals: None,
                 },
             );
 
