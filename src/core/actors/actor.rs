@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::cmp::max;
 
 pub use super::traits::*;
@@ -25,7 +26,7 @@ pub struct ActorBuilder {
     team: Team,
     look: Look,
     name: String,
-    traits: Vec<Trait>,
+    traits: HashMap<String, Trait>,
 }
 
 impl ActorBuilder {
@@ -36,11 +37,11 @@ impl ActorBuilder {
             name,
             behaviour: None,
             look: vec![],
-            traits: Vec::new(),
+            traits: HashMap::new(),
         }
     }
 
-    pub fn build(mut self) -> Actor {
+    pub fn build(self) -> Actor {
         Actor {
             name: self.name,
             active: false,
@@ -48,14 +49,14 @@ impl ActorBuilder {
             pain: 0,
             wounds: 0,
             effects: Vec::new(),
-            traits: Vec::new(),
+            traits: self.traits,
             pending_action: None,
             behaviour: self.behaviour,
             team: self.team,
             look: self.look,
             engaged_in_combat: false,
         }
-        .add_traits(&mut self.traits)
+        .update_effects()
     }
 
     pub fn behaviour(self, b: AiBehaviour) -> Self {
@@ -69,7 +70,11 @@ impl ActorBuilder {
         Self { look, ..self }
     }
 
-    pub fn traits(self, traits: Vec<Trait>) -> Self {
+    pub fn traits(self, mut trait_list: Vec<(String, Trait)>) -> Self {
+        let mut traits = HashMap::new();
+        for (key, val) in trait_list.drain(..) {
+            traits.insert(key, val);
+        }
         Self { traits, ..self }
     }
 }
@@ -97,7 +102,7 @@ pub type Look = Vec<(&'static str, u16)>;
 pub struct Actor {
     pain: u8,
     wounds: u8,
-    traits: Vec<Trait>,
+    traits: HashMap<String, Trait>,
     look: Look,
 
     pub effects: Vec<(DisplayStr, Effect)>,
@@ -117,6 +122,25 @@ impl Actor {
             pos: to.to_world_pos(),
             ..self
         }
+    }
+
+    pub fn charge_to(self, to: Tile) -> Self {
+        let mut result = self.move_to(to);
+        result.traits.insert("ability#charge-buff".to_string(), Trait {
+            name: DisplayStr::new("Charging"),
+            effects: vec![
+                Effect::AttrMod(Attr::ToWound, 1),
+            ],
+            source: TraitSource::Temporary(1),
+        });
+        result.traits.insert("ability#charge-debuff".to_string(), Trait {
+            name: DisplayStr::new("Did charge"),
+            effects: vec![
+                Effect::AttrMod(Attr::MeleeDefence, -1),
+            ],
+            source: TraitSource::Temporary(2),
+        });
+        result.update_effects()
     }
 
     pub fn can_move(&self) -> bool {
@@ -157,43 +181,48 @@ impl Actor {
         }
     }
 
-    pub fn start_next_turn(self, engaged_in_combat: bool) -> Actor {
-        let mut new_traits = Vec::new();
+    pub fn use_ability(self, key: impl ToString, ability: Trait) -> Self {
+        let msg = format!("Used ability {}", ability.name);
+        self.add_trait(key.to_string(), ability).prepare(Action::done(msg))
+    }
+
+    pub fn start_next_turn(mut self, engaged_in_combat: bool) -> Actor {
+        let mut new_traits = HashMap::new();
 
         // handle temporary traits
-        for t in self.traits.iter() {
+        for (k, t) in self.traits.drain() {
             if let TraitSource::Temporary(time) = t.source {
                 if time > 1 {
-                    let mut new_t = t.clone();
+                    let mut new_t = t;
                     new_t.source = TraitSource::Temporary(time - 1);
-                    new_traits.push(new_t);
+                    new_traits.insert(k, new_t);
                 }
             } else {
                 // not a temporary trait
-                new_traits.push(t.clone());
+                new_traits.insert(k, t);
             }
         }
 
         Self {
             engaged_in_combat,
             pending_action: None,
-            traits: Vec::new(),
+            traits: new_traits,
             ..self
         }
-        .add_traits(&mut new_traits)
+        .update_effects()
     }
 
-    pub fn ability_self(&self) -> Vec<(DisplayStr, Trait, u8)> {
+    pub fn ability_self(&self) -> Vec<(String, Trait, u8)> {
         let mut result = vec![];
 
         for e in self.effects.iter() {
-            if let (_, Effect::GiveTrait(name, AbilityTarget::OnSelf, t)) = e {
-                result.push((name.clone(), t.clone(), 0));
+            if let (_, Effect::GiveTrait(key, t, AbilityTarget::OnSelf)) = e {
+                result.push((key.clone(), t.clone(), 0));
             }
         }
 
         result.push((
-            DisplayStr::new("Recover"),
+            "ability#Recover".to_string(),
             Trait {
                 name: DisplayStr::new("Recovering"),
                 effects: vec![Effect::Recovering],
@@ -232,19 +261,22 @@ impl Actor {
         }
     }
 
-    pub fn range_attack(&self, _distance: u8) -> Option<AttackOption> {
+    pub fn range_attack(&self, d: u8) -> Option<AttackOption> {
         for (_, eff) in self.effects.iter() {
             match eff {
-                Effect::RangeAttack(name, min_distance, max_distance, to_hit, to_wound) => {
-                    return Some(AttackOption {
-                        name: name.clone(),
-                        min_distance: *min_distance,
-                        max_distance: *max_distance,
-                        to_hit: *to_hit,
-                        to_wound: *to_wound,
-                        attack_type: AttackType::Ranged("fx-projectile-1".to_string()),
-                    })
+                Effect::RangeAttack { name, distance, to_hit, to_wound, fx } => {
+                    if distance.0 <= d && d <= distance.1 {
+                        return Some(AttackOption {
+                            name: name.clone(),
+                            min_distance: distance.0,
+                            max_distance: distance.1,
+                            to_hit: *to_hit,
+                            to_wound: *to_wound,
+                            attack_type: AttackType::Ranged(fx.to_string()),
+                        })
+                    }
                 }
+
                 _ => {}
             }
         }
@@ -253,14 +285,13 @@ impl Actor {
     }
 
     pub fn defence(&self, attack: &Attack) -> Option<Defence> {
-        for (_, eff) in self.effects.iter() {
+        for (name, eff) in self.effects.iter() {
             match eff {
-                Effect::Defence(name, modifier, defence_type) => {
+                Effect::Defence(modifier, defence_type) => {
                     match attack.attack_type {
                         AttackType::Melee(..) => {
                             return Some(Defence {
                                 defence_type: defence_type.clone(),
-                                name: name.clone(),
                                 defence: self
                                     .attr(Attr::MeleeDefence)
                                     .modify(name.clone(), *modifier),
@@ -280,11 +311,9 @@ impl Actor {
         None
     }
 
-    pub fn add_traits(self, new_traits: &mut Vec<Trait>) -> Self {
-        let mut traits = self.traits;
-        traits.append(new_traits);
-        let effects = traits
-            .iter()
+    fn update_effects(mut self) -> Self {
+        let effects = self.traits
+            .values()
             .flat_map(|t| {
                 t.effects
                     .iter()
@@ -293,12 +322,43 @@ impl Actor {
             })
             .collect();
 
-        Self {
-            traits,
-            effects,
-            ..self
+        self.effects = effects;
+        self
+    }
+
+
+    pub fn add_trait(mut self, key: String, new_trait: Trait) -> Self {
+        self.traits.insert(key, new_trait);
+        self.update_effects()
+    }
+
+    pub fn remove_trait(mut self, key: &str) -> Self {
+        if let Some(_) = self.traits.remove(key) {
+            self.update_effects()
+        } else {
+            self
         }
     }
+
+    // pub fn add_traits(self, new_traits: &mut Vec<Trait>) -> Self {
+    //     let mut traits = self.traits;
+    //     traits.append(new_traits);
+    //     let effects = traits
+    //         .iter()
+    //         .flat_map(|t| {
+    //             t.effects
+    //                 .iter()
+    //                 .map(|e| (t.name.clone(), e.clone()))
+    //                 .collect::<Vec<_>>()
+    //         })
+    //         .collect();
+
+    //     Self {
+    //         traits,
+    //         effects,
+    //         ..self
+    //     }
+    // }
 
     pub fn wound(self, w: Wound) -> Self {
         // pub fn wound(self, w: Wound) -> Condition {
@@ -378,11 +438,11 @@ impl Actor {
     }
 
     pub fn active_traits(&self) -> ActiveTraitIter {
-        ActiveTraitIter(self.traits.iter())
+        ActiveTraitIter(self.traits.values())
     }
 }
 
-pub struct ActiveTraitIter<'a>(std::slice::Iter<'a, Trait>);
+pub struct ActiveTraitIter<'a>(std::collections::hash_map::Values<'a, String, Trait>);
 
 impl<'a> Iterator for ActiveTraitIter<'a> {
     type Item = &'a Trait;
@@ -441,7 +501,6 @@ pub enum AttackType {
 
 #[derive(Debug, Clone)]
 pub struct Defence {
-    pub name: DisplayStr,
     pub defence: AttrVal,
     pub defence_type: DefenceType,
     pub num_dice: u8,

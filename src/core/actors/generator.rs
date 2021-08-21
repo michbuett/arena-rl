@@ -13,13 +13,21 @@ pub enum ActorType {
 
 pub fn generate_enemy_easy(pos: WorldPos, t: Team) -> Actor {
     ActorBuilder::new(generate_name(), pos, t)
-        .look(vec![("body-light", between(1, 3)), ("head", between(1, 4)), ("claw-L", 1), ("claw-R", 1)])
+        .look(vec![
+            ("body-light", between(1, 3)),
+            ("head", between(1, 4)),
+            ("claw-L", 1),
+            ("claw-R", 1),
+        ])
         .behaviour(AiBehaviour::Default)
-        .traits(vec![Trait {
-            name: DisplayStr::new("Fragile physiology"),
-            effects: vec![Effect::AttrMod(Attr::Wound, -2)],
-            source: TraitSource::IntrinsicProperty,
-        }])
+        .traits(vec![(
+            "intrinsic#Fragile".to_string(),
+            Trait {
+                name: DisplayStr::new("Fragile physiology"),
+                effects: vec![Effect::AttrMod(Attr::Wound, -2)],
+                source: TraitSource::IntrinsicProperty,
+            },
+        )])
         .build()
 }
 
@@ -90,8 +98,11 @@ impl ObjectGenerator {
         }
     }
 
-    fn get_trait(&self, key: &str) -> Option<Trait> {
-        self.traits.get(key).map(|t| t.clone())
+    fn get_trait(&self, key: &str) -> Option<(String, Trait)> {
+        self.traits
+            .get_key_value(key)
+            .map(|(k, t)| (k.clone(), t.clone()))
+        // self.traits.get_key_value(key).cloned()
     }
 
     pub fn generate_player_by_type(&self, pos: WorldPos, t: Team, actor_type: ActorType) -> Actor {
@@ -113,9 +124,9 @@ impl ObjectGenerator {
                 ("melee-1h", 1),
             ])
             .traits(vec![
-                self.get_trait("Item_Armor_PlateMail").unwrap(),
-                self.get_trait("Item_Shield_TowerShield").unwrap(),
-                self.get_trait("Item_Weapon_Flail").unwrap()
+                self.get_trait("item#Armor_PlateMail").unwrap(),
+                self.get_trait("item#Shield_TowerShield").unwrap(),
+                self.get_trait("item#Weapon_Flail").unwrap(),
             ])
             .build()
     }
@@ -124,8 +135,8 @@ impl ObjectGenerator {
         ActorBuilder::new(generate_name(), pos, t)
             .look(vec![("body-heavy", 1), ("head-heavy", 2), ("melee-2h", 1)])
             .traits(vec![
-                self.get_trait("Item_Armor_PlateMail").unwrap(),
-                self.get_trait("Item_Weapon_PowerSaw").unwrap(),
+                self.get_trait("item#Armor_PlateMail").unwrap(),
+                self.get_trait("item#Weapon_PowerSaw").unwrap(),
             ])
             .build()
     }
@@ -138,8 +149,8 @@ impl ObjectGenerator {
                 ("melee-2h", 2),
             ])
             .traits(vec![
-                self.get_trait("Item_Armor_ChainMail").unwrap(),
-                self.get_trait("Item_Weapon_Spear").unwrap(),
+                self.get_trait("item#Armor_ChainMail").unwrap(),
+                self.get_trait("item#Weapon_Spear").unwrap(),
             ])
             .build()
     }
@@ -148,8 +159,8 @@ impl ObjectGenerator {
         ActorBuilder::new(generate_name(), pos, t)
             .look(vec![("body-light", 1), ("head", 5), ("staff", 1)])
             .traits(vec![
-                self.get_trait("Item_Armor_ChainMail").unwrap(),
-                self.get_trait("Item_Weapon_Injector").unwrap(),
+                self.get_trait("item#Armor_ChainMail").unwrap(),
+                self.get_trait("item#Weapon_Injector").unwrap(),
             ])
             .build()
     }
@@ -158,8 +169,8 @@ impl ObjectGenerator {
         ActorBuilder::new(generate_name(), pos, t)
             .look(vec![("body-light", 4), ("head", 6), ("gun-2h", 1)])
             .traits(vec![
-                self.get_trait("Item_Armor_ChainMail").unwrap(),
-                self.get_trait("Item_Weapon_IonGun").unwrap(),
+                self.get_trait("item#Armor_ChainMail").unwrap(),
+                self.get_trait("item#Weapon_IonGun").unwrap(),
             ])
             .build()
     }
@@ -168,7 +179,7 @@ impl ObjectGenerator {
 fn init_traits() -> HashMap<String, Trait> {
     let mut traits = HashMap::new();
     traits.insert(
-        "Item_Armor_ChainMail".to_string(),
+        "item#Armor_ChainMail".to_string(),
         Trait {
             name: DisplayStr::new("Chain mail"),
             effects: vec![Effect::AttrMod(Attr::Protection, 4)],
@@ -177,7 +188,7 @@ fn init_traits() -> HashMap<String, Trait> {
     );
 
     traits.insert(
-        "Item_Armor_PlateMail".to_string(),
+        "item#Armor_PlateMail".to_string(),
         Trait {
             name: DisplayStr::new("Plate Mail"),
             effects: vec![Effect::AttrMod(Attr::Protection, 5)],
@@ -186,7 +197,7 @@ fn init_traits() -> HashMap<String, Trait> {
     );
 
     traits.insert(
-        "Item_Weapon_PowerSaw".to_string(),
+        "item#Weapon_PowerSaw".to_string(),
         Trait {
             name: DisplayStr::new("Power Saw"),
             effects: vec![Effect::MeleeAttack(DisplayStr::new("Swing"), 1, 2, 5)],
@@ -195,7 +206,7 @@ fn init_traits() -> HashMap<String, Trait> {
     );
 
     traits.insert(
-        "Item_Weapon_Injector".to_string(),
+        "item#Weapon_Injector".to_string(),
         Trait {
             name: DisplayStr::new("Injector"),
             effects: vec![Effect::MeleeAttack(DisplayStr::new("Stab"), 2, 3, 3)],
@@ -204,81 +215,75 @@ fn init_traits() -> HashMap<String, Trait> {
     );
 
     traits.insert(
-        "Item_Weapon_Spear".to_string(),
+        "item#Weapon_Spear".to_string(),
         Trait {
             name: DisplayStr::new("Spear"),
             effects: vec![
                 Effect::MeleeAttack(DisplayStr::new("Stab"), 2, 4, 3),
                 Effect::GiveTrait(
-                    DisplayStr::new("Parry"),
-                    AbilityTarget::OnSelf,
+                    "ability#Parry_Spear".to_string(),
                     Trait {
-                        name: DisplayStr::new("Parry"),
-                        effects: vec![Effect::Defence(
-                            DisplayStr::new("Parry with spear"),
-                            3,
-                            DefenceType::Parry,
-                        )],
+                        name: DisplayStr::new("Parry (spear)"),
+                        effects: vec![Effect::Defence(3, DefenceType::Parry)],
                         source: TraitSource::Temporary(1),
                     },
-                )
+                    AbilityTarget::OnSelf,
+                ),
             ],
             source: TraitSource::IntrinsicProperty,
         },
     );
 
     traits.insert(
-        "Item_Weapon_Flail".to_string(),
+        "item#Weapon_Flail".to_string(),
         Trait {
             name: DisplayStr::new("Flail"),
             effects: vec![
                 Effect::MeleeAttack(DisplayStr::new("Swing Flail"), 1, 3, 4),
                 Effect::GiveTrait(
-                    DisplayStr::new("Parry"),
-                    AbilityTarget::OnSelf,
+                    "ability#Parry_Flail".to_string(),
                     Trait {
-                        name: DisplayStr::new("Parry"),
-                        effects: vec![Effect::Defence(
-                            DisplayStr::new("Parry with flail"),
-                            2,
-                            DefenceType::Parry,
-                        )],
+                        name: DisplayStr::new("Parry (flail)"),
+                        effects: vec![Effect::Defence(2, DefenceType::Parry,)],
                         source: TraitSource::Temporary(1),
                     },
-                )
+                    AbilityTarget::OnSelf,
+                ),
             ],
             source: TraitSource::IntrinsicProperty,
         },
     );
 
     traits.insert(
-        "Item_Weapon_IonGun".to_string(),
+        "item#Weapon_IonGun".to_string(),
         Trait {
             name: DisplayStr::new("Ion Gun"),
-            effects: vec![Effect::RangeAttack(DisplayStr::new("Shoot Ion Gun"), 2, 8, 4, 4)],
+            effects: vec![Effect::RangeAttack {
+                name: DisplayStr::new("Shoot Ion Gun"),
+                distance: (2, 8),
+                to_hit: 4,
+                to_wound: 4,
+                fx: "fx-projectile-2".to_string(),
+            }],
             source: TraitSource::IntrinsicProperty,
         },
     );
 
     traits.insert(
-        "Item_Shield_TowerShield".to_string(),
+        "item#Shield_TowerShield".to_string(),
         Trait {
             name: DisplayStr::new("Towershield"),
             effects: vec![
                 Effect::AttrMod(Attr::MeleeDefence, 2),
                 Effect::AttrMod(Attr::RangeDefence, 2),
                 Effect::GiveTrait(
-                    DisplayStr::new("Block with Shield"),
-                    AbilityTarget::OnSelf,
+                    "ability#Block_Shield".to_string(),
                     Trait {
-                        name: DisplayStr::new("Shield raised"),
-                        effects: vec![Effect::Defence(
-                            DisplayStr::new("Block with shield"),
-                            1,
-                            DefenceType::Block,
-                        )],
+                        name: DisplayStr::new("Raise shield"),
+                        effects: vec![Effect::Defence(1, DefenceType::Block,)],
                         source: TraitSource::Temporary(1),
                     },
+                    AbilityTarget::OnSelf,
                 ),
             ],
             source: TraitSource::IntrinsicProperty,

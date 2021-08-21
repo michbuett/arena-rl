@@ -107,7 +107,7 @@ fn display_text((action, _): &(Action, u8), is_first: bool) -> DisplayStr {
         Action::RangeAttack(_, a, _, _) => format!("{}", a.name),
         Action::Charge(..) => "Charge!".to_string(),
         Action::Dodge(..) => "Dodge".to_string(),
-        Action::UseAbility(_, name, _) => format!("Use ability: {}", name),
+        Action::UseAbility(_, _, t) => format!("Use ability: {}", t.name),
         _ => format!("Unnamed action: {:?}", action),
     };
 

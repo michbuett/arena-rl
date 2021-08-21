@@ -22,14 +22,21 @@ pub enum Effect {
     MeleeAttack(DisplayStr, u8, i8, i8),
 
     /// (name, min-distance, max-distance, to-hit, to-wound)
-    RangeAttack(DisplayStr, u8, u8, i8, i8),
+    RangeAttack{
+        name: DisplayStr,
+        distance: (u8, u8),
+        to_hit: i8,
+        to_wound: i8,
+        fx: String,
+    },
 
-    Defence(DisplayStr, i8, DefenceType),
+    /// (modifier, type)
+    Defence(i8, DefenceType),
 
-    GiveTrait(DisplayStr, AbilityTarget, Trait),
-    // Ability(DisplayStr, AbilityTarget, Ability),
+    /// (key, trait, target)
+    GiveTrait(String, Trait, AbilityTarget),
+
     Recovering,
-    // Dying,
 }
 
 #[derive(Debug, Clone)]

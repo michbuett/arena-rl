@@ -18,7 +18,7 @@ pub enum Action {
     MeleeAttack(Entity, AttackOption, String),
     RangeAttack(Entity, AttackOption, AttackVector, String),
     Charge(Entity, AttackOption, String),
-    UseAbility(Entity, DisplayStr, Trait),
+    UseAbility(Entity, String, Trait),
     Dodge(Tile),
 }
 
@@ -59,8 +59,8 @@ impl Action {
         (Self::Dodge(to_pos), 0)
     }
 
-    pub fn use_ability(target: Entity, name: DisplayStr, t: Trait, delay: u8) -> Act {
-        (Self::UseAbility(target, name, t), delay)
+    pub fn use_ability(target: Entity, key: impl ToString, t: Trait, delay: u8) -> Act {
+        (Self::UseAbility(target, key.to_string(), t), delay)
     }
 }
 
@@ -120,7 +120,10 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             for (e, o) in (&entities, &actors).join() {
                 if let GameObject::Actor(a) = &o.0 {
                     if a.team == team && a.pending_action.is_none() {
-                        updates.push(update_actor(e, a.clone().prepare(Action::done("Waiting for next turn..."))));
+                        updates.push(update_actor(
+                            e,
+                            a.clone().prepare(Action::done("Waiting for next turn...")),
+                        ));
                     }
                 }
             }
@@ -135,10 +138,8 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                 let fx_pos = target_actor.pos.clone();
                 let fx_str = t.name.to_string();
                 let actor_name = target_actor.name.clone();
-                let target_actor = target_actor
-                    .add_traits(&mut vec![t])
-                    .prepare(Action::done(format!("Used ability {}", ability_name)));
                 let log = DisplayStr::new(format!("{} used ability: {}", actor_name, ability_name));
+                let target_actor = target_actor.use_ability(ability_name, t);
 
                 (
                     vec![update_actor(target_entity, target_actor)],
@@ -156,7 +157,9 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             }
 
             let sp = actor.pos;
-            let na = actor.move_to(*path.last().unwrap()).prepare(Action::done("Did move..."));
+            let na = actor
+                .move_to(*path.last().unwrap())
+                .prepare(Action::done("Did move..."));
 
             (
                 vec![update_actor(entity, na)],
@@ -235,15 +238,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     let p1 = actor.pos; // start movement at the original postion of the attacer
                     let p2 = p.last().unwrap().to_world_pos(); // step on the target tile to visualise impact
                     let p3 = tile.to_world_pos(); // one tile back to the place where the attacker actually stands
-                    let actor = actor.move_to(tile).add_traits(&mut vec![Trait {
-                        name: DisplayStr::new("Charging"),
-                        effects: vec![
-                            Effect::AttrMod(Attr::ToWound, 1),
-                            Effect::AttrMod(Attr::MeleeDefence, -1),
-                        ],
-                        source: TraitSource::Temporary(1),
-                    }]);
-
+                    let actor = actor.charge_to(tile);
                     let changes = vec![update_actor(entity, actor.clone())];
                     let fx_seq = FxSequence::new()
                         .then(FxEffect::jump(entity, vec![p1, p2, p3]))
@@ -265,17 +260,14 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
 
         Action::Dodge(target_pos) => {
             let actor_pos = actor.pos;
-            let actor = actor
-                .add_traits(&mut vec![Trait {
+            let actor = actor.use_ability(
+                "ability#Dodge",
+                Trait {
                     name: DisplayStr::new("Dodging"),
-                    effects: vec![Effect::Defence(
-                        DisplayStr::new("Dodge"),
-                        3,
-                        DefenceType::Dodge(target_pos),
-                    )],
+                    effects: vec![Effect::Defence(3, DefenceType::Dodge(target_pos))],
                     source: TraitSource::Temporary(1),
-                }])
-                .prepare(Action::done("Prepared dodging"));
+                },
+            );
 
             let changes = vec![update_actor(entity, actor)];
             let fx_seq = FxSequence::new()
@@ -486,7 +478,10 @@ fn handle_defence(
             let target_pos = target_actor.pos;
             let dodge_path = vec![target_pos, tile.to_world_pos()];
 
-            target_actor = target_actor.clone().move_to(tile);
+            target_actor = target_actor
+                .clone()
+                .move_to(tile)
+                .remove_trait("ability#Dodge");
 
             fx_seq = fx_seq
                 .then(FxEffect::jump(target.0, dodge_path))
@@ -499,9 +494,10 @@ fn handle_defence(
                 let attack = target_actor.melee_attack();
                 let target_pos = target_actor.pos;
 
-                target_actor = target_actor
-                    .clone()
-                    .prepare((Action::MeleeAttack(attacker.0, attack, target_actor.name.clone()), 0));
+                target_actor = target_actor.clone().prepare((
+                    Action::MeleeAttack(attacker.0, attack, target_actor.name.clone()),
+                    0,
+                ));
 
                 fx_seq = fx_seq
                     .then(FxEffect::say("Counter Attack!", target_pos))

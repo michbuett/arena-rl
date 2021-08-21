@@ -61,8 +61,8 @@ pub fn actions_at(
 
     if let Some((other_entity, other_actor)) = find_actor_at(world, &selected_pos) {
         if entity.id() == other_entity.id() {
-            for (n, t, d) in actor.ability_self() {
-                result.push(Action::use_ability(*entity, n, t, d));
+            for (k, t, d) in actor.ability_self() {
+                result.push(Action::use_ability(*entity, k, t, d));
             }
         } else {
             if actor.team == other_actor.team {
