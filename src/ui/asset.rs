@@ -193,17 +193,17 @@ fn compile_sprite_sheet_data(
 
             line_height = std::cmp::max(line_height, height);
 
-            sprite_position_cache.insert(file.to_string(), (x, y, width, height));
-
-            if x as u32 + width < max_width {
-                x = x + width as i32;
-            } else {
+            if x as u32 + width > max_width {
                 // new line
                 x = 0;
                 y = y + line_height as i32;
                 total_height = total_height + line_height;
                 line_height = 0;
             }
+
+            sprite_position_cache.insert(file.to_string(), (x, y, width, height));
+
+            x += width as i32;
         }
     }
 
