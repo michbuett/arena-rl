@@ -1,4 +1,11 @@
 [
+    // === SECTION ===========================================
+    // head
+    // body
+    // blood and gore
+    // fx
+    // backgrounds 
+
     // EXAMPLE
     // ("melee-1h_1", ProtoSpriteConfig( 
     //         files: ["weapons_saw-1-1.png", "weapons_saw-1-2.png"],
@@ -214,7 +221,17 @@
 
     // === BEGIN SECTION Fx ================================
     ("fx-hit-1", ProtoSpriteConfig(
-            files: ["fx_hit_1-1.png", "fx_hit_1-2.png", "fx_hit_1-3.png"],
+            files: ["fx_hit_2-1.png", "fx_hit_2-2.png", "fx_hit_2-3.png"],
+            offset: (-64, -64),
+            frame_durration: Some(150),
+        )),
+    ("fx-hit-2", ProtoSpriteConfig(
+            files: ["fx_hit_3-1.png", "fx_hit_3-2.png", "fx_hit_3-3.png"],
+            offset: (-64, -64),
+            frame_durration: Some(150),
+        )),
+    ("fx-hit-3", ProtoSpriteConfig(
+            files: ["fx_hit_4-1.png", "fx_hit_4-2.png", "fx_hit_4-3.png"],
             offset: (-64, -64),
             frame_durration: Some(150),
         )),
@@ -234,5 +251,11 @@
             files: ["fx_impact_1-1.png", "fx_impact_1-2.png", "fx_impact_1-3.png"],
             offset: (-64, -64),
             frame_durration: Some(100),
+        )),
+    ("fx-dust-1", ProtoSpriteConfig(
+            files: ["fx_dust_1-1.png", "fx_dust_1-2.png", "fx_dust_1-3.png"],
+            offset: (-64, -64),
+            frame_durration: Some(100),
+            alpha: Some(150),
         )),
 ]

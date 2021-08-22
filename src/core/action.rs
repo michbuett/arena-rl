@@ -241,6 +241,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     let actor = actor.charge_to(tile);
                     let changes = vec![update_actor(entity, actor.clone())];
                     let fx_seq = FxSequence::new()
+                        .then(FxEffect::dust("fx-dust-1", p1, 300))
                         .then(FxEffect::jump(entity, vec![p1, p2, p3]))
                         .wait(200);
 
@@ -485,6 +486,7 @@ fn handle_defence(
                 .remove_trait("ability#Dodge");
 
             fx_seq = fx_seq
+                .then(FxEffect::dust("fx-dust-1", target_pos, 300))
                 .then(FxEffect::jump(target.0, dodge_path))
                 .then(FxEffect::say("Dodged!", target_pos))
                 .wait(100);

@@ -403,7 +403,7 @@ impl Actor {
     pub fn corpse(&self) -> Item {
         Item {
             name: format!("Corpse of {}", self.name),
-            look: vec![(1, "corpses".to_string())],
+            look: vec![(1, "corpses_1".to_string())],
         }
     }
 

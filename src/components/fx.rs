@@ -40,7 +40,6 @@ impl FxSequence {
     }
 }
 
-
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
 pub struct Fx(Instant, Duration, FxEffect);
@@ -59,48 +58,150 @@ impl Fx {
 
 #[derive(Debug)]
 pub enum FxEffect {
-    Text(Text, WorldPos),
-
     /// - Entity: the target entity (the entity which should move)
     /// - Vec<WorldPos>: the path the entity should move along
     /// - MovementModification: modification of the movement (e.g. add jump effect)
     MoveTo(Entity, Vec<WorldPos>, MovementModification),
 
-    Sprite(String, WorldPos),
-
     BloodSplatter(WorldPos),
 
-    Projectile(String, WorldPos, WorldPos),
+    Custom {
+        pos: WorldPos,
+        duration: u64,
+        sprite: Option<String>,
+        text: Option<Text>,
+        scale_anim: Option<(f32, f32)>,
+        movement_anim: Option<Vec<WorldPos>>,
+        fade_anim: bool,
+    },
 }
 
 impl FxEffect {
     pub fn say(txt: impl ToString, pos: WorldPos) -> FxEffect {
-        let txt = Text::new(txt.to_string(), FontFace::Big).padding(5).color(21, 22, 23, 255);
-        FxEffect::Text(txt, pos)
+        let txt = Text::new(txt.to_string(), FontFace::Big)
+            .padding(5)
+            .color(21, 22, 23, 255);
+
+        FxBuilder::new(pos, 1000)
+            .text(txt)
+            .scale(1.0, 2.0)
+            .move_to(animation_target_pos(&pos, (-150, 150), (-250, -200)))
+            .fade_out()
+            .build()
     }
 
     pub fn scream(txt: impl ToString, pos: WorldPos) -> FxEffect {
-        let txt = Text::new(txt.to_string(), FontFace::VeryBig).padding(5).color(195, 31, 42, 255);
-        FxEffect::Text(txt, pos)
+        let txt = Text::new(txt.to_string(), FontFace::VeryBig)
+            .padding(5)
+            .color(195, 31, 42, 255);
+
+        FxBuilder::new(pos, 1000)
+            .text(txt)
+            .scale(1.0, 3.0)
+            .move_to(animation_target_pos(&pos, (-150, 150), (-250, -200)))
+            .fade_out()
+            .build()
     }
 
     pub fn jump(e: Entity, p: Vec<WorldPos>) -> Self {
         FxEffect::MoveTo(e, p, MovementModification::ParabolaJump(96))
     }
 
-    pub fn sprite(s: impl ToString, p: WorldPos, _d: u64) -> Self {
-        FxEffect::Sprite(s.to_string(), p)
+    pub fn sprite(s: impl ToString, p: WorldPos, d: u64) -> Self {
+        FxEffect::custom(p, d).sprite(s).build()
     }
-                            
+
+    pub fn dust(s: impl ToString, p: WorldPos, d: u64) -> Self {
+        FxEffect::custom(p, d)
+            .sprite(s)
+            .scale(1.0, 1.5)
+            .move_to(animation_target_pos(&p, (0, 0), (-100, -50)))
+            .fade_out()
+            .build()
+    }
+
     pub fn projectile(s: impl ToString, from: WorldPos, to: WorldPos) -> Self {
-        FxEffect::Projectile(s.to_string(), from, to)
+        let p1 = MapPos::from_world_pos(from);
+        let p2 = MapPos::from_world_pos(to);
+        let d = 50 * p1.distance(p2) as u64;
+
+        FxBuilder::new(from, d).sprite(s).scale(1.0, 2.0).build()
     }
 
     pub fn blood_splatter(p: WorldPos) -> Self {
         FxEffect::BloodSplatter(p)
     }
+
+    pub fn custom(p: WorldPos, d: u64) -> FxBuilder {
+        FxBuilder::new(p, d)
+    }
 }
 
+#[derive(Debug)]
+pub struct FxBuilder {
+    pos: WorldPos,
+    duration: u64,
+    sprite: Option<String>,
+    text: Option<Text>,
+    scale_anim: Option<(f32, f32)>,
+    movement_anim: Option<Vec<WorldPos>>,
+    fade_anim: bool,
+}
+
+impl FxBuilder {
+    fn new(pos: WorldPos, ms: u64) -> Self {
+        Self {
+            pos,
+            duration: ms,
+            sprite: None,
+            text: None,
+            scale_anim: None,
+            movement_anim: None,
+            fade_anim: false,
+        }
+    }
+
+    pub fn sprite(mut self, sprite: impl ToString) -> Self {
+        self.sprite = Some(sprite.to_string());
+        self
+    }
+
+    pub fn text(self, text: Text) -> Self {
+        Self {
+            text: Some(text),
+            ..self
+        }
+    }
+
+    pub fn scale(self, from: f32, to: f32) -> Self {
+        Self {
+            scale_anim: Some((from, to)),
+            ..self
+        }
+    }
+
+    pub fn move_to(mut self, target_pos: WorldPos) -> Self {
+        self.movement_anim = Some(vec![self.pos, target_pos]);
+        self
+    }
+
+    pub fn fade_out(mut self) -> Self {
+        self.fade_anim = true;
+        self
+    }
+
+    pub fn build(self) -> FxEffect {
+        FxEffect::Custom {
+            pos: self.pos,
+            duration: self.duration,
+            sprite: self.sprite,
+            text: self.text,
+            scale_anim: self.scale_anim,
+            movement_anim: self.movement_anim,
+            fade_anim: self.fade_anim,
+        }
+    }
+}
 
 pub struct FxSystem;
 
@@ -122,45 +223,40 @@ impl<'a> System<'a> for FxSystem {
             }
 
             match fx_eff {
-                FxEffect::Text(txt, pos) => 
-                    handle_text(&entities, txt.clone(), *pos, *duration, &updater),
+                FxEffect::BloodSplatter(pos) => {
+                    handle_blood_splatter(*pos, *duration, &entities, &updater, &texture_map)
+                }
 
-                FxEffect::Sprite(sprite, pos) => 
-                    handle_sprite(sprite, *pos, *duration, &entities, &updater, &texture_map),
+                FxEffect::MoveTo(entity, path, modification) => {
+                    handle_move_to(*entity, path.to_vec(), *duration, *modification, &updater)
+                }
 
-                FxEffect::BloodSplatter(pos) => 
-                    handle_blood_splatter(*pos, *duration, &entities, &updater, &texture_map),
-
-                FxEffect::Projectile(sprite, from, to) => 
-                    handle_projectile(sprite, *from, *to, *duration, &entities, &updater, &texture_map),
-
-                FxEffect::MoveTo(entity, path, modification) =>
-                    handle_move_to(*entity, path.to_vec(), *duration, *modification, &updater),
+                FxEffect::Custom {
+                    pos,
+                    duration,
+                    sprite,
+                    text,
+                    scale_anim,
+                    movement_anim,
+                    fade_anim,
+                } => handle_custom(
+                    *pos,
+                    *duration,
+                    sprite,
+                    text,
+                    scale_anim,
+                    movement_anim,
+                    *fade_anim,
+                    &entities,
+                    &updater,
+                    &texture_map,
+                ),
             }
 
             let _ = entities.delete(e);
         }
     }
 }
-
-fn handle_text(
-    entities: &Entities,
-    txt: Text,
-    pos: WorldPos,
-    duration: Duration,
-    updater: &Read<LazyUpdate>,
-) {
-    updater
-        .create_entity(entities)
-        .with(txt)
-        .with(Position(pos))
-        .with(MovementAnimation::new(duration, vec![pos, animation_target_pos(&pos)]))
-        .with(FadeAnimation::fadeout_after(duration))
-        .with(ScaleAnimation::new(1.0, 2.0, duration))
-        .with(EndOfLive::after(duration))
-        .build();
-}
-
 
 fn handle_move_to(
     target_entity: Entity,
@@ -170,42 +266,23 @@ fn handle_move_to(
     updater: &Read<LazyUpdate>,
 ) {
     assert!(path.len() > 1);
-    
+
     let num_steps = path.len() as u64 - 1;
     let time_per_step = Duration::from_millis(duration.as_millis() as u64 / num_steps);
-        
+
     updater.insert(
         target_entity,
         MovementAnimation::new(time_per_step, path).set_modification(modification),
     );
 }
 
-fn animation_target_pos(wp: &WorldPos) -> WorldPos {
+fn animation_target_pos(wp: &WorldPos, dx: (i32, i32), dy: (i32, i32)) -> WorldPos {
     let mut rng = rand::thread_rng();
-    let range_x = rand::distributions::Uniform::from(-100..=100);
-    let range_y = rand::distributions::Uniform::from(-150..=-100);
+    let range_x = rand::distributions::Uniform::from(dx.0..=dx.1);
+    let range_y = rand::distributions::Uniform::from(dy.0..=dy.1);
     let (dx, dy) = (rng.sample(range_x), rng.sample(range_y));
 
     ScreenCoord::translate_world_pos(*wp, dx, dy)
-}
-
-fn handle_sprite(
-    sprite_name: &str,
-    pos: WorldPos,
-    duration: Duration,
-    entities: &Entities,
-    updater: &Read<LazyUpdate>,
-    texture_map: &Read<TextureMap>,
-) {
-    if let Some(sprite) = texture_map.get(sprite_name) {
-        updater
-            .create_entity(&entities)
-            .with(Sprites::new(vec![sprite.clone()]))
-            .with(Position(pos))
-            .with(EndOfLive::after(duration))
-            .with(ZLayerFX)
-            .build();
-    }
 }
 
 fn handle_blood_splatter(
@@ -223,7 +300,10 @@ fn handle_blood_splatter(
             .create_entity(&entities)
             .with(Sprites::new(vec![sprite.clone()]))
             .with(Position(pos))
-            .with(MovementAnimation::new(duration, vec![pos, to]).set_modification(MovementModification::ParabolaJump(100)))
+            .with(
+                MovementAnimation::new(duration, vec![pos, to])
+                    .set_modification(MovementModification::ParabolaJump(100)),
+            )
             .with(ScaleAnimation::new(0.0, 1.0, duration))
             .with(EndOfLive::after(duration))
             .with(ZLayerGameObject)
@@ -246,47 +326,62 @@ fn random_neighbor_pos(from_pos: &WorldPos) -> WorldPos {
     WorldPos::new(x + dx, y + dy, 0.0)
 }
 
-fn handle_projectile(
-    sprite_name: &str,
-    from: WorldPos,
-    to: WorldPos,
-    duration: Duration,
-    entities: &Entities,
-    updater: &Read<LazyUpdate>,
-    texture_map: &Read<TextureMap>,
-) {
-    if let Some(sprite) = texture_map.get(sprite_name) {
-        updater
-            .create_entity(&entities)
-            .with(Sprites::new(vec![sprite.clone()]))
-            .with(Position(from))
-            .with(MovementAnimation::new(duration, vec![from, to]))
-            .with(ScaleAnimation::new(1.0, 2.0, duration))
-            .with(EndOfLive::after(duration))
-            .with(ZLayerFX)
-            .build();
-    }
-}
-
 fn one_of<'a, T>(v: &'a Vec<T>) -> &'a T {
     v.choose(&mut rand::thread_rng()).unwrap()
 }
 
 fn duration(fx: &FxEffect) -> Duration {
     let millis = match fx {
-        FxEffect::Text(..) | FxEffect::BloodSplatter(..) => 1000,
+        FxEffect::BloodSplatter(..) => 1000,
 
         FxEffect::MoveTo(_, p, _) => p.len().checked_sub(1).unwrap_or(0) as u64 * 200,
 
-        FxEffect::Projectile(_, from, to) => {
-            let p1 = MapPos::from_world_pos(*from);
-            let p2 = MapPos::from_world_pos(*to);
-
-            50 * p1.distance(p2) as u64
-        }
-
-        FxEffect::Sprite(..) => 300,
+        FxEffect::Custom { duration, .. } => *duration,
     };
 
     Duration::from_millis(millis)
+}
+
+fn handle_custom(
+    pos: WorldPos,
+    duration: u64,
+    sprite_name: &Option<String>,
+    text: &Option<Text>,
+    scale_anim: &Option<(f32, f32)>,
+    movement_anim: &Option<Vec<WorldPos>>,
+    fade_anim: bool,
+    entities: &Entities,
+    updater: &Read<LazyUpdate>,
+    texture_map: &Read<TextureMap>,
+) {
+    let duration = Duration::from_millis(duration);
+    let mut new_entity = updater
+        .create_entity(&entities)
+        .with(Position(pos))
+        .with(EndOfLive::after(duration))
+        .with(ZLayerFX);
+
+    if let Some(sprite_name) = sprite_name {
+        if let Some(sprite) = texture_map.get(sprite_name) {
+            new_entity = new_entity.with(Sprites::new(vec![sprite.clone()]))
+        }
+    }
+
+    if let Some(txt) = text {
+        new_entity = new_entity.with(txt.clone());
+    }
+
+    if let Some((scale_from, scale_to)) = scale_anim {
+        new_entity = new_entity.with(ScaleAnimation::new(*scale_from, *scale_to, duration))
+    }
+
+    if let Some(path) = movement_anim {
+        new_entity = new_entity.with(MovementAnimation::new(duration, path.to_vec()));
+    }
+
+    if fade_anim {
+        new_entity = new_entity.with(FadeAnimation::fadeout_after(duration));
+    }
+
+    new_entity.build();
 }
