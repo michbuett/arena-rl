@@ -20,7 +20,13 @@ pub enum Effect {
     AttrMod(Attr, i8),
 
     /// (name, reach, to-hit, to-wound)
-    MeleeAttack(DisplayStr, u8, i8, i8),
+    MeleeAttack {
+        name: DisplayStr,
+        distance: u8,
+        to_hit: i8, 
+        to_wound: i8,
+        fx: String,
+    },
 
     /// (name, min-distance, max-distance, to-hit, to-wound)
     RangeAttack{
@@ -55,27 +61,15 @@ pub enum AbilityTarget {
     // OnTile,
 }
 
-// #[derive(Debug, Clone)]
-// pub enum Ability {
-//     // MeleeAttack(DisplayStr, u8, i8, i8),
-//     // RangedAttack(AttackOption),
-//     GiveTrait(Trait),
-//     Recover,
-//     // BuffSelf(Box<Trait>),
-//     // BuffOther(Box<Trait>),
-//     // Aura(Box<Trait>),
-// }
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Attr {
-    Wound,
-    // MeleeAttack,
     MeleeDefence,
-    // RangeAttack,
     RangeDefence,
     ToHit,
     ToWound,
     Protection,
+    Physical,
+    Movement,
 }
 
 #[derive(Debug, Clone)]

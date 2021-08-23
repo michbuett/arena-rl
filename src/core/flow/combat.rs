@@ -10,6 +10,20 @@ use crate::core::*;
 
 // const TEAM_PLAYER: Team = Team("Player", 1, true);
 const TEAM_CPU: Team = Team("Computer", 2, false);
+const ENEMY_SPAWN_POS: [(u8, u8); 12] = [
+    (1, 5),
+    (1, 6),
+    (1, 7),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (6, 12),
+    (7, 12),
+    (8, 12),
+    (13, 5),
+    (13, 6),
+    (13, 7),
+];
 
 pub fn init_combat_data<'a, 'b>(
     game_objects: Vec<GameObject>,
@@ -252,7 +266,7 @@ fn next_state<'a, 'b>(
             }
 
             spawn_obstacles(w);
-            spawn_enemies(round, w);
+            spawn_enemies(0, w);
 
             (round, active_team_idx, Some(CombatState::StartTurn()), None)
         }
@@ -336,6 +350,11 @@ fn next_state<'a, 'b>(
                     )
                 } else {
                     // ... or start a new round beginning with the first team
+                    let new_round = round + 1;
+                    if new_round % 5 == 0 {
+                        spawn_enemies(new_round / 5, w);
+                    }
+                    
                     (round + 1, 0, Some(CombatState::StartTurn()), None)
                 }
             }
@@ -418,15 +437,26 @@ fn next_state<'a, 'b>(
     }
 }
 
-fn spawn_enemies(_turn: u64, w: &World) {
-    vec![
-        GameObject::Actor(generate_enemy_easy(WorldPos::new(1.0, 6.0, 0.0), TEAM_CPU)),
-        GameObject::Actor(generate_enemy_easy(WorldPos::new(1.0, 5.0, 0.0), TEAM_CPU)),
-        GameObject::Actor(generate_enemy_easy(WorldPos::new(6.0, 0.0, 0.0), TEAM_CPU)),
-        GameObject::Actor(generate_enemy_easy(WorldPos::new(7.0, 0.0, 0.0), TEAM_CPU)),
-    ]
-    .drain(..)
-    .for_each(move |enemy| insert_game_object_components(enemy, w));
+fn spawn_enemies(wave: u64, w: &World) {
+    let generator: Read<ObjectGenerator> = w.system_data();
+    let wave = generator.generate_enemy_wave(wave);
+
+    for (pos_idx, actor_type) in wave {
+        let (x, y) = ENEMY_SPAWN_POS[pos_idx as usize];
+        let pos = WorldPos::new(x as f32, y as f32, 0.0);
+        let enemy = generator.generate_enemy_by_type(pos, TEAM_CPU, actor_type);
+
+        insert_game_object_components(GameObject::Actor(enemy), w);
+    }
+
+    // vec![
+    //     GameObject::Actor(generate_enemy_easy(WorldPos::new(1.0, 6.0, 0.0), TEAM_CPU)),
+    //     GameObject::Actor(generate_enemy_easy(WorldPos::new(1.0, 5.0, 0.0), TEAM_CPU)),
+    //     GameObject::Actor(generate_enemy_easy(WorldPos::new(6.0, 0.0, 0.0), TEAM_CPU)),
+    //     GameObject::Actor(generate_enemy_easy(WorldPos::new(7.0, 0.0, 0.0), TEAM_CPU)),
+    // ]
+    // .drain(..)
+    // .for_each(move |enemy| insert_game_object_components(enemy, w));
 }
 
 fn spawn_obstacles(w: &World) {
@@ -436,7 +466,14 @@ fn spawn_obstacles(w: &World) {
         Read<LazyUpdate>,
         Entities,
     ) = w.system_data();
-    let pos = vec![(5.0, 6.0), (7.0, 4.0), (5.0, 9.0), (10.0, 4.0), (8.0, 9.0), (10.0, 7.0)];
+    let pos = vec![
+        (5.0, 6.0),
+        (7.0, 4.0),
+        (5.0, 9.0),
+        (10.0, 4.0),
+        (8.0, 9.0),
+        (10.0, 7.0),
+    ];
     let sprite = texture_map.get("wall-1").unwrap();
 
     for (x, y) in pos.iter() {

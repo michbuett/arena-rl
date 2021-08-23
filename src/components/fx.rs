@@ -125,7 +125,11 @@ impl FxEffect {
         let p2 = MapPos::from_world_pos(to);
         let d = 50 * p1.distance(p2) as u64;
 
-        FxBuilder::new(from, d).sprite(s).scale(1.0, 2.0).build()
+        FxBuilder::new(from, d)
+            .sprite(s)
+            .scale(1.0, 2.0)
+            .move_to(to)
+            .build()
     }
 
     pub fn blood_splatter(p: WorldPos) -> Self {

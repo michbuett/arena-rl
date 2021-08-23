@@ -150,7 +150,7 @@ impl Actor {
     }
 
     pub fn move_distance(&self) -> u8 {
-        2
+        max(1, 2 + self.attr(Attr::Movement).val()) as u8
     }
 
     pub fn is_pc(&self) -> bool {
@@ -240,14 +240,14 @@ impl Actor {
     pub fn melee_attack(&self) -> AttackOption {
         for (_, eff) in self.effects.iter() {
             match eff {
-                Effect::MeleeAttack(name, reach, to_hit, to_wound) => {
+                Effect::MeleeAttack { name, distance, to_hit, to_wound, fx } => {
                     return AttackOption {
                         name: name.clone(),
                         min_distance: 0,
-                        max_distance: *reach,
+                        max_distance: *distance,
                         to_hit: *to_hit,
                         to_wound: *to_wound,
-                        attack_type: AttackType::Melee("fx-hit-1".to_string()),
+                        attack_type: AttackType::Melee(fx.to_string()),
                     }
                 }
                 _ => {}
@@ -394,10 +394,9 @@ impl Actor {
     }
 
     pub fn is_alive(&self) -> bool {
-        let default_wounds_num = 3 + self.attr(Attr::Wound).val();
-        let max_wounds = max(1, default_wounds_num) as u8;
+        let (_, wounds, max_wounds) = self.health();
+        wounds < max_wounds
 
-        self.wounds < max_wounds
     }
 
     pub fn corpse(&self) -> Item {
@@ -409,7 +408,7 @@ impl Actor {
 
     /// Describes the current health condition of an actor (pain, wounds, max_distance)
     pub fn health(&self) -> (u8, u8, u8) {
-        let default_wounds_num = 3 + self.attr(Attr::Wound).val();
+        let default_wounds_num = 3 + self.attr(Attr::Physical).val();
         let max_wounds = max(1, default_wounds_num) as u8;
 
         (self.pain, self.wounds, max_wounds)

@@ -12,16 +12,21 @@ PATH_IN="assets/images/raw"
 PARAMS="-path assets/images/combat/ -filter Box -interpolate Integer"
 
 echo "resizing sprites..."
+mogrify -resize 32x32   $PARAMS $PATH_IN/icons/*.png
+mogrify -resize 32x32   $PARAMS $PATH_IN/projectiles/*.png
+
 mogrify -resize 48x48   $PARAMS $PATH_IN/ArenaRL_Assets_\(heads\)-*.png
-mogrify -resize 96x96   $PARAMS $PATH_IN/weapon/*.png
+
 mogrify -resize 96x96   $PARAMS $PATH_IN/ArenaRL_Assets-*.png
 mogrify -resize 96x96   $PARAMS $PATH_IN/Background-*.png
 mogrify -resize 96x96   $PARAMS $PATH_IN/blood/*.png
-mogrify -resize 32x32   $PARAMS $PATH_IN/icons/*.png
-mogrify -resize 96x96   $PARAMS $PATH_IN/icons-big/*.png
-mogrify -resize 32x32   $PARAMS $PATH_IN/projectiles/*.png
 mogrify -resize 96x96   $PARAMS $PATH_IN/floor.png
-mogrify -resize 128x128 $PARAMS $PATH_IN/terrain/*.png
+mogrify -resize 96x96   $PARAMS $PATH_IN/icons-big/*.png
+mogrify -resize 96x96   $PARAMS $PATH_IN/monster/*.png
+mogrify -resize 96x96   $PARAMS $PATH_IN/weapon/*.png
+
 mogrify -resize 128x128 $PARAMS $PATH_IN/selected.png
+mogrify -resize 128x128 $PARAMS $PATH_IN/terrain/*.png
+
 mogrify -resize 256x256 $PARAMS $PATH_IN/fx-hit/*.png
 echo "done"
