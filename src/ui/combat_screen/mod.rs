@@ -3,8 +3,10 @@ mod map;
 
 use specs::prelude::*;
 
-use super::types::{ClickAreas, Scene, TILE_HEIGHT, TILE_WIDTH};
-use crate::core::{CombatData, Map};
+use super::types::*;
+
+use crate::core::{CombatData, Map, DisplayStr};
+
 
 pub fn render(
     (x, y, w, h): (i32, i32, u32, u32),
@@ -16,64 +18,63 @@ pub fn render(
 
     details::render(&mut scene, &mut click_areas, (w, h), game);
 
-    // render_screen_texts(cvs, assets, viewport, game)?;
+    render_screen_texts(&mut scene, game);
 
     click_areas.append(&mut map_clicks);
 
     (scene, click_areas)
 }
 
-// fn render_screen_texts(
-//     cvs: &mut WindowCanvas,
-//     assets: &AssetRepo,
-//     viewport: &Rect,
-//     game: &CombatData,
-// ) -> Result<(), String> {
-//     assets
-//         .font("normal")?
-//         .text(DisplayStr::new(format!("Turn: {}", game.turn)))
-//         .padding(10)
-//         .background(Color::RGB(252, 251, 250))
-//         .prepare()
-//         .draw(cvs, (10, 10))?;
+fn render_screen_texts(
+    scene: &mut Scene,
+    // viewport: (i32, i32, u32, u32),
+    game: &CombatData,
+) {
+    scene.texts.push(
+        ScreenText::new(
+            DisplayStr::new(format!("Turn: {}, Score: {}", game.turn, game.score)),
+            ScreenPos(10, 10),
+        )
+        .color((20, 150, 20, 255))
+        .padding(10)
+        .background((252, 251, 250, 255)),
+    );
 
-//     let mut y = 75;
-//     for s in &game.log {
-//         let msg = assets
-//             .font("normal")?
-//             .text(s.clone())
-//             .max_width(500)
-//             .padding(10)
-//             .background(Color::RGBA(252, 251, 250, 100))
-//             .prepare();
+    // let mut y = 75;
+    // for s in &game.log {
+    //     let msg = assets
+    //         .font("normal")?
+    //         .text(s.clone())
+    //         .max_width(500)
+    //         .padding(10)
+    //         .background(Color::RGBA(252, 251, 250, 100))
+    //         .prepare();
 
-//         let txt_height = msg.dimension().1 as i32;
+    //     let txt_height = msg.dimension().1 as i32;
 
-//         if y + txt_height > viewport.height() as i32 {
-//             break;
-//         }
+    //     if y + txt_height > viewport.height() as i32 {
+    //         break;
+    //     }
 
-//         msg.draw(cvs, (10, y))?;
-//         y += txt_height;
-//     }
+    //     msg.draw(cvs, (10, y))?;
+    //     y += txt_height;
+    // }
 
-//     // if let CombatState::Win(Team(_, num, ..)) = game.state {
-//     //     let text = assets
-//     //         .font("very big")?
-//     //         .text(format!("Team #{} wins!", num))
-//     //         .padding(50)
-//     //         .background(Color::RGBA(252, 251, 250, 150))
-//     //         .prepare();
+    // if let CombatState::Win(Team(_, num, ..)) = game.state {
+    //     let text = assets
+    //         .font("very big")?
+    //         .text(format!("Team #{} wins!", num))
+    //         .padding(50)
+    //         .background(Color::RGBA(252, 251, 250, 150))
+    //         .prepare();
 
-//     //     let (w, h) = text.dimension();
-//     //     let x = (viewport.width() - w) / 2;
-//     //     let y = (viewport.height() - h) / 2;
+    //     let (w, h) = text.dimension();
+    //     let x = (viewport.width() - w) / 2;
+    //     let y = (viewport.height() - h) / 2;
 
-//     //     text.draw(cvs, (x as i32, y as i32))?;
-//     // }
-
-//     Ok(())
-// }
+    //     text.draw(cvs, (x as i32, y as i32))?;
+    // }
+}
 
 pub fn init_scroll_offset(
     game: &CombatData,

@@ -57,6 +57,7 @@ pub fn init_combat_data<'a, 'b>(
         dispatcher,
         state: CombatState::Init(game_objects),
         log: vec![],
+        score: 0,
     }
 }
 
@@ -70,10 +71,11 @@ pub fn step<'a, 'b>(g: CombatData<'a, 'b>, i: &Option<UserInput>) -> CombatData<
         mut dispatcher,
         mut world,
         mut log,
+        score,
     } = g;
 
-    let (next_turn, next_active_team, next_state, log_entry) =
-        next_state(turn, &state, active_team_idx, &teams, i, &world);
+    let (next_turn, next_active_team, next_state, log_entry, new_score) =
+        next_state(turn, &state, active_team_idx, &teams, i, &world, score);
 
     dispatcher.dispatch(&mut world);
     world.maintain();
@@ -93,6 +95,7 @@ pub fn step<'a, 'b>(g: CombatData<'a, 'b>, i: &Option<UserInput>) -> CombatData<
         dispatcher,
         world,
         log,
+        score: new_score,
     };
 }
 
@@ -248,19 +251,10 @@ fn next_state<'a, 'b>(
     teams: &Vec<Team>,
     i: &Option<UserInput>,
     w: &World,
-) -> (u64, usize, Option<CombatState>, Option<DisplayStr>) {
+    score: u64,
+) -> (u64, usize, Option<CombatState>, Option<DisplayStr>, u64) {
     match state {
         CombatState::Init(game_objects) => {
-            // TODO use configured characters
-            // -> find way to inject team and pos
-
-            // let game_objects = vec![
-            //     GameObject::Actor(generate_player_by_type(WorldPos(7.0, 6.0), TEAM_PLAYER, ActorType::Tank)),
-            //     GameObject::Actor(generate_player_by_type(WorldPos(8.0, 6.0), TEAM_PLAYER, ActorType::Saw)),
-            //     GameObject::Actor(generate_player_by_type(WorldPos(7.0, 7.0), TEAM_PLAYER, ActorType::Spear)),
-            //     GameObject::Actor(generate_player_by_type(WorldPos(8.0, 7.0), TEAM_PLAYER, ActorType::Healer)),
-            // ];
-
             for o in game_objects {
                 insert_game_object_components(o.clone(), w);
             }
@@ -268,7 +262,13 @@ fn next_state<'a, 'b>(
             spawn_obstacles(w);
             spawn_enemies(0, w);
 
-            (round, active_team_idx, Some(CombatState::StartTurn()), None)
+            (
+                round,
+                active_team_idx,
+                Some(CombatState::StartTurn()),
+                None,
+                score,
+            )
         }
 
         CombatState::StartTurn() => {
@@ -305,11 +305,18 @@ fn next_state<'a, 'b>(
                         tail.to_vec(),
                     )),
                     None,
+                    score,
                 )
             } else {
                 // wait time is up and no further reactions to handle
                 // => continue with next actor
-                (round, active_team_idx, Some(CombatState::FindActor()), None)
+                (
+                    round,
+                    active_team_idx,
+                    Some(CombatState::FindActor()),
+                    None,
+                    score,
+                )
             }
         }
 
@@ -329,6 +336,7 @@ fn next_state<'a, 'b>(
                     active_team_idx,
                     Some(CombatState::SelectAction(ea)),
                     None,
+                    score,
                 );
             }
 
@@ -337,7 +345,7 @@ fn next_state<'a, 'b>(
                 let next_state =
                     CombatState::ResolveAction((ea.0, ea.1, Action::Activate(ea.0), 0), vec![]);
 
-                (round, active_team_idx, Some(next_state), None)
+                (round, active_team_idx, Some(next_state), None, score)
             } else {
                 // there are no more entities with a turn left...
                 if active_team_idx < teams.len() - 1 {
@@ -347,6 +355,7 @@ fn next_state<'a, 'b>(
                         active_team_idx + 1,
                         Some(CombatState::StartTurn()),
                         None,
+                        score,
                     )
                 } else {
                     // ... or start a new round beginning with the first team
@@ -354,8 +363,8 @@ fn next_state<'a, 'b>(
                     if new_round % 5 == 0 {
                         spawn_enemies(new_round / 5, w);
                     }
-                    
-                    (round + 1, 0, Some(CombatState::StartTurn()), None)
+
+                    (round + 1, 0, Some(CombatState::StartTurn()), None, score)
                 }
             }
         }
@@ -371,6 +380,7 @@ fn next_state<'a, 'b>(
                     active_team_idx,
                     Some(CombatState::WaitForUserAction(ea.clone(), None)),
                     None,
+                    score,
                 )
             } else {
                 // the next ready actor is a player controlled entity
@@ -386,6 +396,7 @@ fn next_state<'a, 'b>(
                         Vec::new(),
                     )),
                     None,
+                    score,
                 )
             }
         }
@@ -393,12 +404,16 @@ fn next_state<'a, 'b>(
         CombatState::ResolveAction(entity_action, remaining_actions) => {
             let (change, fx_seq, log_entry) = act(entity_action.clone(), w);
             let mut wait_until = Instant::now();
+            let mut new_score = score;
 
             for c in change {
                 match c {
                     Change::Update(e, o) => update_components(e, o, w),
                     Change::Insert(o) => insert_game_object_components(o, w),
                     Change::Remove(e) => remove_components(e, w),
+                    Change::Score(amount) => {
+                        new_score += amount;
+                    }
                 }
             }
 
@@ -419,6 +434,7 @@ fn next_state<'a, 'b>(
                     remaining_actions.to_vec(),
                 )),
                 log_entry,
+                new_score,
             )
         }
 
@@ -427,9 +443,17 @@ fn next_state<'a, 'b>(
             active_team_idx,
             handle_wait_for_user_action(&e, &ctxt, i, w),
             None,
+            score,
         ),
 
-        CombatState::WaitUntil(t, ol) => (round, active_team_idx, handle_wait_until(t, ol), None),
+        CombatState::WaitUntil(t, ol) => (
+            round,
+            active_team_idx,
+            handle_wait_until(t, ol),
+            None,
+            score,
+        ),
+
         // CombatState::Win(_) => {
         //     // ignore
         //     (round, active_team_idx, None)

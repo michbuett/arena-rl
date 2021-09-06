@@ -68,6 +68,7 @@ pub enum Change {
     Update(Entity, GameObject),
     Insert(GameObject),
     Remove(Entity),
+    Score(u64),
 }
 
 pub type Act = (Action, u8);
@@ -304,6 +305,7 @@ fn changes_for_condition(e: Entity, a: Actor, changes: &mut Vec<Change>) {
     } else {
         changes.push(Change::Remove(e));
         changes.push(Change::Insert(GameObject::Item(a.pos, a.corpse())));
+        changes.push(Change::Score(100));
     }
 }
 

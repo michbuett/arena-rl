@@ -36,6 +36,7 @@ pub struct CombatData<'a, 'b> {
     pub world: World,
     pub dispatcher: Dispatcher<'a, 'b>,
     pub log: Vec<DisplayStr>,
+    pub score: u64,
 }
 
 impl<'a, 'b> CombatData<'a, 'b> {
