@@ -165,14 +165,15 @@ impl<'a> System<'a> for FadeAnimationSystem {
         Entities<'a>,
         ReadStorage<'a, FadeAnimation>,
         WriteStorage<'a, Text>,
+        WriteStorage<'a, Sprites>,
         Read<'a, LazyUpdate>,
     );
 
     fn run(&mut self, data: Self::SystemData) {
-        let (entities, animations, mut texts, updater) = data;
+        let (entities, animations, mut texts, mut sprites, updater) = data;
         let now = Instant::now();
 
-        for (anim, text, e) in (&animations, &mut texts, &entities).join() {
+        for (anim, text, sprites, e) in (&animations, (&mut texts).maybe(), (&mut sprites).maybe(), &entities).join() {
             if anim.start > now {
                 // animation not started yet -> skip it
                 continue;
@@ -188,8 +189,15 @@ impl<'a> System<'a> for FadeAnimationSystem {
             let dt = delta.as_millis() as f32 / anim.duration.as_millis() as f32;
             let da = dt * (anim.end_alpha as f32 - anim.start_alpha as f32);
             let new_alpha = anim.start_alpha as i32 + da.round() as i32;
+            let new_alpha = max(0, min(255, new_alpha)) as u8;
 
-            text.alpha = max(0, min(255, new_alpha)) as u8;
+            if let Some(text) = text {
+                text.alpha = new_alpha;
+            }
+
+            if let Some(sprites) = sprites {
+                sprites.set_alpha(new_alpha);
+            }
         }
     }
 }

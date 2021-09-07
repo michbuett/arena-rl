@@ -48,6 +48,12 @@ impl Sprites {
             sprite.scale = new_scale;
         }
     }
+
+    pub fn set_alpha(&mut self, new_alpha: u8) {
+        for sprite in self.1.iter_mut() {
+            sprite.alpha = new_alpha;
+        }
+    }
 }
 
 pub struct SpriteIter<'a> {
