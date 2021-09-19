@@ -343,48 +343,9 @@ impl Actor {
         }
     }
 
-    // pub fn add_traits(self, new_traits: &mut Vec<Trait>) -> Self {
-    //     let mut traits = self.traits;
-    //     traits.append(new_traits);
-    //     let effects = traits
-    //         .iter()
-    //         .flat_map(|t| {
-    //             t.effects
-    //                 .iter()
-    //                 .map(|e| (t.name.clone(), e.clone()))
-    //                 .collect::<Vec<_>>()
-    //         })
-    //         .collect();
-
-    //     Self {
-    //         traits,
-    //         effects,
-    //         ..self
-    //     }
-    // }
-
     pub fn wound(self, w: Wound) -> Self {
-        // pub fn wound(self, w: Wound) -> Condition {
-        // let default_wounds_num = 3 + self.attr(Attr::Wound).val();
-        // let max_wounds = max(1, default_wounds_num) as u8;
         let wounds = self.wounds + w.wound;
         let pain = self.pain + w.pain;
-
-        // if wounds < max_wounds {
-        //     Condition::Alive(Self {
-        //         wounds,
-        //         pain,
-        //         ..self
-        //     })
-        // } else {
-        //     Condition::Dead(
-        //         self.pos,
-        //         Item {
-        //             name: format!("Corpse of {}", self.name),
-        //             look: vec![("corpses", 1)],
-        //         },
-        //     )
-        // }
 
         Self {
             wounds,
@@ -439,13 +400,7 @@ impl Actor {
     ///  6 => Supernatural
     ///  7 => Godlike (unlimited power)
     pub fn attr(&self, s: Attr) -> AttrVal {
-        let mut result = AttrVal::new(s, &self.effects);
-
-        if self.pain > 0 {
-            result = result.modify(DisplayStr::new("pain"), -1 * self.pain as i8);
-        }
-
-        result
+        AttrVal::new(s, &self.effects)
     }
 
     pub fn active_traits(&self) -> ActiveTraitIter {
@@ -524,17 +479,6 @@ pub struct Wound {
 }
 
 impl Wound {
-    // pub fn new(num_hits: u8) -> Self {
-    //     match num_hits {
-    //         0 => Self { pain: 0, wound: 0 },
-    //         1 => Self { pain: 1, wound: 0 },
-    //         n => Self {
-    //             pain: n,
-    //             wound: n -1,
-    //         },
-    //     }
-    // }
-
     pub fn from_wound_roll(r: &Roll) -> Self {
         match r.successes() {
             0 => Self { pain: 0, wound: 0 },

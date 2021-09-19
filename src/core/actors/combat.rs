@@ -7,8 +7,8 @@ use crate::core::{MapPos, Obstacle};
 
 pub type AttackVector<T> = Vec<(MapPos, T, Obstacle, bool)>;
 
-#[derive(Debug)]
-pub struct Hit<T> {
+#[derive(Clone, Debug)]
+pub struct Hit<T: Clone> {
     pub attack: Attack,
     pub pos: MapPos,
     pub roll: Roll,
@@ -16,8 +16,8 @@ pub struct Hit<T> {
     pub accicental_hit: bool,
 }
 
-impl<A> Hit<A> {
-    pub fn set_target<B>(self, target: B) -> Hit<B> {
+impl<A: Clone> Hit<A> {
+    pub fn set_target<B: Clone>(self, target: B) -> Hit<B> {
         Hit {
             target,
             attack: self.attack,
@@ -36,13 +36,18 @@ impl<A> Hit<A> {
     }
 }
 
-pub fn resolve_to_hit<T>(attack: &Attack, mut vector: AttackVector<T>) -> Vec<Hit<T>> {
+pub fn resolve_to_hit<T: Clone>(attack: &Attack, mut vector: AttackVector<T>) -> Vec<Hit<T>> {
     let mut remaining_dice = attack.num_dice;
     let mut result = vec![];
 
     for (pos, target, Obstacle(difficulty), is_target) in vector.drain(..) {
         let to_hit_adv = RollAdvantage::new(attack.to_hit.val(), difficulty);
         let roll = Roll::new(remaining_dice, to_hit_adv);
+
+        // println!(
+        //     "[DEBUG] resolve_to_hit *** \n\tdifficulty: {}, \n\tadvantage: {:?}, \n\troll: {:?}",
+        //     difficulty, to_hit_adv, roll
+        // );
 
         if is_target {
             remaining_dice = remaining_dice - roll.normal_successes();
@@ -58,7 +63,6 @@ pub fn resolve_to_hit<T>(attack: &Attack, mut vector: AttackVector<T>) -> Vec<Hi
             accicental_hit: !is_target,
         });
 
-        // println!("[DEBUG] resolve_to_hit: difficulty={}, roll={:?}", difficulty, roll);
         if remaining_dice == 0 {
             return result;
         }
@@ -80,11 +84,16 @@ pub fn resolve_to_wound(hit: Hit<Actor>) -> ToWoundResult {
     );
 
     let (num_hits, defence) = handle_defence(&hit);
-
     let wound_roll = Roll::new(num_hits, to_wound_adv);
+    let wound = Wound::from_wound_roll(&wound_roll);
+
+    // println!(
+    //     "[DEBUG] resolve_to_wound *** \n\tadvantage: {:?}, \n\troll: {:?}, \n\twound: {:?}",
+    //     to_wound_adv, wound_roll, wound
+    // );
 
     ToWoundResult {
-        target: hit.target.wound(Wound::from_wound_roll(&wound_roll)),
+        target: hit.target.wound(wound),
         roll: wound_roll,
         defence,
     }

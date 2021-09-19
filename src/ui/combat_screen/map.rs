@@ -40,7 +40,6 @@ pub fn render(
     render_floor_objects(&mut scene, scroll_offset, &pos, &sprites, &zlayer_floor);
     render_game_objects(&mut scene, scroll_offset, &pos, &sprites, &zlayer_gameobj);
     render_fx(&mut scene, scroll_offset, &default_action, &texture_map, &pos, &sprites, &zlayer_fx);
-
     render_texts(&mut scene, scroll_offset, &pos, &texts);
 
     (

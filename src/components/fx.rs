@@ -10,16 +10,16 @@ use crate::core::*;
 use crate::ui::ScreenCoord;
 
 #[derive(Debug)]
-pub struct FxSequence(Instant, Vec<Fx>);
+pub struct FxSequence(Duration, Vec<(Duration, FxEffect)>);
 
 impl FxSequence {
     pub fn new() -> Self {
-        Self(Instant::now(), vec![])
+        Self(Duration::from_millis(0), vec![])
     }
 
     pub fn wait_until_finished(mut self) -> Self {
-        if let Some(Fx(_, dur, _)) = self.1.last() {
-            self.0 += *dur
+        if let Some(d) = self.1.iter().map(|(wait, eff)| *wait + eff.duration()).max() {
+            self.0 = d;
         }
 
         self
@@ -31,22 +31,33 @@ impl FxSequence {
     }
 
     pub fn then(mut self, fx: FxEffect) -> Self {
-        self.1.push(Fx(self.0, duration(&fx), fx));
+        self.1.push((self.0, fx));
         self
     }
 
-    pub fn into_vec(self) -> Vec<Fx> {
-        self.1
+    pub fn then_append(mut self, mut other: FxSequence) -> Self {
+        for (wait, eff) in other.1.drain(..) {
+            self.1.push((self.0 + wait, eff));
+        }
+        self
+    }
+
+    // pub fn into_vec(self) -> Vec<Fx> {
+    //     self.1
+    // }
+
+    pub fn into_fx_vec(mut self, start_time: Instant) -> Vec<Fx> {
+        self.1.drain(..).map(|(wait, eff)| Fx(start_time + wait, eff)).collect()
     }
 }
 
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
-pub struct Fx(Instant, Duration, FxEffect);
+pub struct Fx(Instant, FxEffect);
 
 impl Fx {
     pub fn ends_at(&self) -> Instant {
-        self.0 + self.1
+        self.0 + self.1.duration()
     }
 
     pub fn run(self, world: &World) {
@@ -139,6 +150,18 @@ impl FxEffect {
     pub fn custom(p: WorldPos, d: u64) -> FxBuilder {
         FxBuilder::new(p, d)
     }
+    
+    pub fn duration(&self) -> Duration {
+        let millis = match self {
+            FxEffect::BloodSplatter(..) => 1000,
+
+            FxEffect::MoveTo(_, p, _) => p.len().checked_sub(1).unwrap_or(0) as u64 * 200,
+
+            FxEffect::Custom { duration, .. } => *duration,
+        };
+
+        Duration::from_millis(millis)
+    }
 }
 
 #[derive(Debug)]
@@ -221,18 +244,20 @@ impl<'a> System<'a> for FxSystem {
         let (entities, fx, updater, texture_map) = data;
         let now = Instant::now();
 
-        for (e, Fx(start_time, duration, fx_eff)) in (&entities, &fx).join() {
+        for (e, Fx(start_time, fx_eff)) in (&entities, &fx).join() {
             if now < *start_time {
                 continue;
             }
 
+            let duration = fx_eff.duration();
+
             match fx_eff {
                 FxEffect::BloodSplatter(pos) => {
-                    handle_blood_splatter(*pos, *duration, &entities, &updater, &texture_map)
+                    handle_blood_splatter(*pos, duration, &entities, &updater, &texture_map)
                 }
 
                 FxEffect::MoveTo(entity, path, modification) => {
-                    handle_move_to(*entity, path.to_vec(), *duration, *modification, &updater)
+                    handle_move_to(*entity, path.to_vec(), duration, *modification, &updater)
                 }
 
                 FxEffect::Custom {
@@ -304,6 +329,20 @@ fn handle_blood_splatter(
             .create_entity(&entities)
             .with(Sprites::new(vec![sprite.clone()]))
             .with(Position(pos))
+            .with(ScaleAnimation::new(1.0, 3.0, duration))
+            .with(FadeAnimation::fadeout_after(duration))
+            .with(EndOfLive::after(duration))
+            .with(ZLayerFX)
+            .with(MovementAnimation::new(
+                duration,
+                vec![pos, animation_target_pos(&pos, (0, 0), (-200, -100))],
+            ))
+            .build();
+
+        updater
+            .create_entity(&entities)
+            .with(Sprites::new(vec![sprite.clone()]))
+            .with(Position(pos))
             .with(
                 MovementAnimation::new(duration, vec![pos, to])
                     .set_modification(MovementModification::ParabolaJump(100)),
@@ -332,18 +371,6 @@ fn random_neighbor_pos(from_pos: &WorldPos) -> WorldPos {
 
 fn one_of<'a, T>(v: &'a Vec<T>) -> &'a T {
     v.choose(&mut rand::thread_rng()).unwrap()
-}
-
-fn duration(fx: &FxEffect) -> Duration {
-    let millis = match fx {
-        FxEffect::BloodSplatter(..) => 1000,
-
-        FxEffect::MoveTo(_, p, _) => p.len().checked_sub(1).unwrap_or(0) as u64 * 200,
-
-        FxEffect::Custom { duration, .. } => *duration,
-    };
-
-    Duration::from_millis(millis)
 }
 
 fn handle_custom(

@@ -417,7 +417,7 @@ fn next_state<'a, 'b>(
                 }
             }
 
-            for fx in fx_seq.into_vec().drain(..) {
+            for fx in fx_seq.into_fx_vec(Instant::now()).drain(..) {
                 if wait_until < fx.ends_at() {
                     wait_until = fx.ends_at();
                 }
