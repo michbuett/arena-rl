@@ -113,8 +113,26 @@ fn map_action_to_sprite(a: &Action) -> String {
 }
 
 fn get_txt_actor(a: &Actor) -> Text {
-    let (pain, wounds, ..) = a.health();
-    return Text::new(format!("{} - {}", pain, wounds), FontFace::Normal).offset(39, 85);
+    let health = a.health();
+    if health.wounds.0 > 0 {
+        return Text::new(format!("{}", health.wounds.0), FontFace::Normal)
+            .color(200, 21, 22, 255)
+            .offset(39, 85);
+    }
+
+    if health.pain > 0 {
+        return Text::new(format!("-{}", health.pain), FontFace::Normal)
+            .color(200, 201, 22, 255)
+            .offset(39, 85);
+    }
+
+    if health.focus > 0 {
+        return Text::new(format!("+{}", health.focus), FontFace::Normal)
+            .color(20, 201, 22, 255)
+            .offset(39, 85);
+    }
+
+    return Text::new("-".to_string(), FontFace::Normal).offset(39, 85);
 }
 
 fn get_sprites_actor(a: &Actor, texture_map: &TextureMap) -> Sprites {

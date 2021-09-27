@@ -48,6 +48,7 @@ impl ActorBuilder {
             pos: self.pos,
             pain: 0,
             wounds: 0,
+            focus: 0,
             effects: Vec::new(),
             traits: self.traits,
             pending_action: None,
@@ -102,6 +103,7 @@ pub type Look = Vec<(u8, String)>;
 pub struct Actor {
     pain: u8,
     wounds: u8,
+    focus: u8,
     traits: HashMap<String, Trait>,
     look: Look,
 
@@ -188,9 +190,28 @@ impl Actor {
         self.add_trait(key.to_string(), ability).prepare(Action::done(msg))
     }
 
+    fn is_gathering_strength(&self) -> bool {
+        for (_, eff) in self.effects.iter() {
+            if let Effect::GatherStrength = eff {
+                return true
+            }
+        }
+
+        false
+    }
+
     pub fn start_next_turn(mut self, engaged_in_combat: bool) -> Actor {
         let mut new_traits = HashMap::new();
-
+        let (pain, focus)  = if self.is_gathering_strength() {
+            if self.pain > 0 {
+                (max(self.wounds, 0), 0)
+            } else {
+                (0, 1)
+            }
+        } else {
+            (self.pain, 0)
+        };
+        
         // handle temporary traits
         for (k, t) in self.traits.drain() {
             if let TraitSource::Temporary(time) = t.source {
@@ -207,6 +228,8 @@ impl Actor {
 
         Self {
             engaged_in_combat,
+            pain,
+            focus,
             pending_action: None,
             traits: new_traits,
             ..self
@@ -224,10 +247,10 @@ impl Actor {
         }
 
         result.push((
-            "ability#Recover".to_string(),
+            "ability#GatherStrength".to_string(),
             Trait {
-                name: DisplayStr::new("Recovering"),
-                effects: vec![Effect::Recovering],
+                name: DisplayStr::new("Gather strength"),
+                effects: vec![Effect::GatherStrength],
                 source: TraitSource::Temporary(1),
                 visuals: None,
             },
@@ -355,8 +378,8 @@ impl Actor {
     }
 
     pub fn is_alive(&self) -> bool {
-        let (_, wounds, max_wounds) = self.health();
-        wounds < max_wounds
+        let Health { wounds, .. } = self.health();
+        wounds.0 < wounds.1
 
     }
 
@@ -367,12 +390,16 @@ impl Actor {
         }
     }
 
-    /// Describes the current health condition of an actor (pain, wounds, max_distance)
-    pub fn health(&self) -> (u8, u8, u8) {
-        let default_wounds_num = 3 + self.attr(Attr::Physical).val();
+    /// Describes the current health condition of an actor
+    pub fn health(&self) -> Health {
+        let default_wounds_num = 3 + AttrVal::new(Attr::Physical, &self.effects).val();
         let max_wounds = max(1, default_wounds_num) as u8;
 
-        (self.pain, self.wounds, max_wounds)
+        Health {
+            pain: self.pain,
+            focus: self.focus,
+            wounds: (self.wounds, max_wounds),
+        }
     }
 
     pub fn look(&self) -> Vec<String> {
@@ -400,12 +427,24 @@ impl Actor {
     ///  6 => Supernatural
     ///  7 => Godlike (unlimited power)
     pub fn attr(&self, s: Attr) -> AttrVal {
-        AttrVal::new(s, &self.effects)
+        let mut av = AttrVal::new(s, &self.effects);
+
+        if self.focus > 0 {
+            av = av.modify(DisplayStr::new("Focus"), 1);
+        }
+
+        av
     }
 
     pub fn active_traits(&self) -> ActiveTraitIter {
         ActiveTraitIter(self.traits.values())
     }
+}
+
+pub struct Health {
+    pub pain: u8,
+    pub focus: u8,
+    pub wounds: (u8, u8),
 }
 
 pub struct ActiveTraitIter<'a>(std::collections::hash_map::Values<'a, String, Trait>);
@@ -436,7 +475,8 @@ pub struct AttackOption {
 
 impl AttackOption {
     pub fn into_attack(self, a: &Actor) -> Attack {
-        let (pain, wounds, max_wounds) = a.health();
+        let Health { pain, wounds, .. } = a.health();
+        let (cur_wounds, max_wounds) = wounds;
 
         Attack {
             to_hit: a.attr(Attr::ToHit).modify(self.name.clone(), self.to_hit),
@@ -445,7 +485,7 @@ impl AttackOption {
                 .modify(self.name.clone(), self.to_wound),
             name: self.name,
             attack_type: self.attack_type,
-            num_dice: max(1, max_wounds.checked_sub(wounds + pain).unwrap_or(0)),
+            num_dice: max(1, max_wounds.checked_sub(cur_wounds + pain).unwrap_or(0)),
         }
     }
 }

@@ -1,6 +1,6 @@
 use crate::core::{
     Action, Actor, CombatData, CombatState, DisplayStr, GameObject, InputContext, Trait,
-    TraitSource, UserInput, WorldPos,
+    TraitSource, UserInput, WorldPos, Health
 };
 use crate::ui::types::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenText};
 
@@ -121,8 +121,8 @@ fn display_text((action, _): &(Action, u8), is_first: bool) -> DisplayStr {
 }
 
 fn describe_actor(a: &Actor) -> String {
-    let (pain, wounds, ..) = a.health();
-    let condition = match (pain, wounds) {
+    let Health { pain, wounds, ..} = a.health();
+    let condition = match (pain, wounds.0) {
         (0, 0) => "perfect condition",
         (_, 0) => "unharmed but in some pain",
         (_, 1) => "wounded",

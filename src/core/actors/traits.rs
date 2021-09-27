@@ -43,7 +43,7 @@ pub enum Effect {
     /// (key, trait, target)
     GiveTrait(String, Trait, AbilityTarget),
 
-    Recovering,
+    GatherStrength,
 }
 
 #[derive(Debug, Clone)]

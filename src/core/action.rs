@@ -418,49 +418,6 @@ fn filter_attack_vector<T: Clone>(
         })
 }
 
-struct CombatResult {
-    attacker: (Entity, Actor),
-    attack: (Attack, WorldPos, WorldPos),
-    fx_data: HitWoundData,
-}
-
-fn perform_combat(
-    attacker: (Entity, Actor),
-    target: (Entity, Actor),
-    attack_option: AttackOption,
-    w: &World,
-) -> Option<CombatResult> {
-    let v = attack_vector(&attacker.1, &target.1, &attack_option, w.system_data());
-
-    if v.is_empty() {
-        // there are no targets or obstacles to hit
-        // => cancel attack and do nothing
-        return None
-    }
-
-    let attack_start_pos = attacker.1.pos;
-    let attack_end_pos = v.last().unwrap().0.to_world_pos();
-    let attack = attack_option.into_attack(&attacker.1);
-    let mut hits = resolve_to_hit(&attack, filter_attack_vector(&v));
-    let mut fx_data = vec![];
-
-    for h in hits.drain(..) {
-        if let Some(target) = get_actor(h.target, w) {
-            let wound = resolve_to_wound(h.clone().set_target(target));
-
-            fx_data.push((h, Some(wound)));
-        } else {
-            fx_data.push((h, None));
-        }
-    }
-
-    Some(CombatResult {
-        attacker,
-        attack: (attack, attack_start_pos, attack_end_pos),
-        fx_data,
-    })
-}
-
 fn handle_attack(
     attacker: (Entity, Actor),
     target: (Entity, Actor),
