@@ -71,17 +71,17 @@ fn draw_scene(
     cvs.set_draw_color(Color::RGB(r, g, b));
     cvs.clear();
 
-    for (tex_name, ScreenSprite(pos, sprite)) in scene.images {
+    for (tex_name, ScreenSprite(pos, align, sprite)) in scene.images {
         if let Some(ref mut t) = assets.textures.get_mut(&tex_name) {
-            draw_sprite(pos, sprite, t, cvs)?;
+            draw_sprite(pos, align, sprite, t, cvs)?;
         }
     }
 
-    for ScreenSprite(pos, sprite) in scene.sprites {
+    for ScreenSprite(pos, align, sprite) in scene.sprites {
         let mut texture = assets.texture.as_mut();
 
         if let Some(ref mut t) = texture {
-            draw_sprite(pos, sprite, t, cvs)?;
+            draw_sprite(pos, align, sprite, t, cvs)?;
         }
     }
 
@@ -207,6 +207,7 @@ fn get_scrolling(sd: ScrollData, i: &UserInput) -> ScrollData {
 
 fn draw_sprite(
     pos: ScreenPos,
+    align: Align,
     sprite: Sprite,
     t: &mut Texture,
     cvs: &mut WindowCanvas,
@@ -216,6 +217,7 @@ fn draw_sprite(
     let (w, h) = sprite.dim;
     let tw = (w as f32 * sprite.scale).round() as u32;
     let th = (h as f32 * sprite.scale).round() as u32;
+    let pos = pos.align(align, tw, th);
     let from = Rect::new(x, y, w, h);
     let to = Rect::new(pos.0 + dx, pos.1 + dy, tw, th);
 

@@ -42,10 +42,6 @@ impl FxSequence {
         self
     }
 
-    // pub fn into_vec(self) -> Vec<Fx> {
-    //     self.1
-    // }
-
     pub fn into_fx_vec(mut self, start_time: Instant) -> Vec<Fx> {
         self.1.drain(..).map(|(wait, eff)| Fx(start_time + wait, eff)).collect()
     }
@@ -91,6 +87,7 @@ impl FxEffect {
     pub fn say(txt: impl ToString, pos: WorldPos) -> FxEffect {
         let txt = Text::new(txt.to_string(), FontFace::Big)
             .padding(5)
+            .align(Align::MidCenter)
             .color(21, 22, 23, 255);
 
         FxBuilder::new(pos, 1000)
@@ -103,6 +100,7 @@ impl FxEffect {
 
     pub fn scream(txt: impl ToString, pos: WorldPos) -> FxEffect {
         let txt = Text::new(txt.to_string(), FontFace::VeryBig)
+            .align(Align::MidCenter)
             .padding(5)
             .color(195, 31, 42, 255);
 

@@ -170,10 +170,10 @@ fn handle_wait_for_user_action(
                 // it is allowed
                 // => determine the new possible actions and wait for the next
                 //    user input
-                let pos = WorldPos::new(pos.x().floor(), pos.y().floor(), 0.0);
-                let objects = find_objects_at(&pos, &w);
-                let actions = actions_at(e, pos, &w);
-                let ui = InputContext::SelectedArea(pos, objects, actions);
+                // let pos = WorldPos::new(pos.x().floor(), pos.y().floor(), 0.0);
+                let objects = find_objects_at(*pos, &w);
+                let actions = actions_at(e, pos.to_world_pos(), &w);
+                let ui = InputContext::SelectedArea(*pos, objects, actions);
 
                 Some(CombatState::WaitForUserAction(e.clone(), Some(ui)))
             } else {
@@ -220,10 +220,10 @@ fn handle_wait_for_user_action(
 //     winning_team
 // }
 
-fn find_objects_at(pos: &WorldPos, world: &World) -> Vec<GameObject> {
+fn find_objects_at(mpos: MapPos, world: &World) -> Vec<GameObject> {
     let game_objects: ReadStorage<GameObjectCmp> = world.system_data();
     let mut result = Vec::new();
-    let mpos = MapPos::from_world_pos(*pos);
+    // let mpos = MapPos::from_world_pos(*pos);
 
     for GameObjectCmp(o) in (&game_objects).join() {
         match o {

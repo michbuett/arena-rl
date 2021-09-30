@@ -9,7 +9,8 @@ use std::time::{Duration, Instant};
 use specs::prelude::*;
 use specs_derive::Component;
 
-use crate::core::{GameObject, SpriteConfig, Team, WorldPos};
+use crate::core::{DisplayStr, GameObject, SpriteConfig, Team, WorldPos};
+use crate::ui::{Align, ScreenText, ScreenPos};
 
 pub use crate::components::actors::*;
 pub use crate::components::animation::*;
@@ -79,6 +80,7 @@ pub struct Text {
     pub border: Option<(u32, (u8, u8, u8, u8))>,
     pub alpha: u8,
     pub scale: f32,
+    pub align: Align,
 }
 
 impl Text {
@@ -93,9 +95,32 @@ impl Text {
             border: None,
             alpha: 255,
             scale: 1.0,
+            align: Align::TopLeft,
         }
     }
 
+    pub fn into_screen_text(&self, pos: ScreenPos) -> ScreenText {
+        ScreenText {
+            font: self.font,
+            text: DisplayStr::new(self.txt.clone()),
+            pos: pos,
+            color: self.color,
+            background: self.background,
+            padding: self.padding,
+            border: self.border,
+            alpha: self.alpha,
+            min_width: 0,
+            max_width: u32::max_value(),
+            scale: self.scale,
+            align: self.align,
+        }
+    }
+
+    pub fn align(mut self, new_alignment: Align) -> Self {
+        self.align = new_alignment;
+        self
+    }
+    
     pub fn offset(self, dx: i32, dy: i32) -> Self {
         Self {
             offset: Some((dx, dy)),
@@ -114,12 +139,12 @@ impl Text {
         }
     }
 
-    // pub fn background(self, r: u8, g: u8, b: u8, a: u8) -> Self {
-    //     Self {
-    //         background: Some((r, g, b, a)),
-    //         ..self
-    //     }
-    // }
+    pub fn background(self, r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self {
+            background: Some((r, g, b, a)),
+            ..self
+        }
+    }
 }
 
 #[derive(Component, Debug, Clone)]

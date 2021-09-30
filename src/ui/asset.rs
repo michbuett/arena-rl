@@ -135,7 +135,7 @@ fn compile_texture_map(
                 SpriteConfig {
                     source: SpriteSource::Static(*x, *y),
                     dim: (*w, *h),
-                    offset: proto_cfg.offset,
+                    offset: proto_cfg.offset.unwrap_or((0, 0)),
                     alpha: proto_cfg.alpha.unwrap_or(255),
                     scale: 1.0,
                 },
@@ -157,7 +157,7 @@ fn compile_texture_map(
                         frame_positions,
                     ),
                     dim: (*w, *h),
-                    offset: proto_cfg.offset,
+                    offset: proto_cfg.offset.unwrap_or((0, 0)),
                     alpha: proto_cfg.alpha.unwrap_or(255),
                     scale: 1.0,
                 },

@@ -254,7 +254,7 @@ pub struct MapPos(pub i32, pub i32);
 
 impl MapPos {
     pub fn from_world_pos(pos: WorldPos) -> Self {
-        Self(pos.x().floor() as i32, pos.y().floor() as i32)
+        Self(pos.x().round() as i32, pos.y().round() as i32)
     }
 
     pub fn to_world_pos(self) -> WorldPos {

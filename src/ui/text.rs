@@ -104,17 +104,19 @@ impl<'a> Font<'a> {
         let cache_key = screen_txt.text.to_string();
 
         if let Some((ref mut tex, w, h)) = self.cached_texts.get_mut(&cache_key) {
-            let ScreenPos(x, y) = screen_txt.pos;
             let (tw, th) = scale_dim(screen_txt.scale, *w, *h);
+            let ScreenPos(x, y) = screen_txt.pos.align(screen_txt.align, tw, th);
 
             tex.set_alpha_mod(screen_txt.alpha);
             cvs.copy(tex, Rect::new(0, 0, *w, *h), Rect::new(x, y, tw, th))?;
             return Ok(());
         }
 
-        let ScreenPos(x, y) = screen_txt.pos;
+        let pos = screen_txt.pos;
+        let align = screen_txt.align;
         let prepared_text = prepare(screen_txt, self);
         let (w, h) = prepared_text.dim;
+        let ScreenPos(x, y) = pos.align(align, w, h);
         let pixel_format = sdl2::pixels::PixelFormatEnum::ARGB32;
 
         // draw the text to the temporay image

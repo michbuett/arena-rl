@@ -70,12 +70,13 @@ pub fn find_enemies(
 
 pub fn find_actor_at(w: &World, at: &WorldPos) -> Option<(Entity, Actor)> {
     let (entities, objects): (Entities, ReadStorage<GameObjectCmp>) = w.system_data();
+    let at = MapPos::from_world_pos(*at);
 
     for (e, GameObjectCmp(o)) in (&entities, &objects).join() {
         if let GameObject::Actor(a) = o {
-            let (x, y) = a.pos.as_xy();
+            let apos = MapPos::from_world_pos(a.pos);
 
-            if x.floor() == at.x().floor() && y.floor() == at.y().floor() {
+            if apos == at {
                 return Some((e, a.clone()));
             }
         }

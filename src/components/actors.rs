@@ -1,7 +1,7 @@
 use specs::prelude::*;
 
 use crate::components::*;
-use crate::core::{Action, Attr, GameObject, Actor, Item, TextureMap};
+use crate::core::{Action, Actor, Attr, GameObject, Item, TextureMap};
 
 type SystemData<'a> = (
     Read<'a, LazyUpdate>,
@@ -30,35 +30,29 @@ pub fn remove_components(entity: Entity, world: &World) {
     let _ = entities.delete(entity);
 }
 
-fn lazy_insert_components<'a>(
-    entity: Entity,
-    obj: GameObject,
-    data: SystemData,
-) {
+fn lazy_insert_components<'a>(entity: Entity, obj: GameObject, data: SystemData) {
     match obj {
-        GameObject::Actor(a) =>
-            lazy_insert_component_for_actor(entity, a, data),
+        GameObject::Actor(a) => lazy_insert_component_for_actor(entity, a, data),
 
-        GameObject::Item(p, i) =>
-            lazy_insert_component_for_items(entity, p, i, data),
+        GameObject::Item(p, i) => lazy_insert_component_for_items(entity, p, i, data),
     }
 }
 
-fn lazy_insert_component_for_actor<'a>(
-    entity: Entity,
-    a: Actor,
-    data: SystemData,
-) {
+fn lazy_insert_component_for_actor<'a>(entity: Entity, a: Actor, data: SystemData) {
     let (updater, texture_map, positions) = data;
     let melee_def = a.attr(Attr::MeleeDefence).val();
     let range_def = a.attr(Attr::RangeDefence).val();
-
 
     if positions.get(entity).is_none() {
         updater.insert(entity, Position(a.pos));
     }
 
-    updater.insert(entity, get_txt_actor(&a));
+    if let Some(txt) = get_txt_actor(&a) {
+        updater.insert(entity, txt);
+    } else {
+        updater.remove::<Text>(entity);
+    }
+
     updater.insert(entity, get_sprites_actor(&a, &texture_map));
     updater.insert(
         entity,
@@ -112,27 +106,24 @@ fn map_action_to_sprite(a: &Action) -> String {
     .to_string()
 }
 
-fn get_txt_actor(a: &Actor) -> Text {
+fn get_txt_actor(a: &Actor) -> Option<Text> {
     let health = a.health();
-    if health.wounds.0 > 0 {
-        return Text::new(format!("{}", health.wounds.0), FontFace::Normal)
-            .color(200, 21, 22, 255)
-            .offset(39, 85);
-    }
+    let unformated_text = if health.wounds.0 > 0 {
+        Some(Text::new(format!("{}", health.wounds.0), FontFace::Big).color(200, 21, 22, 255))
+    } else if health.pain > 0 {
+        Some(Text::new(format!("-{}", health.pain), FontFace::Normal).color(200, 201, 22, 255))
+    } else if health.focus > 0 {
+        Some(Text::new(format!("+{}", health.focus), FontFace::Normal).color(20, 201, 22, 255))
+    } else {
+        None
+    };
 
-    if health.pain > 0 {
-        return Text::new(format!("-{}", health.pain), FontFace::Normal)
-            .color(200, 201, 22, 255)
-            .offset(39, 85);
-    }
-
-    if health.focus > 0 {
-        return Text::new(format!("+{}", health.focus), FontFace::Normal)
-            .color(20, 201, 22, 255)
-            .offset(39, 85);
-    }
-
-    return Text::new("-".to_string(), FontFace::Normal).offset(39, 85);
+    unformated_text.map(|t: Text| {
+        t.align(Align::MidCenter)
+            .background(200, 201, 202, 128)
+            .padding(5)
+            .offset(0, 16)
+    })
 }
 
 fn get_sprites_actor(a: &Actor, texture_map: &TextureMap) -> Sprites {
@@ -162,7 +153,8 @@ fn get_sprites_actor(a: &Actor, texture_map: &TextureMap) -> Sprites {
 }
 
 fn get_sprites_items(item: &Item, texture_map: &TextureMap) -> Sprites {
-    let sprites = item.look
+    let sprites = item
+        .look
         .iter()
         .filter_map(|(_, key)| texture_map.get(key))
         .cloned()

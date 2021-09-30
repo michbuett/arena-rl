@@ -10,7 +10,7 @@ pub enum UserInput {
     NewGame,
     SelectTeam(Vec<GameObject>),
     SelectAction((Action, u8)),
-    SelectWorldPos(WorldPos),
+    SelectWorldPos(MapPos),
     StartScrolling(),
     EndScrolling(),
     ScrollTo(i32, i32),
@@ -18,7 +18,7 @@ pub enum UserInput {
 
 #[derive(Debug)]
 pub enum InputContext {
-    SelectedArea(WorldPos, Vec<GameObject>, Vec<(Action, u8)>),
+    SelectedArea(MapPos, Vec<GameObject>, Vec<(Action, u8)>),
     // Opportunity(Opportunity, Vec<(Action, u8)>),
 }
 

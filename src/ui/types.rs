@@ -70,6 +70,15 @@ impl ScreenCoord {
 #[derive(Clone, Copy, Debug)]
 pub struct ScreenPos(pub i32, pub i32);
 
+impl ScreenPos {
+    pub fn align(self, align: Align, w: u32, h: u32) -> Self {
+        match align {
+            Align::TopLeft => self,
+            Align::MidCenter => Self(self.0 - w as i32 / 2, self.1 - h as i32 / 2),
+        }
+    }
+}
+
 #[test]
 fn mapping_between_world_and_screen_coordinates_is_isomorphic() {
     let wp = WorldPos::new(5.0, 10.0, 0.0);
@@ -117,6 +126,7 @@ pub struct ScreenText {
     pub padding: u32,
     pub alpha: u8,
     pub scale: f32,
+    pub align: Align,
 
     /// e.g.
     /// Some(width, (red, green, blue, alpha))
@@ -140,6 +150,7 @@ impl ScreenText {
             min_width: 0,
             max_width: u32::max_value(),
             scale: 1.0,
+            align: Align::TopLeft,
         }
     }
 
@@ -221,13 +232,19 @@ impl Scene {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum Align {
+    TopLeft,
+    MidCenter,
+}
+
 #[derive(Debug)]
-pub struct ScreenSprite(pub ScreenPos, pub Sprite);
+pub struct ScreenSprite(pub ScreenPos, pub Align, pub Sprite);
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProtoSpriteConfig {
     pub files: Vec<String>,
-    pub offset: (i32, i32),
+    pub offset: Option<(i32, i32)>,
     pub alpha: Option<u8>,
     pub frame_durration: Option<u32>,
 }

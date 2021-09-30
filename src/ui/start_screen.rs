@@ -1,5 +1,5 @@
 use crate::core::{DisplayStr, Sprite, UserInput};
-use crate::ui::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenSprite, ScreenText};
+use crate::ui::{Align, ClickArea, ClickAreas, Scene, ScreenPos, ScreenSprite, ScreenText};
 
 pub fn render(viewport: (i32, i32, u32, u32)) -> (Scene, ClickAreas) {
     let (width, height) = (400, 106);
@@ -12,6 +12,7 @@ pub fn render(viewport: (i32, i32, u32, u32)) -> (Scene, ClickAreas) {
         "logo".to_string(),
         ScreenSprite(
             ScreenPos(xpos, ypos),
+            Align::TopLeft,
             Sprite {
                 source: (0, 0),
                 dim: (width, height),

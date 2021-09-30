@@ -1,6 +1,6 @@
 use crate::core::{
     Action, Actor, CombatData, CombatState, DisplayStr, GameObject, InputContext, Trait,
-    TraitSource, UserInput, WorldPos, Health
+    TraitSource, UserInput, MapPos, Health
 };
 use crate::ui::types::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenText};
 
@@ -30,10 +30,10 @@ pub fn render(
 fn draw_area_details(
     scene: &mut Scene,
     viewport_width: u32,
-    pos: WorldPos,
+    MapPos(x, y): MapPos,
     objects: &Vec<GameObject>,
 ) {
-    let mut txt = format!("You look at ({}, {}).", pos.x(), pos.y());
+    let mut txt = format!("You look at ({}, {}).", x, y);
 
     if objects.is_empty() {
         txt += &"\nNothing special here.".to_string();

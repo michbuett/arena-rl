@@ -10,7 +10,7 @@
     // EXAMPLE
     // ("melee-1h_1", ProtoSpriteConfig( 
     //         files: ["weapons_saw-1-1.png", "weapons_saw-1-2.png"],
-    //         offset: (16, 16),
+    //         offset: Some((16, 16)),
     //         alpha: Some(200),  // optional, defaults to 255
     //         frame_durration: Some(200), // optional, defaults to 50, only relevant for animations
     //     )),
@@ -18,288 +18,246 @@
     // === BEGIN SECTION head ================================
     ("head_1", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-1.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
+            // offset: (40, 24),
         )),
     ("head_2", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-2.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
         )),
     ("head_3", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-3.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
         )),
     ("head_4", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-4.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
         )),
     ("head_5", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-13.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
         )),
     ("head_6", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-19.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
         )),
     ("head-heavy_1", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-15.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
         )),
     ("head-heavy_2", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-17.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
         )),
     ("head-zombi_1", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-31.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
         )),
     ("head-zombi_2", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-32.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
         )),
     ("head-zombi_3", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-33.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
         )),
     ("head-zombi_4", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-34.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
         )),
     ("head-zombi_5", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-35.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
         )),
     ("head-zombi_6", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-36.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
         )),
     ("head-zombi_7", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_(heads)-37.png"],
-            offset: (40, 24),
+            offset: Some((0, -16)),
         )),
 
     // === BEGIN SECTION body ================================
     ("body-heavy_1", ProtoSpriteConfig(
             files: ["ArenaRL_Assets-6.png"],
-            offset: (16, 16),
         )),
 
     ("body-light_1", ProtoSpriteConfig(
             files: ["ArenaRL_Assets-7.png"],
-            offset: (16, 16),
         )),
     ("body-light_2", ProtoSpriteConfig(
             files: ["ArenaRL_Assets-8.png"],
-            offset: (16, 16),
         )),
     ("body-light_3", ProtoSpriteConfig(
             files: ["ArenaRL_Assets-9.png"],
-            offset: (16, 16),
         )),
     ("body-light_4", ProtoSpriteConfig(
             files: ["ArenaRL_Assets-11.png"],
-            offset: (16, 16),
         )),
     ("body-zombi_1", ProtoSpriteConfig(
             files: ["ArenaRL_Assets-10.png"],
-            offset: (16, 16),
         )),
     ("body-zombi_2", ProtoSpriteConfig(
             files: ["ArenaRL_Assets-14.png"],
-            offset: (16, 16),
         )),
 
     // === BEGIN SECTION body ================================
     ("monster-sucker", ProtoSpriteConfig(
             files: ["Sucker-1.png", "Sucker-2.png", "Sucker-3.png"],
-            offset: (16, -16),
+            offset: Some((0, -20)),
             frame_durration: Some(150),
         )),
     ("monster-worm", ProtoSpriteConfig(
             files: ["WORM-1.png"],
-            offset: (16, 16),
         )),
     ("monster-worm-dust", ProtoSpriteConfig(
             files: ["WORM-2.png", "WORM-3.png", "WORM-4.png"],
-            offset: (16, 16),
             frame_durration: Some(150),
         )),
 
     // === BEGIN SECTION Weapons ================================
     ("melee-1h_1", ProtoSpriteConfig( // power mace
             files: ["weapons_mace-1-1.png", "weapons_mace-1-2.png"],
-            offset: (16, 16),
             frame_durration: Some(200),
         )),
     ("melee-1h_2", ProtoSpriteConfig( // scimitar
             files: ["weapons_sword-1.png"],
-            offset: (16, 16),
         )),
     ("staff-1", ProtoSpriteConfig( // injector
             files: ["weapons_staff-1.png"],
-            offset: (16, 16),
         )),
     ("staff-2", ProtoSpriteConfig( // staff of light
             files: ["weapons_staff-2.png"],
-            offset: (16, 16),
         )),
     ("melee-2h_1", ProtoSpriteConfig( // power saw
             files: ["weapons_saw-1-1.png", "weapons_saw-1-2.png"],
-            offset: (16, 16),
             frame_durration: Some(200),
         )),
     ("melee-2h_2", ProtoSpriteConfig( // spear
             files: ["weapons_spear-1.png"],
-            offset: (16, 16),
         )),
     ("shild_1", ProtoSpriteConfig(
             files: ["weapons_shild-1.png"],
-            offset: (16, 16),
         )),
     ("shild_2", ProtoSpriteConfig(
             files: ["weapons_shild-2.png"],
-            offset: (16, 16),
         )),
     ("gun-2h_1", ProtoSpriteConfig(
             files: ["weapons_gun-1.png"],
-            offset: (16, 16),
         )),
     ("claws_1", ProtoSpriteConfig( // both claws in one image
             files: ["weapons_claws-1.png"],
-            offset: (16, 16),
         )),
 
     // === BEGIN SECTION team backgrounds ================================
     ("team_1_active", ProtoSpriteConfig(
             files: ["Background-1.png"],
-            offset: (16, 16),
         )),
     ("team_1_inactive", ProtoSpriteConfig(
             files: ["Background-2.png"],
-            offset: (16, 16),
         )),
     ("team_2_active", ProtoSpriteConfig(
             files: ["Background-3.png"],
-            offset: (16, 16),
         )),
     ("team_2_inactive", ProtoSpriteConfig(
             files: ["Background-4.png"],
-            offset: (16, 16),
         )),
 
     // === BEGIN SECTION floor backgrounds ================================
     ("floor", ProtoSpriteConfig(
             files: ["floor.png"],
-            offset: (16, 16),
         )),
     ("selected", ProtoSpriteConfig(
             files: ["selected.png"],
-            offset: (0, 0),
         )),
     ("wall-1", ProtoSpriteConfig(
             files: ["wall-1.png"],
-            offset: (0, 0),
         )),
     ("barricade-NW", ProtoSpriteConfig(
             files: ["barricade_NW-1.png"],
-            offset: (0, 0),
         )),
 
     // === BEGIN SECTION icons ================================
     ("icon-action-Done", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_Icons-1.png"],
-            offset: (96, 0),
+            offset: Some((32, -16)),
         )),
     ("icon-action-Charge", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_Icons-2.png"],
-            offset: (64, 0),
+            offset: Some((32, -16)),
         )),
     ("icon-action-MeleeAttack", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_Icons-3.png"],
-            offset: (64, 0),
+            offset: Some((32, -16)),
         )),
     ("icon-action-RangedAttack", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_Icons-4.png"],
-            offset: (64, 0),
+            offset: Some((32, -16)),
         )),
     ("icon-action-Defend", ProtoSpriteConfig(
             files: ["ArenaRL_Assets_Icons-5.png"],
-            offset: (64, 0),
+            offset: Some((32, -16)),
         )),
 
     ("icon-floor-MoveTo", ProtoSpriteConfig(
             files: ["icon_big_move.png"],
-            offset: (16, 16),
             alpha: Some(100),  
         )),
     ("icon-floor-RangedAttack-1", ProtoSpriteConfig(
             files: ["icon_big_shoot.png"],
-            offset: (16, 16),
             alpha: Some(100),  
         )),
     ("icon-floor-RangedAttack-2", ProtoSpriteConfig(
             files: ["icon_big_shoot_obstacle.png"], 
-            offset: (16, 16),
             alpha: Some(200),  
         )),
 
     // === BEGIN SECTION blood and gore ================================
     ("corpses_1", ProtoSpriteConfig(
             files: ["ArenaRL_Assets-3.png"],
-            offset: (16, 16),
         )),
     ("corpses_2", ProtoSpriteConfig(
             files: ["ArenaRL_Assets-4.png"],
-            offset: (16, 16),
         )),
     ("blood-splatter-1", ProtoSpriteConfig(
             files: ["blood-2.png"],
-            offset: (16, 16),
         )),
     ("blood-splatter-2", ProtoSpriteConfig(
             files: ["blood-3.png"],
-            offset: (16, 16),
         )),
     ("blood-splatter-3", ProtoSpriteConfig(
             files: ["blood-4.png"],
-            offset: (16, 16),
         )),
 
     // === BEGIN SECTION Fx ================================
     ("fx-hit-1", ProtoSpriteConfig(
             files: ["fx_hit_2-1.png", "fx_hit_2-2.png", "fx_hit_2-3.png"],
-            offset: (-64, -64),
             frame_durration: Some(150),
         )),
     ("fx-hit-2", ProtoSpriteConfig(
             files: ["fx_hit_3-1.png", "fx_hit_3-2.png", "fx_hit_3-3.png"],
-            offset: (-64, -64),
             frame_durration: Some(150),
         )),
     ("fx-hit-3", ProtoSpriteConfig(
             files: ["fx_hit_4-1.png", "fx_hit_4-2.png", "fx_hit_4-3.png"],
-            offset: (-64, -64),
             frame_durration: Some(150),
         )),
     ("fx-projectile-1", ProtoSpriteConfig(
             files: ["projectile-01.png"],
-            offset: (48, 48),
         )),
     ("fx-projectile-2", ProtoSpriteConfig(
             files: ["projectile-02-1.png", "projectile-02-2.png", "projectile-02-3.png"],
-            offset: (48, 48),
         )),
     ("fx-projectile-3", ProtoSpriteConfig(
             files: ["projectile-03-1.png", "projectile-03-2.png", "projectile-03-3.png"],
-            offset: (48, 48),
         )),
     ("fx-impact-1", ProtoSpriteConfig(
             files: ["fx_impact_1-1.png", "fx_impact_1-2.png", "fx_impact_1-3.png"],
-            offset: (-64, -64),
             frame_durration: Some(100),
         )),
     ("fx-dust-1", ProtoSpriteConfig(
             files: ["fx_dust_1-1.png", "fx_dust_1-2.png", "fx_dust_1-3.png"],
-            offset: (-64, -64),
             frame_durration: Some(100),
             alpha: Some(150),
         )),

@@ -2,10 +2,10 @@ use specs::prelude::*;
 
 use crate::components::{Position, Sprites, Text, ZLayerFX, ZLayerFloor, ZLayerGameObject};
 use crate::core::{
-    Action, CombatData, CombatState, DisplayStr, InputContext, Map, TextureMap, Tile, TileType,
-    UserInput, WorldPos, MapPos, 
+    Action, CombatData, CombatState, InputContext, Map, MapPos, TextureMap, Tile, TileType,
+    UserInput, WorldPos,
 };
-use crate::ui::{ClickArea, Scene, ScreenPos, ScreenCoord, ScreenSprite, ScreenText, TILE_WIDTH};
+use crate::ui::{Align, ClickArea, Scene, ScreenCoord, ScreenPos, ScreenSprite};
 
 pub type SystemData<'a> = (
     ReadStorage<'a, Position>,
@@ -18,7 +18,7 @@ pub type SystemData<'a> = (
     Read<'a, TextureMap>,
 );
 
-type DefaultAction = (Option<WorldPos>, Option<(Action, u8)>);
+type DefaultAction = (Option<MapPos>, Option<(Action, u8)>);
 
 pub fn render(
     viewport: (i32, i32, u32, u32),
@@ -39,7 +39,15 @@ pub fn render(
 
     render_floor_objects(&mut scene, scroll_offset, &pos, &sprites, &zlayer_floor);
     render_game_objects(&mut scene, scroll_offset, &pos, &sprites, &zlayer_gameobj);
-    render_fx(&mut scene, scroll_offset, &default_action, &texture_map, &pos, &sprites, &zlayer_fx);
+    render_fx(
+        &mut scene,
+        scroll_offset,
+        &default_action,
+        &texture_map,
+        &pos,
+        &sprites,
+        &zlayer_fx,
+    );
     render_texts(&mut scene, scroll_offset, &pos, &texts);
 
     (
@@ -48,13 +56,13 @@ pub fn render(
             clipping_area: viewport,
             action: Box::new(move |screen_pos| {
                 let screen_coord = ScreenCoord::new(
-                    screen_pos.0 - TILE_WIDTH as i32 / 2 - scroll_offset.0,
-                    screen_pos.1 - scroll_offset. 1
+                    screen_pos.0 - scroll_offset.0,
+                    screen_pos.1 - scroll_offset.1,
                 );
-                let clicked_pos = screen_coord.to_world_pos();
+                let clicked_pos = MapPos::from_world_pos(screen_coord.to_world_pos());
 
                 if let (Some(wp), Some((action, cost))) = &default_action {
-                    if MapPos::from_world_pos(clicked_pos) == MapPos::from_world_pos(*wp) {
+                    if clicked_pos == *wp {
                         return UserInput::SelectAction((action.clone(), *cost));
                     }
                 }
@@ -98,7 +106,9 @@ fn render_fx<'a>(
         let icon_sprite = texture_map.get(&icon_name).unwrap();
         let p = ScreenCoord::from_world_pos(wp).to_screen_pos(offset);
 
-        scene.sprites.push(ScreenSprite(p, icon_sprite.sample(0)));
+        scene
+            .sprites
+            .push(ScreenSprite(p, Align::MidCenter, icon_sprite.sample(0)));
     }
 }
 
@@ -142,19 +152,7 @@ fn render_texts<'a>(
             y += dy;
         }
 
-        scene.texts.push(ScreenText {
-            font: text.font,
-            text: DisplayStr::new(text.txt.clone()),
-            pos: ScreenPos(x, y),
-            color: text.color,
-            background: text.background,
-            padding: text.padding,
-            border: text.border,
-            alpha: text.alpha,
-            min_width: 0,
-            max_width: u32::max_value(),
-            scale: text.scale,
-        });
+        scene.texts.push(text.into_screen_text(ScreenPos(x, y)));
     }
 }
 
@@ -170,15 +168,19 @@ fn render_map(
             let tile_pos = tile.to_world_pos();
             let p = ScreenCoord::from_world_pos(tile_pos).to_screen_pos(offset);
 
-            scene.sprites.push(ScreenSprite(p, sprite_config.sample(0)));
+            scene
+                .sprites
+                .push(ScreenSprite(p, Align::MidCenter, sprite_config.sample(0)));
         }
     }
 
-    if let Some(wp) = get_selected_tile(default_action) {
+    if let Some(p) = default_action.0 {
         if let Some(sprite_config) = texture_map.get("selected") {
-            let p = ScreenCoord::from_world_pos(wp).to_screen_pos(offset);
+            let p = ScreenCoord::from_world_pos(p.to_world_pos()).to_screen_pos(offset);
 
-            scene.sprites.push(ScreenSprite(p, sprite_config.sample(0)));
+            scene
+                .sprites
+                .push(ScreenSprite(p, Align::MidCenter, sprite_config.sample(0)));
         }
     }
     // for wp in get_highlighted_tiles(default_action) {
@@ -214,14 +216,6 @@ fn get_default_action(game: &CombatData) -> DefaultAction {
     }
 }
 
-fn get_selected_tile(default_action: &DefaultAction) -> Option<WorldPos> {
-    match default_action {
-        (Some(pos), _) => Some(*pos),
-        _ => None,
-    }
-}
-
-
 fn get_icons(action: &DefaultAction) -> Vec<(WorldPos, String)> {
     match action {
         (_, Some((Action::MoveTo(p), _))) => p
@@ -232,13 +226,12 @@ fn get_icons(action: &DefaultAction) -> Vec<(WorldPos, String)> {
         (_, Some((Action::RangeAttack(_, _, attack_vector, _), _))) => attack_vector
             .iter()
             .map(|(map_pos, _is_target, obs)| {
-                let num = if let Some(..) = obs {
-                    2
-                } else {
-                    1
-                };
+                let num = if let Some(..) = obs { 2 } else { 1 };
 
-                (map_pos.to_world_pos(), format!("icon-floor-RangedAttack-{}", num))
+                (
+                    map_pos.to_world_pos(),
+                    format!("icon-floor-RangedAttack-{}", num),
+                )
             })
             .collect(),
 
