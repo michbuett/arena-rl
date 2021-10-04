@@ -159,7 +159,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
 
             let sp = actor.pos;
             let na = actor
-                .move_to(*path.last().unwrap())
+                .move_to(path.last().unwrap().to_map_pos())
                 .prepare(Action::done("Did move..."));
 
             (
@@ -239,7 +239,7 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
                     let p1 = actor.pos; // start movement at the original postion of the attacer
                     let p2 = p.last().unwrap().to_world_pos(); // step on the target tile to visualise impact
                     let p3 = tile.to_world_pos(); // one tile back to the place where the attacker actually stands
-                    let actor = actor.charge_to(tile);
+                    let actor = actor.charge_to(tile.to_map_pos());
                     let changes = vec![update_actor(entity, actor.clone())];
                     let fx_seq = FxSequence::new()
                         .then(FxEffect::scream("Charge!", p1))
@@ -262,13 +262,13 @@ pub fn run_action<'a>((entity, actor): EA, action: Action, w: &World) -> ActionR
             return no_op();
         }
 
-        Action::Dodge(target_pos) => {
+        Action::Dodge(target_tile) => {
             let actor_pos = actor.pos;
             let actor = actor.use_ability(
                 "ability#Dodge",
                 Trait {
                     name: DisplayStr::new("Dodging"),
-                    effects: vec![Effect::Defence(3, DefenceType::Dodge(target_pos))],
+                    effects: vec![Effect::Defence(3, DefenceType::Dodge(target_tile.column(), target_tile.row()))],
                     source: TraitSource::Temporary(1),
                     visuals: None,
                 },
@@ -312,7 +312,7 @@ fn add_changes_for_wound(
 
     if let Some(defence) = &wound.defence {
         target_actor = match defence.0.defence_type {
-            DefenceType::Dodge(tile) => target_actor.move_to(tile).remove_trait("ability#Dodge"),
+            DefenceType::Dodge(col, row) => target_actor.move_to(MapPos(col as i32, row as i32)).remove_trait("ability#Dodge"),
 
             DefenceType::Parry => {
                 if defence.1.successes() >= hit.successes() {
@@ -621,8 +621,8 @@ fn create_defence_fx(
     let mut fx_seq = FxSequence::new().wait(delay);
 
     match defence.0.defence_type {
-        DefenceType::Dodge(tile) => {
-            let dodge_path = vec![target_pos, tile.to_world_pos()];
+        DefenceType::Dodge(c, r) => {
+            let dodge_path = vec![target_pos, MapPos(c as i32, r as i32).to_world_pos()];
 
             fx_seq = fx_seq
                 .then(FxEffect::dust("fx-dust-1", target_pos, 300))

@@ -1,6 +1,15 @@
 use crate::core::{Tile, DisplayStr};
+use serde::Deserialize;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProtoTrait {
+    name: String,
+    effects: Vec<Effect>,
+    source: TraitSource,
+    visuals: Option<(u8, String)>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct Trait {
     pub name: DisplayStr,
     pub effects: Vec<Effect>,
@@ -8,13 +17,13 @@ pub struct Trait {
     pub visuals: Option<(u8, String)>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
 pub enum TraitSource {
     IntrinsicProperty,
     Temporary(u8),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub enum Effect {
     /// (attribute, bonus/malus)
     AttrMod(Attr, i8),
@@ -46,22 +55,22 @@ pub enum Effect {
     GatherStrength,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub enum DefenceType {
-    Dodge(Tile),
+    Dodge(u32, u32),
     Block,
     Parry,
     TakeCover,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub enum AbilityTarget {
     OnSelf,
     // OnOther,
     // OnTile,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
 pub enum Attr {
     MeleeDefence,
     RangeDefence,

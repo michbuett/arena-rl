@@ -4,7 +4,7 @@ use std::cmp::max;
 pub use super::traits::*;
 
 use crate::core::dice::*;
-use crate::core::{Action, DisplayStr, Tile, WorldPos};
+use crate::core::{Action, DisplayStr, MapPos, WorldPos};
 
 #[derive(Debug, Clone)]
 pub struct Item {
@@ -118,7 +118,7 @@ pub struct Actor {
 }
 
 impl Actor {
-    pub fn move_to(self, to: Tile) -> Self {
+    pub fn move_to(self, to: MapPos) -> Self {
         // assert!(self.can_move(), "Actor cannot move: {:?}", self);
         Self {
             pos: to.to_world_pos(),
@@ -126,7 +126,7 @@ impl Actor {
         }
     }
 
-    pub fn charge_to(self, to: Tile) -> Self {
+    pub fn charge_to(self, to: MapPos) -> Self {
         let mut result = self.move_to(to);
         result.traits.insert("ability#charge-buff".to_string(), Trait {
             name: DisplayStr::new("Charging"),

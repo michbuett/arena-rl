@@ -1,0 +1,187 @@
+[
+    // === SECTION ===========================================
+    // armor
+    // weapons-2h
+    // weapons-1h
+    // weapons-ranged
+    // weapons-intrinsic
+    // shields
+    // traits
+
+    // EXAMPLE
+    // coming soon ...
+    
+    // === BEGIN SECTION armor ================================
+    ("item#Armor_ChainMail", (
+        name: ("Chain mail"),
+        effects: [AttrMod(Protection, 1)],
+        source: IntrinsicProperty,
+    )),
+
+    ("item#Armor_PlateMail", (
+        name: ("Plate Mail"),
+        effects: [
+            AttrMod(Protection, 2),
+            AttrMod(MeleeDefence, -1),
+            AttrMod(RangeDefence, -1),
+        ],
+        source: IntrinsicProperty,
+    )),
+
+    // === BEGIN SECTION weapons-2h ================================
+    ("item#Weapon_PowerSaw", (
+        name: ("Power Saw"),
+        effects: [MeleeAttack(
+            name: ("Swing saw"),
+            distance: 1,
+            to_hit: 0,
+            to_wound: 2,
+            fx: "fx-hit-1",
+        )],
+        source: IntrinsicProperty,
+        visuals: Some((30, "melee-2h_1")),
+    )),
+
+    ("item#Weapon_Injector", (
+        name: ("Injector"),
+        effects: [MeleeAttack(
+            name: ("Stab"),
+            distance: 2,
+            to_hit: 0,
+            to_wound: 0,
+            fx: "fx-hit-1",
+        )],
+        source: IntrinsicProperty,
+        visuals: Some((30, "staff_1")),
+    )),
+
+    ("item#Weapon_Spear", (
+        name: ("Spear"),
+        effects: [MeleeAttack (
+            name: ("Stab"),
+            distance: 2,
+            to_hit: 1,
+            to_wound: 0,
+            fx: "fx-hit-1",
+        ), GiveTrait(
+            "ability#Parry_Spear", (
+                name: ("Parry (spear)"),
+                effects: [Defence(3, Parry)],
+                source: Temporary(1),
+            ), OnSelf,
+        )],
+        source: IntrinsicProperty,
+        visuals: Some((30, "melee-2h_2")),
+    )),
+
+    // === BEGIN SECTION weapons-1h ================================
+    ("item#Weapon_Flail", (
+        name: ("Flail"),
+        effects: [MeleeAttack(
+            name: ("Swing Flail"),
+            distance: 1,
+            to_hit: 0,
+            to_wound: 1,
+            fx: "fx-hit-1",
+        ), GiveTrait(
+            "ability#Parry_Flail", (
+                name: ("Parry (flail)"),
+                effects: [Defence(2, Parry)],
+                source: Temporary(1),
+            ), OnSelf,
+        )],
+        source: IntrinsicProperty,
+        visuals: Some((30, "melee-1h_1")),
+    )),
+
+    // === BEGIN SECTION weapons-ranged ================================
+    ("item#Weapon_IonGun", (
+        name: ("Ion Gun"),
+        effects: [RangeAttack (
+            name: ("Shoot Ion Gun"),
+            distance: (2, 8),
+            to_hit: 1,
+            to_wound: 1,
+            fx: "fx-projectile-2",
+        )],
+        source: IntrinsicProperty,
+        visuals: Some((20, "gun-2h_1")),
+    )),
+
+    // === BEGIN SECTION weapons-intrinsic ================================
+    ("intrinsic#Weapon_SharpTeeth", (
+        name: ("Sharp teeth"),
+        effects: [MeleeAttack (
+            name: ("Bite"),
+            distance: 1,
+            to_hit: 0,
+            to_wound: 0,
+            fx: "fx-hit-3",
+        )],
+        source: IntrinsicProperty,
+    )),
+
+    ("intrinsic#Weapon_CrushingJaw", (
+        name: ("Crushing jaw"),
+        effects: [MeleeAttack (
+            name: ("Bite"),
+            distance: 1,
+            to_hit: 0,
+            to_wound: 1,
+            fx: "fx-hit-3",
+        )],
+        source: IntrinsicProperty,
+    )),
+
+    ("intrinsic#Weapon_Claws", (
+        name: ("Rending claws"),
+        effects: [MeleeAttack(
+            name: ("Rend"),
+            distance: 1,
+            to_hit: 1,
+            to_wound: 0,
+            fx: "fx-hit-2",
+        )],
+        source: IntrinsicProperty,
+        visuals: Some((30, "claws_1")),
+    )),
+
+    // === BEGIN SECTION shields ================================
+    ("item#Shield_TowerShield", (
+        name: ("Towershield"),
+        effects: [
+            AttrMod(MeleeDefence, 1),
+            AttrMod(RangeDefence, 1),
+            GiveTrait(
+                "ability#Block_Shield",
+                (
+                    name: ("Raise shield"),
+                    effects: [Defence(1, Block)],
+                    source: Temporary(1),
+                ),
+                OnSelf,
+            ),
+        ],
+        source: IntrinsicProperty,
+        visuals: Some((20, "shild_1")),
+    )),
+
+    // === BEGIN SECTION traits ================================
+    ("intrinsic#Trait_Weak", (
+        name: ("Weak"),
+        effects: [AttrMod(Physical, -1)],
+        source: IntrinsicProperty,
+    )),
+
+    ("intrinsic#Trait_Quick", (
+        name: ("Quick"),
+        effects: [AttrMod(Movement, 1)],
+        source: IntrinsicProperty,
+    )),
+
+    ("intrinsic#Trait_Slow", (
+        name: ("Slow"),
+        effects: [AttrMod(Movement, -1)],
+        source: IntrinsicProperty,
+    )),
+]

@@ -1,7 +1,13 @@
-use crate::core::{DisplayStr, WorldPos};
-use std::collections::HashMap;
+use std::collections::{HashMap, };
+use std::fs::File;
+use std::path::Path;
+use std::iter::FromIterator;
 
-use super::actor::*;
+use ron::de::from_reader;
+
+use crate::core::{WorldPos};
+
+use super::actor::{Actor, ActorBuilder, AiBehaviour, Team, Trait};
 
 pub enum ActorType {
     Tank,
@@ -13,11 +19,6 @@ pub enum ActorType {
     MonsterWorm,
     MonsterZombi,
 }
-
-pub const VISUAL_BODY: u8 = 0;
-pub const VISUAL_HEAD: u8 = 10;
-pub const VISUAL_HAND_L: u8 = 20;
-pub const VISUAL_HAND_R: u8 = 30;
 
 fn generate_name() -> String {
     one_of(&vec![
@@ -71,9 +72,11 @@ pub struct ObjectGenerator {
 }
 
 impl ObjectGenerator {
-    pub fn new() -> Self {
+    pub fn new(path: &Path) -> Self {
+        let traits = load_traits_from_file(path);
+            
         Self {
-            traits: init_traits(),
+            traits: HashMap::from_iter(traits),
         }
     }
 
@@ -233,244 +236,12 @@ impl ObjectGenerator {
     }
 }
 
-fn init_traits() -> HashMap<String, Trait> {
-    let mut traits = HashMap::new();
-    traits.insert(
-        "item#Armor_ChainMail".to_string(),
-        Trait {
-            name: DisplayStr::new("Chain mail"),
-            effects: vec![Effect::AttrMod(Attr::Protection, 1)],
-            source: TraitSource::IntrinsicProperty,
-            visuals: None,
-        },
-    );
-
-    traits.insert(
-        "item#Armor_PlateMail".to_string(),
-        Trait {
-            name: DisplayStr::new("Plate Mail"),
-            effects: vec![
-                Effect::AttrMod(Attr::Protection, 2),
-                Effect::AttrMod(Attr::MeleeDefence, -1),
-                Effect::AttrMod(Attr::RangeDefence, -1),
-            ],
-            source: TraitSource::IntrinsicProperty,
-            visuals: None,
-        },
-    );
-
-    traits.insert(
-        "item#Weapon_PowerSaw".to_string(),
-        Trait {
-            name: DisplayStr::new("Power Saw"),
-            effects: vec![Effect::MeleeAttack{
-                name: DisplayStr::new("Swing saw"),
-                distance: 1,
-                to_hit: 0,
-                to_wound: 2,
-                fx: "fx-hit-1".to_string(),
-            }],
-            source: TraitSource::IntrinsicProperty,
-            visuals: Some((VISUAL_HAND_R, "melee-2h_1".to_string())),
-        },
-    );
-
-    traits.insert(
-        "item#Weapon_Injector".to_string(),
-        Trait {
-            name: DisplayStr::new("Injector"),
-            effects: vec![Effect::MeleeAttack{
-                name: DisplayStr::new("Stab"),
-                distance: 2,
-                to_hit: 0,
-                to_wound: 0,
-                fx: "fx-hit-1".to_string(),
-            }],
-            source: TraitSource::IntrinsicProperty,
-            visuals: Some((VISUAL_HAND_R, "staff_1".to_string())),
-        },
-    );
-
-    traits.insert(
-        "item#Weapon_Spear".to_string(),
-        Trait {
-            name: DisplayStr::new("Spear"),
-            effects: vec![Effect::MeleeAttack {
-                name: DisplayStr::new("Stab"),
-                distance: 2,
-                to_hit: 1,
-                to_wound: 0,
-                fx: "fx-hit-1".to_string(),
-            },
-                Effect::GiveTrait(
-                    "ability#Parry_Spear".to_string(),
-                    Trait {
-                        name: DisplayStr::new("Parry (spear)"),
-                        effects: vec![Effect::Defence(3, DefenceType::Parry)],
-                        source: TraitSource::Temporary(1),
-                        visuals: None,
-                    },
-                    AbilityTarget::OnSelf,
-                ),
-            ],
-            source: TraitSource::IntrinsicProperty,
-            visuals: Some((VISUAL_HAND_R, "melee-2h_2".to_string())),
-        },
-    );
-
-    traits.insert(
-        "item#Weapon_Flail".to_string(),
-        Trait {
-            name: DisplayStr::new("Flail"),
-            effects: vec![Effect::MeleeAttack{
-                name: DisplayStr::new("Swing Flail"),
-                distance: 1,
-                to_hit: 0,
-                to_wound: 1,
-                fx: "fx-hit-1".to_string(),
-            },
-                Effect::GiveTrait(
-                    "ability#Parry_Flail".to_string(),
-                    Trait {
-                        name: DisplayStr::new("Parry (flail)"),
-                        effects: vec![Effect::Defence(2, DefenceType::Parry)],
-                        source: TraitSource::Temporary(1),
-                        visuals: None,
-                    },
-                    AbilityTarget::OnSelf,
-                ),
-            ],
-            source: TraitSource::IntrinsicProperty,
-            visuals: Some((VISUAL_HAND_R, "melee-1h_1".to_string())),
-        },
-    );
-
-    traits.insert(
-        "item#Weapon_IonGun".to_string(),
-        Trait {
-            name: DisplayStr::new("Ion Gun"),
-            effects: vec![Effect::RangeAttack {
-                name: DisplayStr::new("Shoot Ion Gun"),
-                distance: (2, 8),
-                to_hit: 1,
-                to_wound: 1,
-                fx: "fx-projectile-2".to_string(),
-            }],
-            source: TraitSource::IntrinsicProperty,
-            visuals: Some((VISUAL_HAND_L, "gun-2h_1".to_string())),
-        },
-    );
-
-    traits.insert(
-        "item#Shield_TowerShield".to_string(),
-        Trait {
-            name: DisplayStr::new("Towershield"),
-            effects: vec![
-                Effect::AttrMod(Attr::MeleeDefence, 1),
-                Effect::AttrMod(Attr::RangeDefence, 1),
-                Effect::GiveTrait(
-                    "ability#Block_Shield".to_string(),
-                    Trait {
-                        name: DisplayStr::new("Raise shield"),
-                        effects: vec![Effect::Defence(1, DefenceType::Block)],
-                        source: TraitSource::Temporary(1),
-                        visuals: None,
-                    },
-                    AbilityTarget::OnSelf,
-                ),
-            ],
-            source: TraitSource::IntrinsicProperty,
-            visuals: Some((VISUAL_HAND_L, "shild_1".to_string())),
-        },
-    );
-
-    traits.insert(
-        "intrinsic#Weapon_SharpTeeth".to_string(),
-        Trait {
-            name: DisplayStr::new("Sharp teeth"),
-            effects: vec![Effect::MeleeAttack {
-                name: DisplayStr::new("Bite"),
-                distance: 1,
-                to_hit: 0,
-                to_wound: 0,
-                fx: "fx-hit-3".to_string(),
-            }],
-            source: TraitSource::IntrinsicProperty,
-            visuals: None,
-        },
-    );
-
-    traits.insert(
-        "intrinsic#Weapon_CrushingJaw".to_string(),
-        Trait {
-            name: DisplayStr::new("Crushing jaw"),
-            effects: vec![Effect::MeleeAttack {
-                name: DisplayStr::new("Bite"),
-                distance: 1,
-                to_hit: 0,
-                to_wound: 1,
-                fx: "fx-hit-3".to_string(),
-            }],
-            source: TraitSource::IntrinsicProperty,
-            visuals: None,
-        },
-    );
-
-    traits.insert(
-        "intrinsic#Weapon_Claws".to_string(),
-        Trait {
-            name: DisplayStr::new("Rending claws"),
-            effects: vec![Effect::MeleeAttack {
-                name: DisplayStr::new("Rend"),
-                distance: 1,
-                to_hit: 1,
-                to_wound: 0,
-                fx: "fx-hit-2".to_string(),
-            }],
-            source: TraitSource::IntrinsicProperty,
-            visuals: Some((VISUAL_HAND_R, "claws_1".to_string())),
-        },
-    );
-
-    traits.insert(
-        "intrinsic#Trait_Weak".to_string(),
-        Trait {
-            name: DisplayStr::new("Weak"),
-            effects: vec![Effect::AttrMod(Attr::Physical, -1)],
-            source: TraitSource::IntrinsicProperty,
-            visuals: None,
-        },
-    );
-
-    traits.insert(
-        "intrinsic#Trait_Quick".to_string(),
-        Trait {
-            name: DisplayStr::new("Quick"),
-            effects: vec![Effect::AttrMod(Attr::Movement, 1)],
-            source: TraitSource::IntrinsicProperty,
-            visuals: None,
-        },
-    );
-
-    traits.insert(
-        "intrinsic#Trait_Slow".to_string(),
-        Trait {
-            name: DisplayStr::new("Slow"),
-            effects: vec![Effect::AttrMod(Attr::Movement, -1)],
-            source: TraitSource::IntrinsicProperty,
-            visuals: None,
-        },
-    );
-
-    traits
-}
-
 fn vbody(name: impl std::fmt::Display, variant: u16) -> (u8, String) {
-    (VISUAL_BODY, format!("{}_{}", name, variant))
+    (0, format!("{}_{}", name, variant))
 }
 
 fn vhead(name: impl std::fmt::Display, variant: u16) -> (u8, String) {
-    (VISUAL_HEAD, format!("{}_{}", name, variant))
+    (10, format!("{}_{}", name, variant))
 }
 
 fn between(a: u16, b: u16) -> u16 {
@@ -480,4 +251,21 @@ fn between(a: u16, b: u16) -> u16 {
 fn one_of<'a, T>(v: &'a Vec<T>) -> &'a T {
     use rand::seq::SliceRandom;
     v.choose(&mut rand::thread_rng()).unwrap()
+}
+
+fn load_traits_from_file(path: &Path) -> Vec<(String, Trait)> {
+    let p = path.join("traits.ron");
+    let f = match File::open(p) {
+        Ok(result) => result,
+        Err(e) => {
+            panic!("Error opening proto sprite config file: {:?}", e);
+        }
+    };
+
+    match from_reader(f) {
+        Ok(result) => result,
+        Err(e) => {
+            panic!("Error parsing proto sprite config: {:?}", e);
+        }
+    }
 }

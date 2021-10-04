@@ -40,7 +40,7 @@ fn main() -> Result<(), String> {
     )?;
 
     let texture_map = assets.create_texture_from_path(Path::new("./assets/images/combat"))?;
-    let object_generator = ObjectGenerator::new();
+    let object_generator = ObjectGenerator::new(Path::new("assets/data/"));
     let vp = canvas.viewport();
 
     let mut click_areas = vec![];
