@@ -9,7 +9,7 @@ use sdl2::surface::Surface;
 use sdl2::ttf::Font as Sdl2Font;
 use sdl2::video::WindowContext;
 
-use crate::ui::types::{ScreenPos, ScreenText};
+use crate::ui::types::{Align, ScreenPos, ScreenText};
 
 const ASCII: &str = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
 
@@ -117,7 +117,8 @@ impl<'a> Font<'a> {
         let prepared_text = prepare(screen_txt, self);
         let (w, h) = prepared_text.dim;
         let ScreenPos(x, y) = pos.align(align, w, h);
-        let pixel_format = sdl2::pixels::PixelFormatEnum::ARGB32;
+        let pixel_format = self.texture_creator.default_pixel_format();
+        // let pixel_format = sdl2::pixels::PixelFormatEnum::ARGB32;
 
         // draw the text to the temporay image
         let mut text_cvs = Surface::new(w, h, pixel_format)?.into_canvas()?;
@@ -129,7 +130,8 @@ impl<'a> Font<'a> {
         draw_text(prepared_text, &mut text_cvs, &mut font_texture, (w, h))?;
 
         // create a texture for the correct render target and for caching
-        let target_tex = self.texture_creator
+        let target_tex = self
+            .texture_creator
             .create_texture_from_surface(text_cvs.surface())
             .map_err(to_string)?;
 
@@ -188,23 +190,28 @@ impl PreparedWord {
 }
 
 struct PreparedText {
-    words: Vec<((i32, i32), PreparedWord)>,
+    lines: Vec<(i32, u32, Vec<(i32, PreparedWord)>)>,
     dim: (u32, u32),
+    text_dim: (u32, u32),
+    align: Align,
     color: (u8, u8, u8, u8),
-    background: Color,
+    background: Option<Color>,
     padding: u32,
     border: Option<(u32, Color)>,
 }
 
 fn prepare<'a>(text: ScreenText, font: &'a Font) -> PreparedText {
     let (mut x, mut y) = (0, 0);
-    let mut words = Vec::new();
-    let mut width_so_far: u32 = 0;
+    let mut lines = Vec::new();
+    let mut text_width: u32 = 0;
     let border_width = text.border.map(|(w, _)| w).unwrap_or(0);
     let spacing = 2 * text.padding + 2 * border_width;
     let max_width = text.max_width - spacing;
 
     for line in text.text.into_string().lines() {
+        let mut words = Vec::new();
+        let mut line_width: u32 = 0;
+
         for t in line.split_whitespace() {
             let word = PreparedWord::prepare(&font.glyphs, t);
             let text_width = word.width;
@@ -213,35 +220,38 @@ fn prepare<'a>(text: ScreenText, font: &'a Font) -> PreparedText {
             if x > 0 && (x + advance) as u32 > max_width {
                 // text does not fit in current line
                 // => wrap text (no wrap if first word in line)
+                lines.push((y, max_width, words));
+                words = Vec::new();
                 x = 0;
                 y += font.line_height as i32;
-                width_so_far = max_width;
+                line_width = max_width;
             }
 
-            words.push(((x, y), word));
+            words.push((x, word));
 
             x += advance;
 
-            if x as u32 > width_so_far {
-                width_so_far = x as u32;
+            if x as u32 > line_width {
+                line_width = x as u32;
             }
         }
 
+        lines.push((y, line_width, words));
         x = 0;
         y += font.line_height as i32;
+        text_width = max(text_width, line_width);
     }
 
-    let width = max(text.min_width, width_so_far + spacing);
-    let height = y as u32 + spacing;
+    let w = text_width + spacing;
+    let h = y as u32 + spacing;
 
     PreparedText {
-        words,
-        dim: (width, height),
+        lines,
+        dim: (max(text.min_width, w), max(text.min_height, h)),
+        text_dim: (w, h),
+        align: text.text_align,
         color: text.color,
-        background: text
-            .background
-            .map(|(r, g, b, a)| Color::RGBA(r, g, b, a))
-            .unwrap_or(Color::RGBA(0, 0, 0, 0)),
+        background: text.background.map(|(r, g, b, a)| Color::RGBA(r, g, b, a)),
         padding: text.padding,
         border: text
             .border
@@ -270,7 +280,16 @@ fn draw_background(
     w: u32,
     h: u32,
 ) -> Result<(), String> {
-    cvs.set_blend_mode(BlendMode::Blend); // TODO test performance impact
+    if color.a < 255 {
+        // set the background to transparent white
+        // (the blending with default black bg is to dark)
+        cvs.set_draw_color(Color::RGBA(255, 255, 255, 0));
+        cvs.clear();
+        cvs.set_blend_mode(BlendMode::Blend); 
+    } else {
+        cvs.set_blend_mode(BlendMode::None);
+    }
+
     cvs.set_draw_color(color);
     cvs.fill_rect(Rect::new(x, y, w, h))
 }
@@ -303,19 +322,26 @@ fn draw_text(
     texture: &mut Texture,
     (w, h): (u32, u32),
 ) -> Result<(), String> {
-    draw_background(cvs, text.background, 0, 0, w, h)?;
+    if let Some(bg_color) = text.background {
+        draw_background(cvs, bg_color, 0, 0, w, h)?;
+    }
 
     if let Some((bw, border_color)) = text.border {
         draw_border(cvs, border_color, bw, 0, 0, w, h)?;
     }
 
-    let shift = text.border.map(|(val, _)| val).unwrap_or(0) as i32 + text.padding as i32;
-
     texture.set_alpha_mod(text.color.3);
     texture.set_color_mod(text.color.0, text.color.1, text.color.2);
 
-    for ((offset_x, offset_y), word) in text.words.iter() {
-        word.draw(texture, cvs, (shift + offset_x, shift + offset_y))?;
+    let shift = text.border.map(|(val, _)| val).unwrap_or(0) as i32 + text.padding as i32;
+    let shift_y = align_line_vertical(text.align, text.text_dim.1, h) + shift;
+
+    for (offset_y, line_width, line) in text.lines.iter() {
+        let shift_x = align_line_horizontal(text.align, *line_width, w) + shift;
+
+        for (offset_x, word) in line {
+            word.draw(texture, cvs, (shift_x + offset_x, shift_y + offset_y))?;
+        }
     }
 
     texture.set_alpha_mod(255);
@@ -329,4 +355,18 @@ fn scale_dim(scale_factor: f32, w: u32, h: u32) -> (u32, u32) {
         (w as f32 * scale_factor).round() as u32,
         (h as f32 * scale_factor).round() as u32,
     )
+}
+
+fn align_line_horizontal(a: Align, line_width: u32, text_width: u32) -> i32 {
+    match a {
+        Align::TopLeft => 0,
+        Align::MidCenter => (text_width - line_width) as i32 / 2,
+    }
+}
+
+fn align_line_vertical(a: Align, text_height: u32, max_height: u32) -> i32 {
+    match a {
+        Align::TopLeft => 0,
+        Align::MidCenter => (max_height - text_height) as i32 / 2,
+    }
 }

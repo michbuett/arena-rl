@@ -100,20 +100,23 @@ impl Text {
     }
 
     pub fn into_screen_text(&self, pos: ScreenPos) -> ScreenText {
-        ScreenText {
-            font: self.font,
-            text: DisplayStr::new(self.txt.clone()),
-            pos: pos,
-            color: self.color,
-            background: self.background,
-            padding: self.padding,
-            border: self.border,
-            alpha: self.alpha,
-            min_width: 0,
-            max_width: u32::max_value(),
-            scale: self.scale,
-            align: self.align,
+        let mut t = ScreenText::new(DisplayStr::new(self.txt.clone()), pos)
+            .font(self.font)
+            .color(self.color)
+            .padding(self.padding)
+            .alpha(self.alpha)
+            .scale(self.scale)
+            .align(self.align);
+
+        if let Some(bg) = self.background {
+            t = t.background(bg);
         }
+
+        if let Some((b_size, b_color)) = self.border {
+            t = t.border(b_size, b_color);
+        }
+
+        t
     }
 
     pub fn align(mut self, new_alignment: Align) -> Self {

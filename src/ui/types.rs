@@ -127,6 +127,7 @@ pub struct ScreenText {
     pub alpha: u8,
     pub scale: f32,
     pub align: Align,
+    pub text_align: Align,
 
     /// e.g.
     /// Some(width, (red, green, blue, alpha))
@@ -134,6 +135,8 @@ pub struct ScreenText {
 
     pub min_width: u32,
     pub max_width: u32,
+    pub min_height: u32,
+    pub max_height: u32,
 }
 
 impl ScreenText {
@@ -149,8 +152,11 @@ impl ScreenText {
             border: None,
             min_width: 0,
             max_width: u32::max_value(),
+            min_height: 0,
+            max_height: u32::max_value(),
             scale: 1.0,
             align: Align::TopLeft,
+            text_align: Align::TopLeft,
         }
     }
 
@@ -160,6 +166,26 @@ impl ScreenText {
 
     pub fn color(self: Self, color: (u8, u8, u8, u8)) -> Self {
         Self { color, ..self }
+    }
+
+    pub fn alpha(mut self: Self, alpha: u8) -> Self {
+        self.alpha = alpha;
+        self
+    }
+
+    pub fn scale(mut self: Self, scale: f32) -> Self {
+        self.scale = scale;
+        self
+    }
+
+    pub fn align(mut self: Self, align: Align) -> Self {
+        self.align = align;
+        self
+    }
+
+    pub fn text_align(mut self: Self, align: Align) -> Self {
+        self.text_align = align;
+        self
     }
 
     pub fn background(self: Self, color: (u8, u8, u8, u8)) -> Self {
@@ -176,33 +202,21 @@ impl ScreenText {
         }
     }
 
-    pub fn border(self: Self, padding: u32, color: (u8, u8, u8, u8)) -> Self {
-        Self {
-            border: Some((padding, color)),
-            ..self
-        }
+    pub fn border(mut self: Self, padding: u32, color: (u8, u8, u8, u8)) -> Self {
+        self.border = Some((padding, color));
+        self
     }
 
-    // pub fn max_width(self: Self, max_width: u32) -> Self {
-    //     Self {
-    //         max_width: max_width,
-    //         ..self
-    //     }
-    // }
+    pub fn width(mut self: Self, width: u32) -> Self {
+        self.min_width = width;
+        self.max_width = width;
+        self
+    }
 
-    // pub fn min_width(self: Self, min_width: u32) -> Self {
-    //     Self {
-    //         min_width: min_width,
-    //         ..self
-    //     }
-    // }
-
-    pub fn width(self: Self, width: u32) -> Self {
-        Self {
-            min_width: width,
-            max_width: width,
-            ..self
-        }
+    pub fn height(mut self: Self, height: u32) -> Self {
+        self.min_height = height;
+        self.max_height = height;
+        self
     }
 }
 
@@ -235,7 +249,14 @@ impl Scene {
 #[derive(Debug, Clone, Copy)]
 pub enum Align {
     TopLeft,
+    // TopCenter,
+    // TopRight,
+    // MidLeft,
     MidCenter,
+    // MidRight,
+    // BottomLeft,
+    // BottomCenter,
+    // BottomRight,
 }
 
 #[derive(Debug)]
