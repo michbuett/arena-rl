@@ -1,6 +1,6 @@
 use crate::core::{
-    Action, Actor, CombatData, CombatState, DisplayStr, GameObject, InputContext, Trait,
-    TraitSource, UserInput, MapPos, Health
+    Act, Action, Actor, CombatData, CombatState, DisplayStr, GameObject, Health, InputContext,
+    MapPos, Trait, TraitSource, UserInput,
 };
 use crate::ui::types::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenText};
 
@@ -69,7 +69,7 @@ fn draw_action_buttons(
     click_areas: &mut ClickAreas,
     game: &CombatData,
     (viewport_width, viewport_height): (u32, u32),
-    actions: Option<&Vec<(Action, u8)>>,
+    actions: Option<&Vec<Act>>,
 ) {
     let mut action_buttons = create_action_buttons(game, actions);
     let x = (viewport_width - DLG_WIDTH) as i32;
@@ -98,7 +98,7 @@ fn draw_action_buttons(
 // PRIVATE HELPER
 //
 
-fn display_text((action, _): &(Action, u8), is_first: bool) -> DisplayStr {
+fn display_text(action: &Action, is_first: bool) -> DisplayStr {
     let str = match action {
         Action::Done(_) => format!("Do nothing"),
         Action::MoveTo(..) => format!("Move Here"),
@@ -106,7 +106,8 @@ fn display_text((action, _): &(Action, u8), is_first: bool) -> DisplayStr {
         Action::MeleeAttack(_, a, _) => format!("{}", a.name),
         Action::RangeAttack(_, a, _, _) => format!("{}", a.name),
         Action::Charge(..) => "Charge!".to_string(),
-        Action::Dodge(..) => "Dodge".to_string(),
+        Action::Ambush(..) => "Ambush".to_string(),
+        Action::Disengage(..) => "Disengage".to_string(),
         Action::UseAbility(_, _, t) => format!("Use ability: {}", t.name),
         _ => format!("Unnamed action: {:?}", action),
     };
@@ -121,22 +122,55 @@ fn display_text((action, _): &(Action, u8), is_first: bool) -> DisplayStr {
 }
 
 fn describe_actor(a: &Actor) -> String {
-    let Health { pain, wounds, ..} = a.health();
-    let condition = match (pain, wounds.0) {
-        (0, 0) => "perfect condition",
-        (_, 0) => "unharmed but in some pain",
-        (_, 1) => "wounded",
-        _ => "critically wounded",
+    let Health {
+        focus,
+        recieved_wounds,
+        max_wounds,
+        ..
+    } = a.health;
+    let condition = if recieved_wounds == 0 {
+        if focus > 0 {
+            "perfect and focused"
+        } else if focus < 0 {
+            "unharmed but in some pain"
+        } else {
+            "unharmed"
+        }
+    } else {
+        if recieved_wounds as f32 / max_wounds as f32 > 0.5 {
+            "seriously wounded"
+        } else {
+            "wounded"
+        }
     };
 
     let action_str = match &a.pending_action {
-        Some((Action::MeleeAttack(_, attack, name), _)) => format!("{} at {}", attack.name, name),
+        Some(Act {
+            action: Action::MeleeAttack(_, attack, name),
+            allocated_effort: e,
+            ..
+        }) => format!("{}{} at {}", describe_effort(*e), attack.name, name),
 
-        Some((Action::RangeAttack(_, attack, _, name), _)) => format!("{} at {}", attack.name, name),
+        Some(Act {
+            action: Action::RangeAttack(_, attack, _, name),
+            allocated_effort: e,
+            ..
+        }) => format!("{}{} at {}", describe_effort(*e), attack.name, name),
 
-        Some((Action::Charge(_, _, name), _)) => format!("Charging at {}", name),
+        Some(Act {
+            action: Action::Charge(_, _, name),
+            ..
+        }) => format!("Charging at {}", name),
 
-        Some((Action::Done(msg), _)) => format!("{}", msg),
+        Some(Act {
+            action: Action::Ambush(attack),
+            ..
+        }) => format!("Perpares an ambush ({})", attack.name),
+
+        Some(Act {
+            action: Action::Done(msg),
+            ..
+        }) => format!("{}", msg),
 
         None => "Waiting for instructions...".to_string(),
 
@@ -155,6 +189,18 @@ fn describe_actor(a: &Actor) -> String {
     )
 }
 
+fn describe_effort(e: Option<u8>) -> String {
+    (match e {
+        None => "",
+        Some(1) => "Weak ",
+        Some(2) => "Mediocre ",
+        Some(3) => "Strong ",
+        Some(4) => "Very strong ",
+        _ => "Incredible ",
+    })
+    .to_string()
+}
+
 fn describe_trait(t: &Trait) -> String {
     let Trait { name, source, .. } = t;
 
@@ -166,16 +212,13 @@ fn describe_trait(t: &Trait) -> String {
     format!("{} ({})", name.clone().into_string(), source_str)
 }
 
-fn create_action_buttons(
-    game: &CombatData,
-    actions: Option<&Vec<(Action, u8)>>,
-) -> Vec<(DisplayStr, (Action, u8))> {
+fn create_action_buttons(game: &CombatData, actions: Option<&Vec<Act>>) -> Vec<(DisplayStr, Act)> {
     let mut result = vec![];
     let mut is_first = true;
 
     if let Some(actions) = actions {
         for a in actions.iter() {
-            result.push((display_text(a, is_first), a.clone()));
+            result.push((display_text(&a.action, is_first), a.clone()));
 
             is_first = false;
         }
@@ -183,7 +226,7 @@ fn create_action_buttons(
 
     result.push((
         DisplayStr::new(format!("End Turn {}", game.turn)),
-        Action::end_turn(game.active_team()),
+        Act::end_turn(game.active_team()),
     ));
 
     result

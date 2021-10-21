@@ -156,7 +156,7 @@ impl Map {
             center_col: tile.column() as i32,
             center_row: tile.row() as i32,
             step: 0,
-            obstacles: obstacles,
+            obstacles,
         }
     }
 
@@ -275,6 +275,7 @@ impl MapPos {
 }
                           
 
+#[derive(Clone)]
 pub struct ObstacleSet(pub HashMap<MapPos, Obstacle>);
 
 impl ObstacleSet {

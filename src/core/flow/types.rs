@@ -1,15 +1,15 @@
 use std::time::Instant;
 
-use specs::prelude::*;
+use specs::prelude::{Dispatcher, Entity, World};
 
-use crate::core::*;
+use crate::core::{Act, Action, Actor, DisplayStr, GameObject, MapPos, ObjectGenerator, Team, TextureMap};
 
 #[derive(Debug)]
 pub enum UserInput {
     Exit(),
     NewGame,
     SelectTeam(Vec<GameObject>),
-    SelectAction((Action, u8)),
+    SelectAction(Act),
     SelectWorldPos(MapPos),
     StartScrolling(),
     EndScrolling(),
@@ -18,7 +18,7 @@ pub enum UserInput {
 
 #[derive(Debug)]
 pub enum InputContext {
-    SelectedArea(MapPos, Vec<GameObject>, Vec<(Action, u8)>),
+    SelectedArea(MapPos, Vec<GameObject>, Vec<Act>),
     // Opportunity(Opportunity, Vec<(Action, u8)>),
 }
 
@@ -57,4 +57,4 @@ pub enum CombatState {
     // Win(Team),
 }
 
-pub type EntityAction = (Entity, Actor, Action, u8);
+pub type EntityAction = (Entity, Actor, Act);

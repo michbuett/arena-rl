@@ -15,3 +15,6 @@ specs-derive = "0.4"
 [dependencies.sdl2]
 features = ["image", "ttf"]
 version = "0.34"
+
+[profile.dev]
+split-debuginfo = "unpacked"

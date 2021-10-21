@@ -6,7 +6,7 @@ mod sprites;
 use crate::FontFace;
 use std::time::{Duration, Instant};
 
-use specs::prelude::*;
+use specs::prelude::{Builder, Component, DenseVecStorage, Entities, Join, LazyUpdate, Read, ReadStorage, System, VecStorage, World, WorldExt};
 use specs_derive::Component;
 
 use crate::core::{DisplayStr, GameObject, SpriteConfig, Team, WorldPos};

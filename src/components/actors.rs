@@ -1,7 +1,10 @@
-use specs::prelude::*;
+use specs::prelude::{Builder, Entities, Entity, LazyUpdate, Read, ReadStorage, World};
 
-use crate::components::*;
-use crate::core::{Action, Actor, Attr, GameObject, Item, TextureMap};
+use crate::components::{
+    Align, FontFace, GameObjectCmp, ObstacleCmp, Position, Restriction,
+    Sprites, Text, WorldPos, ZLayerFloor, ZLayerGameObject,
+};
+use crate::core::{Act, Action, Actor, Attr, GameObject, Item, TextureMap};
 
 type SystemData<'a> = (
     Read<'a, LazyUpdate>,
@@ -100,6 +103,7 @@ fn map_action_to_sprite(a: &Action) -> String {
         Action::MeleeAttack(..) => "icon-action-MeleeAttack",
         Action::RangeAttack(..) => "icon-action-RangedAttack",
         Action::Charge(..) => "icon-action-Charge",
+        Action::Ambush(..) => "icon-action-Charge",
         Action::Done(..) => "icon-action-Done",
         _ => "icon-action-Unknown",
     }
@@ -107,13 +111,15 @@ fn map_action_to_sprite(a: &Action) -> String {
 }
 
 fn get_txt_actor(a: &Actor) -> Option<Text> {
-    let health = a.health();
-    let unformated_text = if health.wounds.0 > 0 {
-        Some(Text::new(format!("{}", health.wounds.0), FontFace::Big).color(200, 21, 22, 255))
-    } else if health.pain > 0 {
-        Some(Text::new(format!("-{}", health.pain), FontFace::Normal).color(200, 201, 22, 255))
-    } else if health.focus > 0 {
-        Some(Text::new(format!("+{}", health.focus), FontFace::Normal).color(20, 201, 22, 255))
+    let unformated_text = if a.health.recieved_wounds > 0 {
+        Some(
+            Text::new(format!("{}", a.health.recieved_wounds), FontFace::Big)
+                .color(200, 21, 22, 255),
+        )
+    } else if a.health.focus < 0 {
+        Some(Text::new("-".to_string(), FontFace::Normal).color(200, 201, 22, 255))
+    } else if a.health.focus > 0 {
+        Some(Text::new("+".to_string(), FontFace::Normal).color(200, 201, 22, 255))
     } else {
         None
     };
@@ -139,7 +145,7 @@ fn get_sprites_actor(a: &Actor, texture_map: &TextureMap) -> Sprites {
         visual_elements.push(l);
     }
 
-    if let Some((action, _)) = &a.pending_action {
+    if let Some(Act { action, .. }) = &a.pending_action {
         visual_elements.push(map_action_to_sprite(action));
     }
 

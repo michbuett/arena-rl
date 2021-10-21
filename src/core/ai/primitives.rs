@@ -1,3 +1,4 @@
+// use std::iter::Sum;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
@@ -140,11 +141,21 @@ pub fn can_charge(
     let from = MapPos::from_world_pos(actor.pos);
     let to = MapPos::from_world_pos(target.pos);
     let d = from.distance(to);
-    let move_distance: usize = actor.move_distance().into();
+    // let move_distance: usize = max_move_distance(actor).into();
 
-    if actor.can_move() && 1 < d && d <= 1 + move_distance {
-        let obstacles = find_movement_obstacles(positions, obstacles, &actor.team).ignore(to);
-        if let Some(_) = map.find_straight_path(from, to, &obstacles) {
+    if d <= 1 {
+        // you cannot charge what is right next to you
+        return None;
+    }
+    
+    if !actor.can_move() {
+        // actor may be engaged in combat or something like this
+        return None;
+    }
+
+    let obstacles = find_movement_obstacles(positions, obstacles, &actor.team).ignore(to);
+    if let Some(p) = map.find_straight_path(from, to, &obstacles) {
+        if p.len() == 2 {
             return Some(attack);
         }
     }
@@ -332,10 +343,18 @@ where
     let mut result = HashMap::new();
 
     for (e, Position(p), obs) in (entities, positions, obstacles).join() {
-        if let Some(c) = costs(p, obs) {
+        if let Some(c) = costs(&p, obs) {
             result.insert(MapPos::from_world_pos(*p), (e, Obstacle(c)));
         }
     }
 
     result
+}
+
+pub fn max_move_distance(_: &Actor) -> u8 {
+    // TODO implement logic
+    // 1 - walk (reserves effort but slow)
+    // 2 - run (fast but no effort left afterwards)
+    // 3 - sprint (very fast but may causes stress/pain)
+    2
 }

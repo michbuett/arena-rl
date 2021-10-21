@@ -184,11 +184,11 @@ fn handle_wait_for_user_action(
             }
         }
 
-        Some(UserInput::SelectAction((action, delay))) => {
+        Some(UserInput::SelectAction(act)) => {
             // user has selected an action
             // => resolve that action
             Some(CombatState::ResolveAction(
-                (e.0.clone(), e.1.clone(), action.clone(), *delay),
+                (e.0.clone(), e.1.clone(), act.clone()),
                 Vec::new(),
             ))
         }
@@ -272,7 +272,7 @@ fn next_state<'a, 'b>(
         }
 
         CombatState::StartTurn() => {
-            let mut entity_actions = Vec::new();
+            let mut entity_actions: Vec<EntityAction> = Vec::new();
             let (entities, objects): (Entities, ReadStorage<GameObjectCmp>) = w.system_data();
             let active_team: &Team = teams.get(active_team_idx).unwrap();
 
@@ -280,7 +280,7 @@ fn next_state<'a, 'b>(
             for (e, GameObjectCmp(o)) in (&entities, &objects).join() {
                 if let GameObject::Actor(a) = o {
                     if &a.team == active_team {
-                        entity_actions.push((e, a.clone(), Action::ResolvePendingActions(), 0));
+                        entity_actions.push((e, a.clone(), Act::new(Action::ResolvePendingActions())));
                     }
                 }
             }
@@ -289,7 +289,7 @@ fn next_state<'a, 'b>(
             for (e, GameObjectCmp(o)) in (&entities, &objects).join() {
                 if let GameObject::Actor(a) = o {
                     if &a.team == active_team {
-                        entity_actions.push((e, a.clone(), Action::StartTurn(), 0));
+                        entity_actions.push((e, a.clone(), Act::new(Action::StartTurn())));
                     }
                 }
             }
@@ -343,7 +343,7 @@ fn next_state<'a, 'b>(
             let active_team: &Team = teams.get(active_team_idx).unwrap();
             if let Some(ea) = next_ready_entity(w, active_team) {
                 let next_state =
-                    CombatState::ResolveAction((ea.0, ea.1, Action::Activate(ea.0), 0), vec![]);
+                    CombatState::ResolveAction((ea.0, ea.1, Act::activate(ea.0)), vec![]);
 
                 (round, active_team_idx, Some(next_state), None, score)
             } else {
@@ -386,15 +386,12 @@ fn next_state<'a, 'b>(
                 // the next ready actor is a player controlled entity
                 // => let the AI compute an action and resolve it
                 //    so far we have no reactions
-                let (action, delay) = action(&ea, w);
+                let act = action(&ea, w);
 
                 (
                     round,
                     active_team_idx,
-                    Some(CombatState::ResolveAction(
-                        (ea.0, ea.1.clone(), action, delay),
-                        Vec::new(),
-                    )),
+                    Some(CombatState::ResolveAction((ea.0, ea.1.clone(), act), Vec::new())),
                     None,
                     score,
                 )
