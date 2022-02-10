@@ -17,248 +17,269 @@
     
     // === BEGIN SECTION head ================================
     ("head_1", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-1.png"],
+            files: ["chars/heads/no-helm-1.png"],
             offset: Some((0, -16)),
-            // offset: (40, 24),
         )),
     ("head_2", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-2.png"],
+            files: ["chars/heads/no-helm-2.png"],
             offset: Some((0, -16)),
         )),
     ("head_3", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-3.png"],
+            files: ["chars/heads/no-helm-3.png"],
             offset: Some((0, -16)),
         )),
     ("head_4", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-4.png"],
+            files: ["chars/heads/no-helm-4.png"],
             offset: Some((0, -16)),
         )),
     ("head_5", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-13.png"],
+            files: ["chars/heads/no-helm-5.png"],
             offset: Some((0, -16)),
         )),
     ("head_6", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-19.png"],
+            files: ["chars/heads/no-helm-6.png"],
             offset: Some((0, -16)),
         )),
     ("head-heavy_1", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-15.png"],
+            files: ["chars/heads/helm-01.png"],
             offset: Some((0, -16)),
         )),
     ("head-heavy_2", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-17.png"],
+            files: ["chars/heads/helm-02.png"],
+            offset: Some((0, -16)),
+        )),
+    ("head-heavy_3", ProtoSpriteConfig(
+            files: ["chars/heads/helm-03.png"],
+            offset: Some((0, -16)),
+        )),
+    ("head-heavy_4", ProtoSpriteConfig(
+            files: ["chars/heads/helm-04.png"],
+            offset: Some((0, -16)),
+        )),
+    ("head-heavy_5", ProtoSpriteConfig(
+            files: ["chars/heads/helm-05.png"],
+            offset: Some((0, -16)),
+        )),
+    ("head-heavy_6", ProtoSpriteConfig(
+            files: ["chars/heads/helm-06.png"],
+            offset: Some((0, -16)),
+        )),
+    ("head-heavy_7", ProtoSpriteConfig(
+            files: ["chars/heads/helm-07.png"],
+            offset: Some((0, -16)),
+        )),
+    ("head-heavy_8", ProtoSpriteConfig(
+            files: ["chars/heads/helm-08.png"],
             offset: Some((0, -16)),
         )),
     ("head-zombi_1", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-31.png"],
+            files: ["chars/heads/zombi-1.png"],
             offset: Some((0, -16)),
         )),
     ("head-zombi_2", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-32.png"],
+            files: ["chars/heads/zombi-2.png"],
             offset: Some((0, -16)),
         )),
     ("head-zombi_3", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-33.png"],
+            files: ["chars/heads/zombi-3.png"],
             offset: Some((0, -16)),
         )),
     ("head-zombi_4", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-34.png"],
+            files: ["chars/heads/zombi-4.png"],
             offset: Some((0, -16)),
         )),
     ("head-zombi_5", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-35.png"],
+            files: ["chars/heads/zombi-5.png"],
             offset: Some((0, -16)),
         )),
     ("head-zombi_6", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-36.png"],
+            files: ["chars/heads/zombi-6.png"],
             offset: Some((0, -16)),
         )),
     ("head-zombi_7", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_(heads)-37.png"],
+            files: ["chars/heads/zombi-7.png"],
             offset: Some((0, -16)),
         )),
 
     // === BEGIN SECTION body ================================
     ("body-heavy_1", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets-6.png"],
+            files: ["chars/bodies/heavy-1.png"],
         )),
 
     ("body-light_1", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets-7.png"],
+            files: ["chars/bodies/light-1.png"],
         )),
     ("body-light_2", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets-8.png"],
+            files: ["chars/bodies/light-2.png"],
         )),
     ("body-light_3", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets-9.png"],
+            files: ["chars/bodies/light-3.png"],
         )),
     ("body-light_4", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets-11.png"],
+            files: ["chars/bodies/light-4.png"],
         )),
     ("body-zombi_1", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets-10.png"],
+            files: ["chars/bodies/zombi-1.png"],
         )),
     ("body-zombi_2", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets-14.png"],
+            files: ["chars/bodies/zombi-2.png"],
         )),
 
     // === BEGIN SECTION body ================================
     ("monster-sucker", ProtoSpriteConfig(
-            files: ["Sucker-1.png", "Sucker-2.png", "Sucker-3.png"],
+            files: ["monster/sucker-idle_1.png", "monster/sucker-idle_2.png", "monster/sucker-idle_3.png"],
             offset: Some((0, -20)),
             frame_durration: Some(150),
         )),
     ("monster-worm", ProtoSpriteConfig(
-            files: ["WORM-1.png"],
+            files: ["monster/worm-idle.png"],
         )),
     ("monster-worm-dust", ProtoSpriteConfig(
-            files: ["WORM-2.png", "WORM-3.png", "WORM-4.png"],
+            files: ["monster/worm-dust_1.png", "monster/worm-dust_2.png", "monster/worm-dust_3.png"],
             frame_durration: Some(150),
         )),
 
     // === BEGIN SECTION Weapons ================================
     ("melee-1h_1", ProtoSpriteConfig( // power mace
-            files: ["weapons_mace-1-1.png", "weapons_mace-1-2.png"],
+            files: ["chars/equipment/mace-1_1.png", "chars/equipment/mace-1_2.png"],
             frame_durration: Some(200),
         )),
     ("melee-1h_2", ProtoSpriteConfig( // scimitar
-            files: ["weapons_sword-1.png"],
+            files: ["chars/equipment/sword-1.png"],
         )),
     ("staff-1", ProtoSpriteConfig( // injector
-            files: ["weapons_staff-1.png"],
+            files: ["chars/equipment/staff-1.png"],
         )),
     ("staff-2", ProtoSpriteConfig( // staff of light
-            files: ["weapons_staff-2.png"],
+            files: ["chars/equipment/staff-2.png"],
         )),
     ("melee-2h_1", ProtoSpriteConfig( // power saw
-            files: ["weapons_saw-1-1.png", "weapons_saw-1-2.png"],
+            files: ["chars/equipment/saw-1_1.png", "chars/equipment/saw-1_2.png"],
             frame_durration: Some(200),
         )),
-    ("melee-2h_2", ProtoSpriteConfig( // spear
-            files: ["weapons_spear-1.png"],
+    ("melee-2h_2", ProtoSpriteConfig( // spear #1
+            files: ["chars/equipment/spear-1.png"],
+        )),
+    ("melee-2h_3", ProtoSpriteConfig( // spear #2
+            files: ["chars/equipment/spear-2.png"],
         )),
     ("shild_1", ProtoSpriteConfig(
-            files: ["weapons_shild-1.png"],
-        )),
-    ("shild_2", ProtoSpriteConfig(
-            files: ["weapons_shild-2.png"],
+            files: ["chars/equipment/shild-1.png"],
         )),
     ("gun-2h_1", ProtoSpriteConfig(
-            files: ["weapons_gun-1.png"],
+            files: ["chars/equipment/gun-1.png"],
+        )),
+    ("xbow-2h_1", ProtoSpriteConfig(
+            files: ["chars/equipment/xbow-1.png"],
         )),
     ("claws_1", ProtoSpriteConfig( // both claws in one image
-            files: ["weapons_claws-1.png"],
+            files: ["chars/equipment/claws-1.png"],
         )),
 
     // === BEGIN SECTION team backgrounds ================================
-    ("team_1_active", ProtoSpriteConfig(
-            files: ["Background-1.png"],
+    ("bg_team_1", ProtoSpriteConfig(
+            files: ["chars/backgrounds/team-1.png"],
         )),
-    ("team_1_inactive", ProtoSpriteConfig(
-            files: ["Background-2.png"],
+    ("bg_team_2", ProtoSpriteConfig(
+            files: ["chars/backgrounds/team-2.png"],
         )),
-    ("team_2_active", ProtoSpriteConfig(
-            files: ["Background-3.png"],
-        )),
-    ("team_2_inactive", ProtoSpriteConfig(
-            files: ["Background-4.png"],
+    ("bg_active", ProtoSpriteConfig(
+            files: ["chars/backgrounds/active_1.png", "chars/backgrounds/active_2.png", "chars/backgrounds/active_3.png"],
+            frame_durration: Some(150),
         )),
 
     // === BEGIN SECTION floor backgrounds ================================
     ("floor", ProtoSpriteConfig(
-            files: ["floor.png"],
-        )),
-    ("selected", ProtoSpriteConfig(
-            files: ["selected.png"],
+            files: ["map/floor-1.png"],
         )),
     ("wall-1", ProtoSpriteConfig(
-            files: ["wall-1.png"],
+            files: ["map/wall-1.png"],
         )),
     ("barricade-NW", ProtoSpriteConfig(
-            files: ["barricade_NW-1.png"],
+            files: ["map/barricade_NW-1.png"],
         )),
 
     // === BEGIN SECTION icons ================================
     ("icon-action-Done", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_Icons-1.png"],
+            files: ["ui/action/done.png"],
             offset: Some((32, -16)),
         )),
     ("icon-action-Charge", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_Icons-2.png"],
+            files: ["ui/action/charge.png"],
             offset: Some((32, -16)),
         )),
     ("icon-action-MeleeAttack", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_Icons-3.png"],
+            files: ["ui/action/fight.png"],
             offset: Some((32, -16)),
         )),
     ("icon-action-RangedAttack", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_Icons-4.png"],
+            files: ["ui/action/aim.png"],
             offset: Some((32, -16)),
         )),
     ("icon-action-Defend", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets_Icons-5.png"],
+            files: ["ui/action/defence.png"],
             offset: Some((32, -16)),
         )),
 
+    ("selected", ProtoSpriteConfig(
+            files: ["ui/floor/selected.png"],
+        )),
     ("icon-floor-MoveTo", ProtoSpriteConfig(
-            files: ["icon_big_move.png"],
+            files: ["ui/floor/feet.png"],
             alpha: Some(100),  
         )),
     ("icon-floor-RangedAttack-1", ProtoSpriteConfig(
-            files: ["icon_big_shoot.png"],
+            files: ["ui/floor/aim.png"],
             alpha: Some(100),  
         )),
     ("icon-floor-RangedAttack-2", ProtoSpriteConfig(
-            files: ["icon_big_shoot_obstacle.png"], 
+            files: ["ui/floor/aim_obstacle.png"], 
             alpha: Some(200),  
         )),
 
     // === BEGIN SECTION blood and gore ================================
     ("corpses_1", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets-3.png"],
+            files: ["fx/gore/corpse-01.png"],
         )),
     ("corpses_2", ProtoSpriteConfig(
-            files: ["ArenaRL_Assets-4.png"],
+            files: ["fx/gore/corpse-02.png"],
         )),
     ("blood-splatter-1", ProtoSpriteConfig(
-            files: ["blood-2.png"],
+            files: ["fx/gore/blood-01.png"],
         )),
     ("blood-splatter-2", ProtoSpriteConfig(
-            files: ["blood-3.png"],
+            files: ["fx/gore/blood-02.png"],
         )),
     ("blood-splatter-3", ProtoSpriteConfig(
-            files: ["blood-4.png"],
+            files: ["fx/gore/blood-03.png"],
         )),
 
     // === BEGIN SECTION Fx ================================
     ("fx-hit-1", ProtoSpriteConfig(
-            files: ["fx_hit_2-1.png", "fx_hit_2-2.png", "fx_hit_2-3.png"],
+            files: ["fx/hit/melee-01_1.png", "fx/hit/melee-01_2.png", "fx/hit/melee-01_3.png"],
             frame_durration: Some(150),
         )),
     ("fx-hit-2", ProtoSpriteConfig(
-            files: ["fx_hit_3-1.png", "fx_hit_3-2.png", "fx_hit_3-3.png"],
+            files: ["fx/hit/melee-02_1.png", "fx/hit/melee-02_2.png", "fx/hit/melee-02_3.png"],
             frame_durration: Some(150),
         )),
     ("fx-hit-3", ProtoSpriteConfig(
-            files: ["fx_hit_4-1.png", "fx_hit_4-2.png", "fx_hit_4-3.png"],
+            files: ["fx/hit/melee-03_1.png", "fx/hit/melee-03_2.png", "fx/hit/melee-03_3.png"],
             frame_durration: Some(150),
         )),
-    ("fx-projectile-1", ProtoSpriteConfig(
-            files: ["projectile-01.png"],
-        )),
-    ("fx-projectile-2", ProtoSpriteConfig(
-            files: ["projectile-02-1.png", "projectile-02-2.png", "projectile-02-3.png"],
-        )),
-    ("fx-projectile-3", ProtoSpriteConfig(
-            files: ["projectile-03-1.png", "projectile-03-2.png", "projectile-03-3.png"],
-        )),
     ("fx-impact-1", ProtoSpriteConfig(
-            files: ["fx_impact_1-1.png", "fx_impact_1-2.png", "fx_impact_1-3.png"],
+            files: ["fx/hit/impact-01_1.png", "fx/hit/impact-01_2.png", "fx/hit/impact-01_3.png"],
             frame_durration: Some(100),
         )),
     ("fx-dust-1", ProtoSpriteConfig(
-            files: ["fx_dust_1-1.png", "fx_dust_1-2.png", "fx_dust_1-3.png"],
+            files: ["fx/hit/dust-01_1.png", "fx/hit/dust-01_2.png", "fx/hit/dust-01_3.png"],
             frame_durration: Some(100),
             alpha: Some(150),
+        )),
+    ("fx-projectile-1", ProtoSpriteConfig(
+            files: ["fx/projectiles/01_1.png", "fx/projectiles/01_1.png", "fx/projectiles/01_1.png"],
+        )),
+    ("fx-projectile-2", ProtoSpriteConfig(
+            files: ["fx/projectiles/02_1.png", "fx/projectiles/02_1.png", "fx/projectiles/02_1.png"],
         )),
 ]

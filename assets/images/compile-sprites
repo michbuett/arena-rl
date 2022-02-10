@@ -1,32 +1,38 @@
 #!/bin/bash
 set -e
-# rm raw/part*
 
-# # combine single sprites horizontally
-# magick montage -geometry 64x64+32+32 -tile 10x1 -background "rgba(0,0,0,0)" -filter Box -interpolate Integer raw/ArenaRL_Assets_\(heads\)-*.png raw/part1.png
-# magick montage -geometry 128x128+0+0 -tile 10x1 -background "rgba(0,0,0,0)" -filter Box -interpolate Integer raw/ArenaRL_Assets-*.png raw/part2.png
-
-# # combine parts vertically
-# convert raw/part*.png -append sprites.png
 PATH_IN="assets/images/raw"
-PARAMS="-path assets/images/combat/ -filter Box -interpolate Integer"
+PATH_OUT="assets/images/combat"
+PARAMS="filter Box -interpolate Integer"
 
-echo "resizing sprites..."
-mogrify -resize 32x32   $PARAMS $PATH_IN/icons/*.png
-mogrify -resize 32x32   $PARAMS $PATH_IN/projectiles/*.png
+resize () {
+    # echo "mogrify -resize $1 -filter Box -path $PATH_OUT/$2 -interpolate Integer $PATH_IN/$2/*.png"
+    mkdir -p "$PATH_OUT/$2"
+    mogrify -resize $1 -filter Box -path $PATH_OUT/$2 -interpolate Integer $PATH_IN/$2/*.png
+}
 
-mogrify -resize 48x48   $PARAMS $PATH_IN/ArenaRL_Assets_\(heads\)-*.png
-
-mogrify -resize 96x96   $PARAMS $PATH_IN/ArenaRL_Assets-*.png
-mogrify -resize 96x96   $PARAMS $PATH_IN/Background-*.png
-mogrify -resize 96x96   $PARAMS $PATH_IN/blood/*.png
-mogrify -resize 96x96   $PARAMS $PATH_IN/floor.png
-mogrify -resize 96x96   $PARAMS $PATH_IN/icons-big/*.png
-mogrify -resize 96x96   $PARAMS $PATH_IN/monster/*.png
-mogrify -resize 96x96   $PARAMS $PATH_IN/weapon/*.png
-
-mogrify -resize 128x128 $PARAMS $PATH_IN/selected.png
-mogrify -resize 128x128 $PARAMS $PATH_IN/terrain/*.png
-
-mogrify -resize 256x256 $PARAMS $PATH_IN/fx-hit/*.png
+echo -n "cleaning target directory ..."
+rm -rf "$PATH_OUT/**/*.png"
 echo "done"
+
+
+echo -n "resizing sprites..."
+
+resize "48x48" "chars/heads"
+resize "96x96" "chars/bodies"
+resize "96x96" "chars/equipment"
+resize "96x96" "chars/backgrounds"
+
+resize "96x96" "monster"
+
+resize "96x96" "map"
+
+resize "32x32" "ui/action"
+resize "96x96" "ui/floor"
+
+resize "96x96"   "fx/gore"
+resize "32x32"   "fx/projectiles"
+resize "256x256" "fx/hit"
+
+echo "done"
+

@@ -133,12 +133,10 @@ fn get_txt_actor(a: &Actor) -> Option<Text> {
 }
 
 fn get_sprites_actor(a: &Actor, texture_map: &TextureMap) -> Sprites {
-    let mut visual_elements = vec![];
+    let mut visual_elements = vec![format!("bg_team_{}", a.team.1)];
 
     if a.active {
-        visual_elements.push(format!("team_{}_active", a.team.1));
-    } else {
-        visual_elements.push(format!("team_{}_inactive", a.team.1));
+        visual_elements.push("bg_active".to_string());
     }
 
     for l in a.look() {
