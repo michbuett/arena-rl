@@ -1,255 +1,211 @@
-pub use super::actor::*;
-pub use super::traits::*;
 use std::cmp::max;
 
+pub use super::actor::*;
+pub use super::traits::*;
+use super::traits::HitEffect as AttackHitEffect;
+
+use crate::core::WorldPos;
 use crate::core::dice::*;
 use crate::core::{MapPos, Obstacle};
 
-pub struct AttackTarget<T: Clone> {
+#[derive(Debug)]
+pub struct AttackTarget {
     pub pos: MapPos,
-    pub target_ref: T,
-    pub target_actor: Option<Actor>,
+    pub target: Option<Actor>,
     pub is_target: bool,
     pub obstacle: Obstacle,
 }
 
 #[derive(Clone, Debug)]
-pub struct HitResult<T: Clone> {
+pub struct HitResult {
     pub attack: Attack,
-    pub hit_roll: Roll,
-    pub hits: Vec<Hit<T>>,
+    pub hits: Vec<Hit>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Hit<T: Clone> {
+pub struct Hit {
+    pub roll: Roll,
     pub pos: MapPos,
-    pub target: T,
-    pub accicental_hit: bool,
-    pub wound: Option<WoundResult>,
-    pub defence: Option<Roll>,
+    pub effects: Vec<HitEffect>,
 }
 
 #[derive(Clone, Debug)]
-pub struct WoundResult {
-    pub target: Actor,
-    pub wound: Option<Wound>,
+pub enum HitEffect {
+    Wound(Wound, ID),
+
+    Miss(),
+
+    Defence(Roll, ID),
+
+    ForceMove {
+        id: ID,
+        dx: i32,
+        dy: i32,
+        distance: u8,
+    },
 }
 
-pub fn resolve_combat<T: Clone>(attack: &Attack, vector: Vec<AttackTarget<T>>) -> HitResult<T> {
-    let hit_roll = Roll::new(attack.num_dice, attack.to_hit.val());
-    let attack_power = hit_roll.result().checked_sub(attack.difficulty).unwrap_or(0);
-    // TODO: apply negativ effects if attack_power < attack difficulty
-
+pub fn resolve_combat(attack: &Attack, vector: Vec<AttackTarget>) -> HitResult {
     HitResult {
         attack: attack.clone(),
-        hit_roll,
-        hits: resolve_hits(attack_power, &attack, vector),
+        hits: resolve_hits(attack, vector),
     }
 }
 
-fn resolve_hits<T: Clone>(
-    mut attack_power: u8,
-    attack: &Attack,
-    mut vector: Vec<AttackTarget<T>>,
-) -> Vec<Hit<T>> {
-    let mut hits = vec![];
-    let mut cover: (MapPos, u8) = (MapPos(-1000, -1000), 0);
+fn resolve_hits(attack: &Attack, mut vector: Vec<AttackTarget>) -> Vec<Hit> {
+    let mut result = vec![];
+    let mut remaing_effort = attack.num_dice;
 
-    for target in vector.drain(..) {
-        if target.is_target {
-            // this is the actual target of the attack
-            if let Some(actor) = target.target_actor {
-                let cover_mod = if target.pos.distance(cover.0) > 1 {
-                    0
-                } else {
-                    cover.1
-                };
+    for t in vector.drain(..) {
+        if remaing_effort == 0 {
+            return result;
+        }
 
-                hits.push(resolve_hitting_target(
-                    target.pos,
-                    target.target_ref,
-                    actor,
-                    attack_power,
-                    attack,
-                    cover_mod,
-                ));
-            } else {
-                panic!("You targeted a Non-Actor. This should not happen!");
+        if t.is_target {
+            if let Some(target_actor) = t.target {
+                let hit = resolve_hit_at_target(&attack, target_actor, t.pos, remaing_effort);
+
+                remaing_effort = hit.roll.num_fails;
+                result.push(hit);
             }
         } else {
-            // this is an accicental hit (e.g. hitting an obstacle which is in the way)
-            let obstacle_difficulty = max(0, target.obstacle.0) as u8;
-            if attack_power < obstacle_difficulty {
-                // the obstacle could not be avoided
-                let wound = if let Some(actor) = target.target_actor {
-                    Some(resolve_wound(attack, actor, 1))
-                } else {
-                    None
-                };
+            let hit = resolve_hit_at_obstacle(t.pos, remaing_effort, t.obstacle.0, &attack, t.target);
 
-                hits.push(Hit {
-                    target: target.target_ref,
-                    pos: target.pos,
-                    accicental_hit: true,
-                    wound,
-                    defence: None,
-                });
+            if let Some(hit) = hit {
+                remaing_effort = hit.roll.num_successes;
+                result.push(hit);
             }
-
-            attack_power = attack_power.checked_sub(obstacle_difficulty).unwrap_or(0);
-            cover = (target.pos, obstacle_difficulty);
-        }
-
-        if attack_power <= 0 {
-            return hits;
         }
     }
 
-    hits
+    result
 }
 
-fn resolve_hitting_target<T: Clone>(
-    pos: MapPos,
-    target_ref: T,
-    target_actor: Actor,
-    attack_power: u8,
-    attack: &Attack,
-    cover_mod: u8,
-) -> Hit<T> {
-    if attack_power == 0 {
-        // the attacker missed
-        return Hit {
-            pos,
-            target: target_ref,
-            accicental_hit: false,
-            wound: None,
-            defence: None,
-        };
-    }
-
-    let max_defence_effort = target_actor.available_effort() as usize + 1;
-    let defence_modifier = get_defence_modifier(attack, cover_mod, &target_actor);
-    let mut defence_power = 0;
-    let mut defence_dice = vec![];
-
-    while defence_dice.len() < max_defence_effort && defence_power < attack_power {
-        let roll = D6::roll();
-
-        defence_power += roll.0;
-        defence_dice.push(roll);
-    }
-
-    let target_actor = target_actor.use_effort(defence_dice.len() as u8);
-
-    let to_wound_result = if attack_power > defence_power {
-        // its a hit!
-        // => roll to wound
-        let num_def_dice = attack_power / max(1, defence_power);
-        resolve_wound(attack, target_actor, num_def_dice)
-    } else {
-        // targets defence was successful
-        // => no wound, no pain, just the effort used for the defence
-        WoundResult {
-            target: target_actor,
-            wound: None,
-        }
-    };
+fn resolve_hit_at_target(attack: &Attack, target_actor: Actor, pos: MapPos, effort: u8) -> Hit {
+    let attack_roll = Roll::new(effort, to_hit_threshold(attack, &target_actor));
 
     Hit {
         pos,
-        target: target_ref,
-        accicental_hit: false,
-        wound: Some(to_wound_result),
-        defence: Some(Roll::from_dice(defence_dice, defence_modifier)),
+        effects: calculate_hit_effects(attack_roll.num_successes, attack, target_actor),
+        roll: attack_roll,
     }
 }
 
-fn get_defence_modifier(attack: &Attack, cover: u8, target_actor: &Actor) -> i8 {
-    match attack.attack_type {
-        AttackType::Melee(..) => target_actor.attr(Attr::MeleeDefence).val(),
-        AttackType::Ranged(..) => -3 + cover as i8 + target_actor.attr(Attr::RangeDefence).val(),
-    }
-}
+fn resolve_hit_at_obstacle(
+    pos: MapPos,
+    effort: u8,
+    difficulty: u8,
+    attack: &Attack,
+    target: Option<Actor>,
+) -> Option<Hit> {
+    let roll = Roll::new(effort, difficulty);
+    let num_hits = roll.num_fails; // a failed attack roll on an obstacle means an accicental hit
 
-fn resolve_wound(attack: &Attack, mut target: Actor, hit_dice: u8) -> WoundResult {
-    let roll = Roll::new(hit_dice, attack.to_wound.val());
-    let phys_strength = target.attr(Attr::Physical).abs_val();
-    let protection = target.attr(Attr::Protection).abs_val();
-    let resistence = max(1, phys_strength + protection);
-    let wound = if roll.result() < resistence {
-        if resistence >= 2 * roll.result() {
-            // the hit only scratched the armor
-            // => no damage whatsoever
-            None
+    println!("Hit obstacle (difficulty={}, roll={:?}, num hits={})", difficulty, roll, num_hits);
+
+    if num_hits > 0 {
+        let effects = if let Some(target) = target {
+            calculate_hit_effects(num_hits, attack, target)
         } else {
-            // it was a hit but the armor was not penetrated
-            // => the target feels pain, but no real damage was done
-            Some(Wound { pain: 1, wound: 0 })
-        }
+            vec![]
+        };
+
+        Some(Hit { pos, roll, effects })
     } else {
-        // The hit penetrates the armor
-        // => a real wound is the result
-        let w = roll.result() / resistence;
-        Some(Wound { pain: w, wound: w })
+        None
+    }
+}
+
+fn calculate_hit_effects(num_hits: u8, attack: &Attack, target_actor: Actor) -> Vec<HitEffect> {
+    if num_hits == 0 {
+        return vec![HitEffect::Miss()];
+    }
+
+    let mut effects = vec![];
+    let num_hits = if let Some(defence_roll) = roll_defence(&target_actor) {
+        let successes = defence_roll.num_successes;
+        effects.push(HitEffect::Defence(defence_roll, target_actor.id));
+        num_hits.checked_sub(successes).unwrap_or(0)
+    } else {
+        num_hits
     };
 
-    if let Some(w) = wound.clone() {
-        target = target.wound(w);
+    if num_hits > 0 {
+        let wound_roll = Roll::new(num_hits, to_wound_threshold(attack, &target_actor));
+        let w = Wound {
+            pain: num_hits,
+            wound: wound_roll.num_successes,
+        };
+
+        effects.push(HitEffect::Wound(w, target_actor.id));
+
+        if let Some(attack_eff_list) = &attack.effects {
+            for (cond, eff) in attack_eff_list {
+                match cond {
+                    HitEffectCondition::OnHit => {
+                        match eff {
+                            AttackHitEffect::PushBack(d) => {
+                                let (dx, dy) = direction(attack.origin_pos, target_actor.pos);
+                                effects.push(HitEffect::ForceMove {
+                                    id: target_actor.id,
+                                    dx,
+                                    dy,
+                                    distance: *d,
+                                    
+                                })
+                            }
+
+                            AttackHitEffect::PullCloser(d) => {
+                                let (dx, dy) = direction(target_actor.pos, attack.origin_pos);
+                                effects.push(HitEffect::ForceMove {
+                                    id: target_actor.id,
+                                    dx,
+                                    dy,
+                                    distance: *d,
+                                    
+                                })
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    WoundResult { wound, target }
+    effects
 }
 
-// pub fn resolve_to_wound(hit: Hit<Actor>) -> ToWoundResult {
-//     // let to_wound_adv = RollAdvantage::new(
-//     //     hit.attack.to_wound.val(),
-//     //     hit.target.attr(Attr::Protection).val(),
-//     // );
+fn roll_defence(defender: &Actor) -> Option<Roll> {
+    if defender.available_effort() == 0 {
+        return None;
+    }
 
-//     let (num_hits, defence) = handle_defence(&hit);
-//     let wound_roll = Roll::new(num_hits); // TODO get difficulty to wound from armor stat
-//     let wound = Wound::from_wound_roll(&wound_roll);
+    Some(Roll::new(defender.available_effort(), defence_threshold()))
+}
 
-//     // println!(
-//     //     "[DEBUG] resolve_to_wound *** \n\tadvantage: {:?}, \n\troll: {:?}, \n\twound: {:?}",
-//     //     to_wound_adv, wound_roll, wound
-//     // );
+fn to_hit_threshold(attack: &Attack, target: &Actor) -> u8 {
+    // TODO implement expertise system
+    max(
+        0,
+        4 + attack.to_hit.val() + target.attr(Attr::MeleeDefence).val(),
+    ) as u8
+}
 
-//     ToWoundResult {
-//         target: hit.target.wound(wound),
-//         roll: wound_roll,
-//         // defence,
-//     }
-// }
+fn defence_threshold() -> u8 {
+    4
+}
 
-// fn handle_defence(hit: &Hit<Actor>) -> (u8, Option<(Defence, Roll)>) {
-//     // TODO implement new defence mechanic
-//     (0, None)
+fn to_wound_threshold(attack: &Attack, target: &Actor) -> u8 {
+    max(
+        0,
+        4 + attack.to_wound.val() + target.attr(Attr::Protection).val(),
+    ) as u8
+}
 
-//     // if let Some(d) = hit.target.defence(&hit.attack) {
-//     //     let a = &hit.attack;
-//     //     let adv = match d.defence_type {
-//     //         DefenceType::Block => RollAdvantage::new(d.defence.val(), a.to_wound.val()),
-
-//     //         DefenceType::Dodge(..) => RollAdvantage::new(d.defence.val(), a.to_hit.val()),
-
-//     //         DefenceType::Parry => {
-//     //             RollAdvantage::new(d.defence.val(), max(a.to_hit.val(), a.to_wound.val()))
-//     //         }
-
-//     //         // TODO: use skills for cover mechanic
-//     //         DefenceType::TakeCover => RollAdvantage::new(0, 0),
-//     //     };
-
-//     //     let def_roll = Roll::new(d.num_dice, adv);
-//     //     let num_hits = hit
-//     //         .roll
-//     //         .successes()
-//     //         .checked_sub(def_roll.successes())
-//     //         .unwrap_or(0);
-
-//     //     (num_hits, Some((d, def_roll)))
-//     // } else {
-//     //     (hit.roll.successes(), None)
-//     // }
-// }
+fn direction(p1: WorldPos, p2: WorldPos) -> (i32, i32) {
+    let mp1 = MapPos::from_world_pos(p1);
+    let mp2 = MapPos::from_world_pos(p2);
+    let dx = mp2.0 - mp1.0;
+    let dy = mp2.1 - mp1.1;
+    (dx, dy)
+}

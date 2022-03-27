@@ -101,14 +101,13 @@ fn draw_action_buttons(
 fn display_text(action: &Action, is_first: bool) -> DisplayStr {
     let str = match action {
         Action::Done(_) => format!("Do nothing"),
+        Action::Rest() => format!("Rest"),
         Action::MoveTo(..) => format!("Move Here"),
-        Action::Activate(_) => format!("Activate"),
-        Action::MeleeAttack(_, a, _) => format!("{}", a.name),
-        Action::RangeAttack(_, a, _, _) => format!("{}", a.name),
-        Action::Charge(..) => "Charge!".to_string(),
-        Action::Ambush(..) => "Ambush".to_string(),
-        Action::Disengage(..) => "Disengage".to_string(),
+        Action::Attack(_, a, _, _) => format!("{}", a.name),
+        Action::Ambush(a) => format!("Ambush ({})", a.name),
+        // Action::Disengage(..) => "Disengage".to_string(),
         Action::UseAbility(_, _, t) => format!("Use ability: {}", t.name),
+        Action::Activate(..) => format!("Activate"),
         _ => format!("Unnamed action: {:?}", action),
     };
 
@@ -123,15 +122,13 @@ fn display_text(action: &Action, is_first: bool) -> DisplayStr {
 
 fn describe_actor(a: &Actor) -> String {
     let Health {
-        focus,
+        pain,
         recieved_wounds,
         max_wounds,
         ..
     } = a.health;
     let condition = if recieved_wounds == 0 {
-        if focus > 0 {
-            "perfect and focused"
-        } else if focus < 0 {
+        if pain > 0 {
             "unharmed but in some pain"
         } else {
             "unharmed"
@@ -146,26 +143,19 @@ fn describe_actor(a: &Actor) -> String {
 
     let action_str = match &a.pending_action {
         Some(Act {
-            action: Action::MeleeAttack(_, attack, name),
-            allocated_effort: e,
+            action: Action::Attack(_, attack, _, name),
             ..
-        }) => format!("{}{} at {}", describe_effort(*e), attack.name, name),
-
-        Some(Act {
-            action: Action::RangeAttack(_, attack, _, name),
-            allocated_effort: e,
-            ..
-        }) => format!("{}{} at {}", describe_effort(*e), attack.name, name),
-
-        Some(Act {
-            action: Action::Charge(_, _, name),
-            ..
-        }) => format!("Charging at {}", name),
+        }) => format!("{} at {}", attack.name, name),
 
         Some(Act {
             action: Action::Ambush(attack),
             ..
         }) => format!("Perpares an ambush ({})", attack.name),
+
+        Some(Act {
+            action: Action::Rest(),
+            ..
+        }) => "Resting".to_string(),
 
         Some(Act {
             action: Action::Done(msg),
@@ -181,25 +171,25 @@ fn describe_actor(a: &Actor) -> String {
         .active_traits()
         .map(describe_trait)
         .collect::<Vec<_>>()
-        .join("\n");
+        .join("\n  - ");
 
     format!(
-        "\n{} ({})\n\n{}\n\n{}",
+        "\n{} (condition: {})\n{}\n{}",
         a.name, condition, action_str, traits_str
     )
 }
 
-fn describe_effort(e: Option<u8>) -> String {
-    (match e {
-        None => "",
-        Some(1) => "Weak ",
-        Some(2) => "Mediocre ",
-        Some(3) => "Strong ",
-        Some(4) => "Very strong ",
-        _ => "Incredible ",
-    })
-    .to_string()
-}
+// fn describe_effort(e: Option<u8>) -> String {
+//     (match e {
+//         None => "",
+//         Some(1) => "Weak ",
+//         Some(2) => "Mediocre ",
+//         Some(3) => "Strong ",
+//         Some(4) => "Very strong ",
+//         _ => "Incredible ",
+//     })
+//     .to_string()
+// }
 
 fn describe_trait(t: &Trait) -> String {
     let Trait { name, source, .. } = t;

@@ -18,10 +18,11 @@ echo "done"
 
 echo -n "resizing sprites..."
 
-resize "48x48" "chars/heads"
+resize "96x96" "chars/backgrounds"
 resize "96x96" "chars/bodies"
 resize "96x96" "chars/equipment"
-resize "96x96" "chars/backgrounds"
+resize "96x96" "chars/fx"
+resize "48x48" "chars/heads"
 
 resize "96x96" "monster"
 
@@ -29,6 +30,7 @@ resize "96x96" "map"
 
 resize "32x32" "ui/action"
 resize "96x96" "ui/floor"
+resize "16x16" "ui/icons"
 
 resize "96x96"   "fx/gore"
 resize "32x32"   "fx/projectiles"

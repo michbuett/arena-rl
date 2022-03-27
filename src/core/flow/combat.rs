@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use specs::prelude::*;
 
-use super::super::action::{act, Action, Change};
+use super::super::action::{act, Action};
 use super::super::ai::{action, actions_at};
 use super::types::*;
 use crate::components::*;
@@ -172,7 +172,7 @@ fn handle_wait_for_user_action(
                 //    user input
                 // let pos = WorldPos::new(pos.x().floor(), pos.y().floor(), 0.0);
                 let objects = find_objects_at(*pos, &w);
-                let actions = actions_at(e, pos.to_world_pos(), &w);
+                let actions = actions_at(&e.1, pos.to_world_pos(), CoreWorld::new(&w));
                 let ui = InputContext::SelectedArea(*pos, objects, actions);
 
                 Some(CombatState::WaitForUserAction(e.clone(), Some(ui)))
@@ -280,7 +280,11 @@ fn next_state<'a, 'b>(
             for (e, GameObjectCmp(o)) in (&entities, &objects).join() {
                 if let GameObject::Actor(a) = o {
                     if &a.team == active_team {
-                        entity_actions.push((e, a.clone(), Act::new(Action::ResolvePendingActions())));
+                        entity_actions.push((
+                            e,
+                            a.clone(),
+                            Act::new(Action::ResolvePendingActions()),
+                        ));
                     }
                 }
             }
@@ -342,8 +346,9 @@ fn next_state<'a, 'b>(
 
             let active_team: &Team = teams.get(active_team_idx).unwrap();
             if let Some(ea) = next_ready_entity(w, active_team) {
+                let id = ea.1.id;
                 let next_state =
-                    CombatState::ResolveAction((ea.0, ea.1, Act::activate(ea.0)), vec![]);
+                    CombatState::ResolveAction((ea.0, ea.1, Act::activate(id)), vec![]);
 
                 (round, active_team_idx, Some(next_state), None, score)
             } else {
@@ -386,12 +391,15 @@ fn next_state<'a, 'b>(
                 // the next ready actor is a player controlled entity
                 // => let the AI compute an action and resolve it
                 //    so far we have no reactions
-                let act = action(&ea, w);
+                let act = action(&ea.1, CoreWorld::new(w));
 
                 (
                     round,
                     active_team_idx,
-                    Some(CombatState::ResolveAction((ea.0, ea.1.clone(), act), Vec::new())),
+                    Some(CombatState::ResolveAction(
+                        (ea.0, ea.1.clone(), act),
+                        Vec::new(),
+                    )),
                     None,
                     score,
                 )
@@ -399,18 +407,21 @@ fn next_state<'a, 'b>(
         }
 
         CombatState::ResolveAction(entity_action, remaining_actions) => {
-            let (change, fx_seq, log_entry) = act(entity_action.clone(), w);
+            let old_score = score;
+            let (_, actor, a) = entity_action;
+            let ActionResult {
+                changes,
+                fx_seq,
+                log,
+                score,
+            } = act(actor.id, a.clone(), CoreWorld::new(w));
             let mut wait_until = Instant::now();
-            let mut new_score = score;
 
-            for c in change {
+            for c in changes {
                 match c {
                     Change::Update(e, o) => update_components(e, o, w),
                     Change::Insert(o) => insert_game_object_components(o, w),
                     Change::Remove(e) => remove_components(e, w),
-                    Change::Score(amount) => {
-                        new_score += amount;
-                    }
                 }
             }
 
@@ -427,11 +438,10 @@ fn next_state<'a, 'b>(
                 active_team_idx,
                 Some(CombatState::WaitUntil(
                     wait_until,
-                    // Instant::now() + durr,
                     remaining_actions.to_vec(),
                 )),
-                log_entry,
-                new_score,
+                log,
+                old_score + score,
             )
         }
 
@@ -450,7 +460,6 @@ fn next_state<'a, 'b>(
             None,
             score,
         ),
-
         // CombatState::Win(_) => {
         //     // ignore
         //     (round, active_team_idx, None)
@@ -504,9 +513,9 @@ fn spawn_obstacles(w: &World) {
             .with(Position(WorldPos::new(*x, *y, 0.0)))
             .with(ZLayerGameObject)
             .with(ObstacleCmp {
-                restrict_melee_attack: Restriction::ForAll(Some(i8::MAX)),
-                restrict_movement: Restriction::ForAll(Some(i8::MAX)),
-                restrict_ranged_attack: Restriction::ForAll(Some(i8::MAX)),
+                restrict_melee_attack: Restriction::ForAll(u8::MAX),
+                restrict_movement: Restriction::ForAll(u8::MAX),
+                restrict_ranged_attack: Restriction::ForAll(u8::MAX),
             })
             .build();
     }

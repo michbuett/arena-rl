@@ -18,116 +18,129 @@
     // === BEGIN SECTION head ================================
     ("head_1", ProtoSpriteConfig(
             files: ["chars/heads/no-helm-1.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head_2", ProtoSpriteConfig(
             files: ["chars/heads/no-helm-2.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head_3", ProtoSpriteConfig(
             files: ["chars/heads/no-helm-3.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head_4", ProtoSpriteConfig(
             files: ["chars/heads/no-helm-4.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head_5", ProtoSpriteConfig(
             files: ["chars/heads/no-helm-5.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head_6", ProtoSpriteConfig(
             files: ["chars/heads/no-helm-6.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-heavy_1", ProtoSpriteConfig(
             files: ["chars/heads/helm-01.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-heavy_2", ProtoSpriteConfig(
             files: ["chars/heads/helm-02.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-heavy_3", ProtoSpriteConfig(
             files: ["chars/heads/helm-03.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-heavy_4", ProtoSpriteConfig(
             files: ["chars/heads/helm-04.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-heavy_5", ProtoSpriteConfig(
             files: ["chars/heads/helm-05.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-heavy_6", ProtoSpriteConfig(
             files: ["chars/heads/helm-06.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-heavy_7", ProtoSpriteConfig(
             files: ["chars/heads/helm-07.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-heavy_8", ProtoSpriteConfig(
             files: ["chars/heads/helm-08.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-zombi_1", ProtoSpriteConfig(
             files: ["chars/heads/zombi-1.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-zombi_2", ProtoSpriteConfig(
             files: ["chars/heads/zombi-2.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-zombi_3", ProtoSpriteConfig(
             files: ["chars/heads/zombi-3.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-zombi_4", ProtoSpriteConfig(
             files: ["chars/heads/zombi-4.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-zombi_5", ProtoSpriteConfig(
             files: ["chars/heads/zombi-5.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-zombi_6", ProtoSpriteConfig(
             files: ["chars/heads/zombi-6.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
     ("head-zombi_7", ProtoSpriteConfig(
             files: ["chars/heads/zombi-7.png"],
-            offset: Some((0, -16)),
+            offset: Some((0, -32)),
         )),
 
     // === BEGIN SECTION body ================================
     ("body-heavy_1", ProtoSpriteConfig(
             files: ["chars/bodies/heavy-1.png"],
+            offset: Some((0, -16)),
         )),
 
     ("body-light_1", ProtoSpriteConfig(
             files: ["chars/bodies/light-1.png"],
+            offset: Some((0, -16)),
         )),
     ("body-light_2", ProtoSpriteConfig(
             files: ["chars/bodies/light-2.png"],
+            offset: Some((0, -16)),
         )),
     ("body-light_3", ProtoSpriteConfig(
             files: ["chars/bodies/light-3.png"],
+            offset: Some((0, -16)),
         )),
     ("body-light_4", ProtoSpriteConfig(
             files: ["chars/bodies/light-4.png"],
+            offset: Some((0, -16)),
         )),
     ("body-zombi_1", ProtoSpriteConfig(
             files: ["chars/bodies/zombi-1.png"],
+            offset: Some((0, -16)),
         )),
     ("body-zombi_2", ProtoSpriteConfig(
             files: ["chars/bodies/zombi-2.png"],
+            offset: Some((0, -16)),
+        )),
+
+    // === BEGIN SECTION charcter fx ================================
+    ("char-fx-ko", ProtoSpriteConfig(
+            files: ["chars/fx/ko_1.png", "chars/fx/ko_2.png", "chars/fx/ko_3.png", "chars/fx/ko_4.png"],
+            offset: Some((0, -16)),
         )),
 
     // === BEGIN SECTION body ================================
     ("monster-sucker", ProtoSpriteConfig(
-            files: ["monster/sucker-idle_1.png", "monster/sucker-idle_2.png", "monster/sucker-idle_3.png"],
+            files: ["monster/sucker-idle_1.png", "monster/sucker-idle_2.png", "monster/sucker-idle_3.png", "monster/sucker-idle_4.png"],
             offset: Some((0, -20)),
             frame_durration: Some(150),
         )),
@@ -143,6 +156,7 @@
     ("melee-1h_1", ProtoSpriteConfig( // power mace
             files: ["chars/equipment/mace-1_1.png", "chars/equipment/mace-1_2.png"],
             frame_durration: Some(200),
+            offset: Some((0, -16)),
         )),
     ("melee-1h_2", ProtoSpriteConfig( // scimitar
             files: ["chars/equipment/sword-1.png"],
@@ -155,12 +169,15 @@
         )),
     ("melee-2h_1", ProtoSpriteConfig( // power saw
             files: ["chars/equipment/saw-1_1.png", "chars/equipment/saw-1_2.png"],
+            offset: Some((0, -16)),
             frame_durration: Some(200),
         )),
     ("melee-2h_2", ProtoSpriteConfig( // spear #1
+            offset: Some((0, -16)),
             files: ["chars/equipment/spear-1.png"],
         )),
     ("melee-2h_3", ProtoSpriteConfig( // spear #2
+            offset: Some((0, -16)),
             files: ["chars/equipment/spear-2.png"],
         )),
     ("shild_1", ProtoSpriteConfig(
@@ -216,9 +233,21 @@
             files: ["ui/action/aim.png"],
             offset: Some((32, -16)),
         )),
+
     ("icon-action-Defend", ProtoSpriteConfig(
-            files: ["ui/action/defence.png"],
-            offset: Some((32, -16)),
+            files: ["ui/icons/shield.png"],
+        )),
+    ("icon-action-Attack", ProtoSpriteConfig(
+            files: ["ui/icons/sword.png"],
+        )),
+    ("icon-dot-blue", ProtoSpriteConfig(
+            files: ["ui/icons/dot-blue.png"],
+        )),
+    ("icon-dot-yellow", ProtoSpriteConfig(
+            files: ["ui/icons/dot-yellow.png"],
+        )),
+    ("icon-dot-red", ProtoSpriteConfig(
+            files: ["ui/icons/dot-red.png"],
         )),
 
     ("selected", ProtoSpriteConfig(

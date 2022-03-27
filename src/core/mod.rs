@@ -7,6 +7,7 @@ mod model;
 mod flow;
 mod text;
 mod visuals;
+mod world;
 
 
 pub use action::*;
@@ -15,6 +16,7 @@ pub use model::*;
 pub use flow::{UserInput, InputContext, Game, CombatData, CombatState, step};
 pub use text::DisplayStr; 
 pub use visuals::*; 
+pub use world::*;
 
 pub use actors::*; // TODO: Specify (re-)exports
 // pub use actors::{Attributes, Actor, AiBehaviour, GameObject, ObjectData};

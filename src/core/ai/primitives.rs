@@ -1,61 +1,66 @@
-// use std::iter::Sum;
 use std::cmp::Ordering;
 use std::collections::HashMap;
-
-use specs::prelude::*;
 
 use super::super::actors::*;
 use crate::components::*;
 use crate::core::*;
 
-pub type AttackVector = Vec<(MapPos, bool, Option<(Entity, Obstacle)>)>;
+pub type AttackVector = Vec<(MapPos, bool, Option<(Obstacle, Option<ID>)>)>;
 
-pub fn find_obstacles<F>(
-    positions: &ReadStorage<Position>,
-    obstacles: &ReadStorage<ObstacleCmp>,
-    costs: F,
-) -> ObstacleSet
-where
-    F: Fn(&ObstacleCmp) -> Option<i8>,
-{
-    let mut result = HashMap::new();
+pub fn find_path_for(a: &Actor, to: impl Into<MapPos>, world: &CoreWorld) -> Option<Path> {
+    let team = &a.team;
+    let from: MapPos = MapPos::from_world_pos(a.pos);
+    let to: MapPos = to.into();
+    let obstacles = world
+        .collect_obstacles()
+        .drain()
+        .filter_map(|(p, (oc, _))| to_obstancle(team, &oc.restrict_movement).map(|o| (p, o)))
+        .collect::<HashMap<_, _>>();
 
-    for (o, Position(p)) in (obstacles, positions).join() {
-        if let Some(c) = costs(o) {
-            result.insert(MapPos::from_world_pos(*p), Obstacle(c));
+    world.map().find_path(from, to, &ObstacleSet(obstacles))
+}
+
+pub fn find_path_towards(actor: &Actor, target: &Actor, world: &CoreWorld) -> Option<Path> {
+    let team = &actor.team;
+    let obstacles = ObstacleSet(
+        world
+            .collect_obstacles()
+            .drain()
+            .filter_map(|(p, (oc, _))| to_obstancle(team, &oc.restrict_movement).map(|o| (p, o)))
+            .collect::<HashMap<_, _>>(),
+    )
+    // We can ignore the target for pathfinding because we are looking for the place
+    // right before the target
+    .ignore(target.pos.into());
+
+    if let Some(mut p) = world
+        .map()
+        .find_path(actor.pos.into(), target.pos.into(), &obstacles)
+    {
+        if p.len() >= 2 {
+            p.pop();
+            return Some(p);
         }
     }
-
-    ObstacleSet(result)
+    None
 }
 
-pub fn find_movement_obstacles(
-    positions: &ReadStorage<Position>,
-    obstacles: &ReadStorage<ObstacleCmp>,
-    team: &Team,
-) -> ObstacleSet {
-    find_obstacles(&positions, &obstacles, |obs| {
-        restriction_costs(&obs.restrict_movement, team)
-    })
-}
-
-pub fn find_enemies(
-    actor: &Actor,
-    entities: &Entities,
-    objects: &ReadStorage<GameObjectCmp>,
-) -> Vec<(Entity, Actor)> {
-    let mut result: Vec<(Entity, Actor)> = Vec::new();
+pub fn find_enemies(actor: &Actor, world: &CoreWorld) -> Vec<Actor> {
+    let team = &actor.team;
     let apos = MapPos::from_world_pos(actor.pos);
-
-    for (te, GameObjectCmp(obj)) in (entities, objects).join() {
-        if let GameObject::Actor(ta) = obj {
-            if ta.team != actor.team {
-                result.push((te, ta.clone()));
+    let mut enemies = world
+        .collect_obstacles()
+        .drain()
+        .filter_map(|(_, (_, id))| {
+            if let Some(a) = id.and_then(|id| world.get_actor(id)) {
+                if &a.team != team {
+                    return Some(a.clone());
+                }
             }
-        }
-    }
+            None
+        }).collect::<Vec<_>>();
 
-    result.sort_by(|(_, a1), (_, a2)| {
+    enemies.sort_by(|a1, a2| {
         let d1 = apos.distance(MapPos::from_world_pos(a1.pos));
         let d2 = apos.distance(MapPos::from_world_pos(a2.pos));
 
@@ -66,178 +71,51 @@ pub fn find_enemies(
         }
     });
 
-    result
+    enemies
 }
 
-pub fn find_actor_at(w: &World, at: &WorldPos) -> Option<(Entity, Actor)> {
-    let (entities, objects): (Entities, ReadStorage<GameObjectCmp>) = w.system_data();
-    let at = MapPos::from_world_pos(*at);
-
-    for (e, GameObjectCmp(o)) in (&entities, &objects).join() {
-        if let GameObject::Actor(a) = o {
-            let apos = MapPos::from_world_pos(a.pos);
-
-            if apos == at {
-                return Some((e, a.clone()));
-            }
-        }
-    }
-
-    None
+pub fn find_actor_at<I: Into<MapPos>>(w: &CoreWorld, at: I) -> Option<Actor> {
+    let at: MapPos = at.into();
+    w.find_actor(|a| at == a.pos.into())
 }
 
-fn can_attack_with(
+pub fn possible_attacks(
     actor: &Actor,
+    target: &Actor,
+    world: &CoreWorld,
+) -> Vec<(AttackOption, AttackVector)> {
+    actor
+        .attacks()
+        .drain(..)
+        .filter_map(|attack| attack_vector(actor, target, &attack, world).map(|av| (attack, av)))
+        .collect()
+}
+
+pub fn can_attack_with(
+    attacker: &Actor,
     target: &Actor,
     attack: &AttackOption,
-    map: &Read<Map>,
-    positions: &ReadStorage<Position>,
-    obstacles: &ReadStorage<ObstacleCmp>,
+    world: &CoreWorld,
 ) -> bool {
-    let from = MapPos::from_world_pos(actor.pos);
-    let to = MapPos::from_world_pos(target.pos);
-    let d = from.distance(to);
-
-    if d > attack.max_distance.into() {
-        return false;
-    } else {
-        let attackers_team = &actor.team;
-        let obstacles = find_obstacles(&positions, &obstacles, |obs| {
-            restriction_costs(&obs.restrict_melee_attack, attackers_team)
-        })
-        .ignore(to);
-
-        if let Some(_) = map.find_straight_path(from, to, &obstacles) {
-            return true;
-        }
-    }
-
-    false
+    attack_vector(attacker, target, attack, world).is_some()
 }
 
-pub fn can_attack_melee(
-    actor: &Actor,
-    target: &Actor,
-    map: &Read<Map>,
-    positions: &ReadStorage<Position>,
-    obstacles: &ReadStorage<ObstacleCmp>,
-) -> Option<AttackOption> {
-    let attack = actor.melee_attack();
-    if can_attack_with(actor, target, &attack, map, positions, obstacles) {
-        Some(attack)
-    } else {
-        None
-    }
-}
-
-pub fn can_charge(
-    actor: &Actor,
-    target: &Actor,
-    map: &Read<Map>,
-    positions: &ReadStorage<Position>,
-    obstacles: &ReadStorage<ObstacleCmp>,
-) -> Option<AttackOption> {
-    let attack = actor.melee_attack();
-    let from = MapPos::from_world_pos(actor.pos);
-    let to = MapPos::from_world_pos(target.pos);
-    let d = from.distance(to);
-    // let move_distance: usize = max_move_distance(actor).into();
-
-    if d <= 1 {
-        // you cannot charge what is right next to you
-        return None;
-    }
-    
-    if !actor.can_move() {
-        // actor may be engaged in combat or something like this
-        return None;
-    }
-
-    let obstacles = find_movement_obstacles(positions, obstacles, &actor.team).ignore(to);
-    if let Some(p) = map.find_straight_path(from, to, &obstacles) {
-        if p.len() == 2 {
-            return Some(attack);
-        }
-    }
-
-    None
-}
-
-pub fn can_attack_at_range(
-    actor: &Actor,
-    target_pos: &WorldPos,
-) -> Option<AttackOption> {
-    let from = MapPos::from_world_pos(actor.pos);
-    let to = MapPos::from_world_pos(*target_pos);
-    let d = from.distance(to);
-
-    actor.range_attack(d as u8)
-}
-
-pub fn can_move_towards(
-    actor: &Actor,
-    target: &Actor,
-    map: &Read<Map>,
-    positions: &ReadStorage<Position>,
-    obstacles: &ReadStorage<ObstacleCmp>,
-) -> Option<Path> {
-    if !actor.can_move() {
-        return None;
-    }
-
-    let st = map.find_tile(actor.pos);
-    let tt = map.find_tile(target.pos);
-
-    if let (Some(source_tile), Some(target_tile)) = (st, tt) {
-        find_path_next_to_tile(
-            &source_tile,
-            &target_tile,
-            &actor.team,
-            map,
-            positions,
-            obstacles,
-        )
-    } else {
-        None
-    }
-}
-
-fn find_path_next_to_tile(
-    source_tile: &Tile,
-    target_tile: &Tile,
-    team: &Team,
-    map: &Read<Map>,
-    positions: &ReadStorage<Position>,
-    obstacles: &ReadStorage<ObstacleCmp>,
-) -> Option<Path> {
-    let distance = source_tile.distance(&target_tile);
-    if distance <= 1.0 {
-        // entity is already next to the target
-        return None;
-    }
-
-    let obstacles = find_movement_obstacles(positions, obstacles, team)
-        // ignore obstacles at target since we only want to move next to it
-        .ignore(target_tile.to_map_pos());
-
-    map.find_path(
-        source_tile.to_map_pos(),
-        target_tile.to_map_pos(),
-        &obstacles,
-    )
-    .map(|p| p.iter().take(p.len() - 1).cloned().collect())
-}
-
-fn restriction_costs(restriction: &Restriction, actual_team: &Team) -> Option<i8> {
-    match restriction {
-        Restriction::ForAll(costs) => *costs,
-        Restriction::ForTeam(allowed_team, costs_for_members, costs_for_others) => {
-            if allowed_team == actual_team {
-                *costs_for_members
+fn to_obstancle(t: &Team, r: &Restriction) -> Option<Obstacle> {
+    let c = match r {
+        Restriction::ForAll(c) => c,
+        Restriction::ForTeam(team, c1, c2) => {
+            if team == t {
+                c1
             } else {
-                *costs_for_others
+                c2
             }
         }
+    };
+
+    if *c > 0 {
+        Some(Obstacle(*c))
+    } else {
+        None
     }
 }
 
@@ -245,116 +123,113 @@ pub fn attack_vector(
     attacker: &Actor,
     target: &Actor,
     attack: &AttackOption,
-    data: (
-        Entities,
-        Read<Map>,
-        ReadStorage<Position>,
-        ReadStorage<ObstacleCmp>,
-    ),
-) -> Vec<(MapPos, bool, Option<(Entity, Obstacle)>)> {
-    match attack.attack_type {
-        AttackType::Ranged(..) => ranged_attack_vector(attacker, target, data),
-
-        AttackType::Melee(..) => melee_attack_vector(
-            attacker,
-            MapPos::from_world_pos(target.pos),
-            attack.max_distance,
-            data,
-        ),
-    }
-}
-
-fn melee_attack_vector(
-    attacker: &Actor,
-    target_pos: MapPos,
-    max_distance: u8,
-    (entities, map, positions, obstacles): (
-        Entities,
-        Read<Map>,
-        ReadStorage<Position>,
-        ReadStorage<ObstacleCmp>,
-    ),
-) -> Vec<(MapPos, bool, Option<(Entity, Obstacle)>)> {
-    let from = MapPos::from_world_pos(attacker.pos);
-    let attacker_team = &attacker.team;
-    let mut result = vec![];
-    let obstacles = collect_relevant_obstacles(&entities, &positions, &obstacles, |_, obs| {
-        restriction_costs(&obs.restrict_melee_attack, &attacker_team)
-    });
-
-    for (d, t) in map.tiles_along_line(from, target_pos).enumerate() {
-        let mp = t.to_map_pos();
-        let target = obstacles.get(&mp);
-
-        if target.is_some() {
-            result.push((mp, true, target.cloned()));
-        }
-
-        if d == max_distance as usize {
-            break;
-        }
-    }
-
-    // println!("melee_attack_vector {:?}", result);
-    result
-}
-
-fn ranged_attack_vector(
-    attacker: &Actor,
-    target: &Actor,
-    (entities, map, positions, obstacles): (
-        Entities,
-        Read<Map>,
-        ReadStorage<Position>,
-        ReadStorage<ObstacleCmp>,
-    ),
-) -> Vec<(MapPos, bool, Option<(Entity, Obstacle)>)> {
+    world: &CoreWorld,
+) -> Option<AttackVector> {
     let from = MapPos::from_world_pos(attacker.pos);
     let to = MapPos::from_world_pos(target.pos);
-    let attacker_team = &attacker.team;
-    let mut result = vec![];
-    let obstacles = collect_relevant_obstacles(&entities, &positions, &obstacles, |pos, obs| {
-        if from.distance(MapPos::from_world_pos(*pos)) <= 1 {
-            None
+    let max_distance = attack.advance + attack.max_distance;
+    let d = from.distance(to);
+
+    if d > max_distance.into() {
+        // target is out of reach => no need to check for obstacles
+        return None;
+    }
+
+    if d < attack.min_distance.into() {
+        // target too close, since there is no auto-fall-back we can stop here
+        return None;
+    }
+
+    let attackers_team = &attacker.team;
+    let obstacles = world.collect_obstacles();
+    let line_of_attack = SuperLineIter::new(from, to);
+    let mut result: AttackVector = vec![];
+    let mut is_advancing = true;
+
+    for pos in line_of_attack {
+        if pos == from {
+            // ignore to first pos (that's where the attacker is)
+            continue;
+        }
+
+        if world.map().get_tile(pos).is_none() {
+            // the world has ended
+            // => return what we've got so far
+            return Some(result);
+        }
+
+        let is_target = pos == to;
+
+        is_advancing = is_advancing && !is_target && from.distance(pos) <= attack.advance.into();
+
+        if let Some((obs, id)) = obstacles.get(&pos) {
+            if is_advancing {
+                // we are still advancing
+                // => check for obstacles which hinder movement
+                if let Some(_) = to_obstancle(attackers_team, &obs.restrict_movement) {
+                    // the path for advancing is blocked
+                    // => no attack possible
+                    return None;
+                }
+            } else if attack.attack_type.is_melee() {
+                if let Some(obs) = to_obstancle(attackers_team, &obs.restrict_melee_attack) {
+                    result.push((pos, is_target, Some((obs, *id))));
+                }
+            } else if attack.attack_type.is_ranged() {
+                if let Some(obs) = to_obstancle(attackers_team, &obs.restrict_ranged_attack) {
+                    result.push((pos, is_target, Some((obs, *id))));
+                }
+            }
         } else {
-            restriction_costs(&obs.restrict_ranged_attack, &attacker_team)
+            result.push((pos, is_target, None))
         }
-    });
 
-    for t in map.tiles_along_line(from, to) {
-        let mp = t.to_map_pos();
-        let is_target_pos = mp == to;
-
-        result.push((mp, is_target_pos, obstacles.get(&mp).cloned()));
-    }
-
-    result
-}
-
-fn collect_relevant_obstacles<F>(
-    entities: &Entities,
-    positions: &ReadStorage<Position>,
-    obstacles: &ReadStorage<ObstacleCmp>,
-    costs: F,
-) -> HashMap<MapPos, (Entity, Obstacle)>
-where
-    F: Fn(&WorldPos, &ObstacleCmp) -> Option<i8>,
-{
-    let mut result = HashMap::new();
-
-    for (e, Position(p), obs) in (entities, positions, obstacles).join() {
-        if let Some(c) = costs(&p, obs) {
-            result.insert(MapPos::from_world_pos(*p), (e, Obstacle(c)));
+        if from.distance(pos) >= max_distance.into() {
+            return Some(result);
         }
     }
 
-    result
+    None
 }
 
-pub fn max_move_distance(_: &Actor) -> u8 {
-    // TODO implement logic
-    // 1 - walk (reserves effort but slow)
-    // 2 - run (fast but no effort left afterwards)
-    // 3 - sprint (very fast but may causes stress/pain)
-    2
+pub fn find_charge_path(
+    moving_actor: &Actor,
+    target_actor: &Actor,
+    world: &CoreWorld,
+) -> Option<Path> {
+    let from_pos = MapPos::from_world_pos(moving_actor.pos);
+    let target_pos = MapPos::from_world_pos(target_actor.pos);
+    if from_pos == target_pos {
+        return None;
+    }
+
+    let mut result = vec![];
+    let mut obstacles = world.collect_obstacles();
+    let super_line_iter =
+        SuperLineIter::new(from_pos, target_pos).map_while(|p| world.map().get_tile(p));
+
+    // it is clear that the attacker pos and target pos will be occupied with by the attacker/target
+    // => ignore them
+    obstacles.remove(&from_pos);
+    obstacles.remove(&target_pos);
+
+    for t in super_line_iter {
+        let tile_pos = t.to_map_pos();
+        let team = &moving_actor.team;
+        let hinderance = obstacles
+            .get(&tile_pos)
+            .and_then(|(obs, _)| to_obstancle(team, &obs.restrict_movement));
+
+        if hinderance.is_some() {
+            return None;
+        }
+
+        result.push(t);
+
+        if tile_pos == target_pos {
+            return Some(result);
+        }
+    }
+
+    None
 }

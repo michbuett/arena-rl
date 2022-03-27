@@ -3,7 +3,7 @@ use specs::prelude::*;
 use crate::components::{Position, Sprites, Text, ZLayerFX, ZLayerFloor, ZLayerGameObject};
 use crate::core::{
     Act, Action, CombatData, CombatState, DisplayStr, InputContext, Map, MapPos, TextureMap, Tile,
-    TileType, UserInput, WorldPos,
+    TileType, UserInput, WorldPos, AttackType,
 };
 use crate::ui::{
     Align, ClickArea, Scene, ScreenCoord, ScreenPos, ScreenSprite, ScreenText, TILE_WIDTH,
@@ -190,7 +190,7 @@ fn render_action_buttons<'a>(
 
     if let (Some(mp), Some(act)) = default_action.clone() {
         if let Some(max_effort) = act.allocated_effort {
-            let default_effort = ((max_effort + 1) / 2) as u8;
+            // let default_effort = ((max_effort + 1) / 2) as u8;
             let p = ScreenCoord::from_world_pos(mp.to_world_pos()).to_screen_pos(scroll_offset);
             let total_height = max_effort as i32 * EFFORT_BTN_SIZE as i32;
             let x = p.0 + (TILE_WIDTH / 2) as i32;
@@ -287,15 +287,16 @@ fn get_icons(action: &DefaultAction) -> Vec<(WorldPos, String)> {
             .map(|tile| (tile.to_world_pos(), "icon-floor-MoveTo".to_string()))
             .collect(),
 
-        (_, Some(Act { action: Action::RangeAttack(_, _, attack_vector, _), .. })) => attack_vector
+        (_, Some(Act { action: Action::Attack(_, attack, attack_vector, _), .. })) => attack_vector
             .iter()
             .map(|(map_pos, _is_target, obs)| {
                 let num = if let Some(..) = obs { 2 } else { 1 };
+                let p = map_pos.to_world_pos();
 
-                (
-                    map_pos.to_world_pos(),
-                    format!("icon-floor-RangedAttack-{}", num),
-                )
+                match attack.attack_type {
+                    AttackType::Melee(..) => (p, format!("icon-floor-RangedAttack-{}", num)),
+                    AttackType::Ranged(..) => (p, format!("icon-floor-RangedAttack-{}", num)),
+                }
             })
             .collect(),
 

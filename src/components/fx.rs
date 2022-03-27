@@ -18,7 +18,12 @@ impl FxSequence {
     }
 
     pub fn wait_until_finished(mut self) -> Self {
-        if let Some(d) = self.1.iter().map(|(wait, eff)| *wait + eff.duration()).max() {
+        if let Some(d) = self
+            .1
+            .iter()
+            .map(|(wait, eff)| *wait + eff.duration())
+            .max()
+        {
             self.0 = d;
         }
 
@@ -35,16 +40,33 @@ impl FxSequence {
         self
     }
 
-    pub fn then_append(mut self, mut other: FxSequence) -> Self {
+    pub fn then_insert(mut self, mut other: FxSequence) -> Self {
         for (wait, eff) in other.1.drain(..) {
             self.1.push((self.0 + wait, eff));
         }
         self
     }
 
-    pub fn into_fx_vec(mut self, start_time: Instant) -> Vec<Fx> {
-        self.1.drain(..).map(|(wait, eff)| Fx(start_time + wait, eff)).collect()
+    pub fn then_append(self, other: FxSequence) -> Self {
+        let other_wait = other.0;
+        let mut result = self.then_insert(other);
+        result.0 += other_wait;
+        result
     }
+
+    pub fn into_fx_vec(mut self, start_time: Instant) -> Vec<Fx> {
+        self.1
+            .drain(..)
+            .map(|(wait, eff)| Fx(start_time + wait, eff))
+            .collect()
+    }
+
+    // pub fn debug(&self) {
+    //     println!("[DEBUG FxSequence] (length: {})", self.1.len());
+    //     for (d, fx) in self.1.iter() {
+    //         println!("  - {:?}: {:?}", d, fx); 
+    //     }
+    // }
 }
 
 #[derive(Component, Debug)]
@@ -68,7 +90,7 @@ pub enum FxEffect {
     /// - Entity: the target entity (the entity which should move)
     /// - Vec<WorldPos>: the path the entity should move along
     /// - MovementModification: modification of the movement (e.g. add jump effect)
-    MoveTo(Entity, Vec<WorldPos>, MovementModification),
+    MoveTo(ID, Vec<WorldPos>, MovementModification, u64),
 
     BloodSplatter(WorldPos),
 
@@ -112,8 +134,13 @@ impl FxEffect {
             .build()
     }
 
-    pub fn jump(e: Entity, p: Vec<WorldPos>) -> Self {
-        FxEffect::MoveTo(e, p, MovementModification::ParabolaJump(96))
+    pub fn jump(id: ID, p: Vec<WorldPos>) -> Self {
+        let h = 48; // half tile height
+        FxEffect::MoveTo(id, p, MovementModification::ParabolaJump(h), 200)
+    }
+
+    pub fn move_along(id: ID, p: Vec<WorldPos>) -> Self {
+        FxEffect::MoveTo(id, p, MovementModification::None, 100)
     }
 
     pub fn sprite(s: impl ToString, p: WorldPos, d: u64) -> Self {
@@ -148,12 +175,12 @@ impl FxEffect {
     pub fn custom(p: WorldPos, d: u64) -> FxBuilder {
         FxBuilder::new(p, d)
     }
-    
+
     pub fn duration(&self) -> Duration {
         let millis = match self {
             FxEffect::BloodSplatter(..) => 1000,
 
-            FxEffect::MoveTo(_, p, _) => p.len().checked_sub(1).unwrap_or(0) as u64 * 200,
+            FxEffect::MoveTo(_, p, _, dur) => p.len().checked_sub(1).unwrap_or(0) as u64 * dur,
 
             FxEffect::Custom { duration, .. } => *duration,
         };
@@ -234,12 +261,13 @@ impl<'a> System<'a> for FxSystem {
     type SystemData = (
         Entities<'a>,
         ReadStorage<'a, Fx>,
+        ReadStorage<'a, GameObjectCmp>,
         Read<'a, LazyUpdate>,
         Read<'a, TextureMap>,
     );
 
     fn run(&mut self, data: Self::SystemData) {
-        let (entities, fx, updater, texture_map) = data;
+        let (entities, fx, game_objects, updater, texture_map) = data;
         let now = Instant::now();
 
         for (e, Fx(start_time, fx_eff)) in (&entities, &fx).join() {
@@ -254,8 +282,10 @@ impl<'a> System<'a> for FxSystem {
                     handle_blood_splatter(*pos, duration, &entities, &updater, &texture_map)
                 }
 
-                FxEffect::MoveTo(entity, path, modification) => {
-                    handle_move_to(*entity, path.to_vec(), duration, *modification, &updater)
+                FxEffect::MoveTo(id, path, modification, _) => {
+                    if let Some(e) = find_entity_by_id(*id, &entities, &game_objects) {
+                        handle_move_to(e, path.to_vec(), duration, *modification, &updater);
+                    }
                 }
 
                 FxEffect::Custom {
@@ -269,10 +299,10 @@ impl<'a> System<'a> for FxSystem {
                 } => handle_custom(
                     *pos,
                     *duration,
-                    sprite,
-                    text,
-                    scale_anim,
-                    movement_anim,
+                    &sprite,
+                    &text,
+                    &scale_anim,
+                    &movement_anim,
                     *fade_anim,
                     &entities,
                     &updater,
@@ -283,6 +313,16 @@ impl<'a> System<'a> for FxSystem {
             let _ = entities.delete(e);
         }
     }
+}
+
+fn find_entity_by_id(id: ID, entities: &Entities, game_objects: &ReadStorage<GameObjectCmp>) -> Option<Entity> {
+    for (e, GameObjectCmp(go)) in (entities, game_objects).join() {
+        if go.id() == id {
+            return Some(e)
+        }
+    }
+
+    None
 }
 
 fn handle_move_to(

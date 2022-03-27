@@ -3,13 +3,13 @@ use std::cmp::max;
 use crate::core::DisplayStr;
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct ProtoTrait {
-    name: String,
-    effects: Vec<Effect>,
-    source: TraitSource,
-    visuals: Option<(u8, String)>,
-}
+// #[derive(Debug, Clone, Deserialize)]
+// pub struct ProtoTrait {
+//     name: String,
+//     effects: Vec<Effect>,
+//     source: TraitSource,
+//     visuals: Option<(u8, String)>,
+// }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Trait {
@@ -33,10 +33,23 @@ pub enum Effect {
     /// (name, reach, to-hit, to-wound)
     MeleeAttack {
         name: DisplayStr,
-        distance: u8,
-        to_hit: i8,
-        to_wound: i8,
+        /// The amount of effort this kind of attack requires 
+        required_effort: u8,
+        /// The reach of the attack (defaults to 1)
+        /// Values > 1 allows to attack across tiles in a straight line
+        distance: Option<u8>,
+        /// How far an actor will push forward during its attack (defaults to 0)
+        advance: Option<u8>,
+        /// A modifier of the hit roll (e.g. for a precice but less penetrating attack)
+        /// Defaults to zero
+        to_hit: Option<i8>,
+        /// A modifier of the wound roll (e.g. for an more brutal but less precice attack)
+        /// Defaults to zero
+        to_wound: Option<i8>,
+        /// The name of the animation which is played upon attacking
         fx: String,
+        /// A set of effects which a apply if the hit roll was successfull
+        effects: Option<Vec<(HitEffectCondition, HitEffect)>>,
     },
 
     /// (name, min-distance, max-distance, to-hit, to-wound)
@@ -55,6 +68,17 @@ pub enum Effect {
     GiveTrait(String, Trait, AbilityTarget),
 
     GatherStrength,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub enum HitEffectCondition {
+    OnHit
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub enum HitEffect {
+    PushBack(u8),
+    PullCloser(u8),
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -109,9 +133,9 @@ impl AttrVal {
     }
 
     /// The absolute attribute value (i.e. base value and all modifier)
-    pub fn abs_val(&self) -> u8 {
-        self.1
-    }
+    // pub fn abs_val(&self) -> u8 {
+    //     self.1
+    // }
 
     pub fn val(&self) -> i8 {
         self.0.iter().map(|(_, m)| m).sum()
