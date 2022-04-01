@@ -14,7 +14,7 @@ pub fn render(viewport: (i32, i32, u32, u32)) -> (Scene, ClickAreas) {
             ScreenPos(xpos, ypos),
             Align::TopLeft,
             Sprite {
-                source: (0, 0),
+                source: ((0, 0), None, None),
                 dim: (width, height),
                 offset: (0, 0),
                 alpha: 255,

@@ -6,9 +6,9 @@ mod teams_screen;
 mod text;
 mod types;
 
-use sdl2::render::Texture;
 pub use asset::*;
 pub use input::*;
+use sdl2::render::Texture;
 pub use text::*;
 pub use types::*;
 
@@ -17,7 +17,7 @@ use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
 use std::time::Instant;
 
-use crate::core::{DisplayStr, Game, UserInput, Sprite};
+use crate::core::{DisplayStr, Game, Sprite, UserInput};
 
 pub fn render(
     cvs: &mut WindowCanvas,
@@ -61,11 +61,7 @@ pub fn render(
     Ok(click_areas)
 }
 
-fn draw_scene(
-    cvs: &mut WindowCanvas,
-    assets: &mut AssetRepo,
-    scene: Scene,
-) -> Result<(), String> {
+fn draw_scene(cvs: &mut WindowCanvas, assets: &mut AssetRepo, scene: Scene) -> Result<(), String> {
     let (r, g, b) = scene.background;
 
     cvs.set_draw_color(Color::RGB(r, g, b));
@@ -209,19 +205,29 @@ fn draw_sprite(
     pos: ScreenPos,
     align: Align,
     sprite: Sprite,
-    t: &mut Texture,
+    tex: &mut Texture,
     cvs: &mut WindowCanvas,
 ) -> Result<(), String> {
-    let (x, y) = sprite.source;
+    let ((x, y), prev_frame, next_frame) = sprite.source;
     let (dx, dy) = sprite.offset;
     let (w, h) = sprite.dim;
     let tw = (w as f32 * sprite.scale).round() as u32;
     let th = (h as f32 * sprite.scale).round() as u32;
     let pos = pos.align(align, tw, th);
-    let from = Rect::new(x, y, w, h);
     let to = Rect::new(pos.0 + dx, pos.1 + dy, tw, th);
 
-    t.set_alpha_mod(sprite.alpha);
+    if let Some((t, xp, yp)) = prev_frame {
+        tex.set_alpha_mod((t * sprite.alpha as f64).round() as u8);
+        cvs.copy(tex, Rect::new(xp, yp, w, h), to)?;
+    }
 
-    cvs.copy(t, from, to)
+    tex.set_alpha_mod(sprite.alpha);
+    cvs.copy(tex, Rect::new(x, y, w, h), to)?;
+
+    if let Some((t, xn, yn)) = next_frame {
+        tex.set_alpha_mod((t * sprite.alpha as f64).round() as u8);
+        cvs.copy(tex, Rect::new(xn, yn, w, h), to)?;
+    }
+
+    Ok(())
 }

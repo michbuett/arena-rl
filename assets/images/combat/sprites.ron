@@ -202,7 +202,7 @@
         )),
     ("bg_active", ProtoSpriteConfig(
             files: ["chars/backgrounds/active_1.png", "chars/backgrounds/active_2.png", "chars/backgrounds/active_3.png"],
-            frame_durration: Some(150),
+            frame_durration: Some(100),
         )),
 
     // === BEGIN SECTION floor backgrounds ================================
