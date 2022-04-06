@@ -16,11 +16,6 @@ pub struct MovementAnimation {
     duration: Duration,
     steps: Vec<WorldPos>,
     modification: MovementModification,
-    // pub loops: u8,
-    // pub timing: AnimationTiming,
-    // pub start_pos: WorldPos,
-    // pub from: WorldPos,
-    // pub to: WorldPos,
 }
 
 impl MovementAnimation {
@@ -32,10 +27,6 @@ impl MovementAnimation {
             modification: MovementModification::None,
         }
     }
-
-    // pub fn set_start(self, new_start: Instant) -> Self {
-    //     Self { start: new_start, ..self }
-    // }
 
     pub fn set_modification(self, modification: MovementModification) -> Self {
         Self {
@@ -85,58 +76,9 @@ impl<'a> System<'a> for MovementAnimationSystem {
                 continue;
             }
 
-            pos.0 = animate(delta, anim);
+            pos.0 = animate_move(delta, anim);
         }
     }
-}
-
-fn animate(delta: Duration, anim: &MovementAnimation) -> WorldPos {
-    let MovementAnimation {
-        duration,
-        steps,
-        modification,
-        ..
-    } = anim;
-    let step_dur: u128 = duration.as_nanos();
-    let step_idx: usize = (delta.as_nanos() / step_dur) as usize;
-
-    if step_idx >= steps.len() - 1 {
-        return *steps.last().unwrap();
-    }
-
-    let step_delta = delta.as_nanos() - step_idx as u128 * step_dur;
-    let dt = (step_delta % step_dur) as f32 / step_dur as f32;
-    let from: WorldPos = steps[step_idx];
-    let to: WorldPos = steps[step_idx + 1];
-    let dx = dt * (to.x() - from.x());
-    let dy = dt * (to.y() - from.y());
-    let target_pos = from.translate_xy(dx, dy);
-
-    match modification {
-        MovementModification::None => target_pos,
-        MovementModification::ParabolaJump(max_height) => parabola_jump(
-            ScreenCoord::from_world_pos(target_pos),
-            ScreenCoord::from_world_pos(from),
-            ScreenCoord::from_world_pos(to),
-            *max_height as f32,
-        )
-        .to_world_pos(),
-    }
-}
-
-fn parabola_jump(
-    target: ScreenCoord,
-    start: ScreenCoord,
-    end: ScreenCoord,
-    max_height: f32,
-) -> ScreenCoord {
-    let l = start.euclidian_distance(end); // the total distance
-    let li = start.euclidian_distance(target); // the actual distance for the current animation step
-    let hl = l / 2.0; // the half of the total distance; this is where the dy is maxed
-    let damper = max_height / (hl * hl); // a dampening factor which ensures that dy <= max_height
-    let dz = -damper * (hl * hl - (hl - li) * (hl - li));
-
-    target.translate(0, 0, dz.round() as i32)
 }
 
 #[derive(Component, Debug, Clone)]
@@ -173,7 +115,14 @@ impl<'a> System<'a> for FadeAnimationSystem {
         let (entities, animations, mut texts, mut sprites, updater) = data;
         let now = Instant::now();
 
-        for (anim, text, sprites, e) in (&animations, (&mut texts).maybe(), (&mut sprites).maybe(), &entities).join() {
+        for (anim, text, sprites, e) in (
+            &animations,
+            (&mut texts).maybe(),
+            (&mut sprites).maybe(),
+            &entities,
+        )
+            .join()
+        {
             if anim.start > now {
                 // animation not started yet -> skip it
                 continue;
@@ -260,7 +209,113 @@ impl<'a> System<'a> for ScaleAnimationSystem {
     }
 }
 
+#[derive(Component, Debug, Clone)]
+#[storage(VecStorage)]
+pub struct HoverAnimation {
+    start: Instant,
+    org_pos: WorldPos,
+}
+
+impl HoverAnimation {
+    pub fn start(p: WorldPos) -> Self {
+        Self {
+            start: Instant::now(),
+            org_pos: p,
+        }
+    }
+}
+
+const HOVER_OFFSET: f32 = 0.3;
+
+pub struct HoverAnimationSystem;
+
+impl<'a> System<'a> for HoverAnimationSystem {
+    type SystemData = (
+        Entities<'a>,
+        ReadStorage<'a, HoverAnimation>,
+        ReadStorage<'a, MovementAnimation>,
+        WriteStorage<'a, Position>,
+    );
+
+    fn run(&mut self, data: Self::SystemData) {
+        let (entities, hov_anim, mov_anim, mut positions) = data;
+        let now = Instant::now();
+
+        for (e, ha, pos) in (&entities, &hov_anim, &mut positions).join() {
+            if mov_anim.get(e).is_some() {
+                // no messing around while moving
+                continue;
+            }
+
+            let delta: Duration = now - ha.start;
+            pos.0 = animate_hover(delta, ha.org_pos, pos.0);
+        }
+    }
+}
+
 fn animate_scale(delta: Duration, anim: &ScaleAnimation) -> f32 {
     let dt = delta.as_millis() as f32 / anim.duration.as_millis() as f32;
     anim.start_scale + dt * (anim.end_scale - anim.start_scale)
+}
+
+fn animate_hover(dt: Duration, p0: WorldPos, pt: WorldPos) -> WorldPos {
+    if f32::abs(pt.z()) < HOVER_OFFSET {
+        // current position is on the ground
+        // => ascend slowly
+        return WorldPos::new(pt.x(), pt.y(), pt.z() - HOVER_OFFSET / 100.0);
+    }
+
+    let dt = (dt.as_millis() % 2000) as f32 / 2000.0;
+    let dz = HOVER_OFFSET + 0.1 * f32::min(dt, 1.0 - dt);
+
+    WorldPos::new(p0.x(), p0.y(), p0.z() - dz)
+}
+
+fn animate_move(delta: Duration, anim: &MovementAnimation) -> WorldPos {
+    let MovementAnimation {
+        duration,
+        steps,
+        modification,
+        ..
+    } = anim;
+    let step_dur: u128 = duration.as_nanos();
+    let step_idx: usize = (delta.as_nanos() / step_dur) as usize;
+
+    if step_idx >= steps.len() - 1 {
+        return *steps.last().unwrap();
+    }
+
+    let step_delta = delta.as_nanos() - step_idx as u128 * step_dur;
+    let dt = (step_delta % step_dur) as f32 / step_dur as f32;
+    let from: WorldPos = steps[step_idx];
+    let to: WorldPos = steps[step_idx + 1];
+    let dx = dt * (to.x() - from.x());
+    let dy = dt * (to.y() - from.y());
+    let target_pos = from.translate_xy(dx, dy);
+
+    match modification {
+        MovementModification::None => target_pos,
+        MovementModification::ParabolaJump(max_height) => parabola_jump(
+            ScreenCoord::from_world_pos(target_pos),
+            ScreenCoord::from_world_pos(from),
+            ScreenCoord::from_world_pos(to),
+            *max_height as f32,
+        )
+        .to_world_pos(),
+    }
+}
+
+fn parabola_jump(
+    target: ScreenCoord,
+    start: ScreenCoord,
+    end: ScreenCoord,
+    max_height: f32,
+) -> ScreenCoord {
+    let l = start.euclidian_distance(end); // the total distance
+    let li = start.euclidian_distance(target); // the actual distance for the current animation step
+    let hl = l / 2.0; // the half of the total distance; this is where the dy is maxed
+    let damper = max_height / (hl * hl); // a dampening factor which ensures that dy <= max_height
+    let dz = -damper * (hl * hl - (hl - li) * (hl - li));
+
+    target.translate(0, 0, dz.round() as i32)
 }

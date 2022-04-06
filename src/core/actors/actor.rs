@@ -4,7 +4,7 @@ use std::time::Instant;
 
 pub use super::traits::*;
 
-use crate::core::dice::*;
+use crate::core::dice::Roll;
 use crate::core::{Act, DisplayStr, WorldPos};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -36,8 +36,9 @@ pub struct ActorBuilder {
     behaviour: Option<AiBehaviour>,
     pos: WorldPos,
     team: Team,
-    look: Look,
+    visual: Visual,
     name: String,
+    keywords: Vec<Keyword>,
     traits: HashMap<String, Trait>,
 }
 
@@ -48,7 +49,8 @@ impl ActorBuilder {
             team,
             name,
             behaviour: None,
-            look: vec![],
+            visual: Visual::new(VisualElements::new()),
+            keywords: vec![],
             traits: HashMap::new(),
         }
     }
@@ -61,15 +63,16 @@ impl ActorBuilder {
             pos: self.pos,
             health: Health::new(0),
             effort: (0, 0),
+            keywords: self.keywords,
             effects: Vec::new(),
             traits: self.traits,
             pending_action: None,
             behaviour: self.behaviour,
             team: self.team,
-            look: self.look,
+            visual: self.visual,
             engaged_in_combat: false,
         }
-        .update_effects();
+        .process_traits();
 
         let physical_strength = 3 + AttrVal::new(Attr::Physical, &a.effects).val();
         a.health = Health::new(max(physical_strength, 1) as u8);
@@ -83,8 +86,8 @@ impl ActorBuilder {
         }
     }
 
-    pub fn look(self, look: Look) -> Self {
-        Self { look, ..self }
+    pub fn visual(self, visual: Visual) -> Self {
+        Self { visual, ..self }
     }
 
     pub fn traits(self, mut trait_list: Vec<(String, Trait)>) -> Self {
@@ -98,33 +101,112 @@ impl ActorBuilder {
 
 pub type Look = Vec<(u8, String)>;
 
-// const VISUAL_BODY: u8 = 0;
-// const VISUAL_HEAD: u8 = 1;
-// const VISUAL_ACCESSORY_1: u8 = 2;
-// const VISUAL_ACCESSORY_2: u8 = 3;
-// const VISUAL_ITEM_1: u8 = 4;
-// const VISUAL_ITEM_2: u8 = 5;
+#[derive(Debug, Clone)]
+pub struct VisualElements([Option<String>; NUM_VISUAL_LAYERS]);
 
-// #[test]
-// fn test_array_indexed_by_enum() {
-//     let arr = [1, 2, 3];
-//     let x = arr[Visual::Body as usize];
-//     let y = arr[Visual::Head as usize];
+impl VisualElements {
+    pub fn new() -> Self {
+        Self(Default::default())
+    }
 
-//     assert_eq!(x, 1);
-//     assert_eq!(y, 2);
-// }
+    fn set(&mut self, layer: VLayers, name: impl ToString) {
+        self.0[layer as usize] = Some(name.to_string());
+    }
+
+    pub fn body(mut self, name: impl ToString) -> Self {
+        self.set(VLayers::Body, name);
+        self
+    }
+
+    pub fn head(mut self, name: impl ToString) -> Self {
+        self.set(VLayers::Head, name);
+        self
+    }
+
+    fn iter(&self) -> VisElIter {
+        VisElIter(self.0.iter())
+    }
+}
+
+struct VisElIter<'a>(std::slice::Iter<'a, Option<String>>);
+
+impl<'a> Iterator for VisElIter<'a> {
+    type Item = &'a String;
+
+    fn next(&mut self) -> Option<&'a String> {
+        let mut next = self.0.next();
+
+        while let Some(v) = next {
+            if v.is_some() {
+                // current layer is set
+                // => return it
+                return v.as_ref();
+            } else {
+                // current layer is not set
+                // => try the next one
+                next = self.0.next();
+            }
+        }
+
+        // no more items to try
+        // => stop iterating
+        None
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Visual {
+    states: [Option<VisualElements>; NUM_VISUAL_STATES],
+}
+
+impl Visual {
+    pub fn new(default: VisualElements) -> Self {
+        let mut states: [Option<VisualElements>; NUM_VISUAL_STATES] = Default::default();
+        states[VisualState::Idle as usize] = Some(default);
+
+        Self { states }
+    }
+
+    pub fn add_state(mut self, state: VisualState, el: VisualElements) -> Self {
+        self.states[state as usize] = Some(el);
+        self
+    }
+
+    fn add_elements(mut self, state: VisualState, layer: VLayers, name: String) -> Self {
+        if self.states[state as usize].is_none() {
+            self.states[state as usize] = Some(VisualElements::new());
+        }
+
+        self.states[state as usize]
+            .as_mut()
+            .unwrap()
+            .set(layer, name);
+        self
+    }
+
+    pub fn get_state(&self, state: VisualState) -> impl Iterator<Item = &String> {
+        if let Some(ve) = &self.states[state as usize] {
+            return ve.iter();
+        }
+
+        self.states[VisualState::Idle as usize]
+            .as_ref()
+            .unwrap()
+            .iter()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Actor {
     traits: HashMap<String, Trait>,
-    look: Look,
+    visual: Visual,
 
     /// used, max
     effort: (u8, u8),
 
     pub id: ID,
     pub health: Health,
+    pub keywords: Vec<Keyword>,
     pub effects: Vec<(DisplayStr, Effect)>,
     pub engaged_in_combat: bool,
     pub name: String,
@@ -162,12 +244,11 @@ impl Actor {
             },
         );
 
-        self.update_effects()
+        self.process_traits()
     }
 
     pub fn can_move(&self) -> bool {
         !self.engaged_in_combat && self.is_concious()
-        // !self.engaged_in_combat && self.pending_action.is_none()
     }
 
     pub fn move_distance(&self) -> u8 {
@@ -175,6 +256,14 @@ impl Actor {
         let move_mod = self.attr(Attr::Movement).val();
 
         max(1, available_e + move_mod) as u8
+    }
+
+    pub fn is_flying(&self) -> bool {
+        self.is_concious() && self.keywords.contains(&Keyword::Flying)
+    }
+
+    pub fn is_hidden(&self) -> bool {
+        !self.engaged_in_combat && self.is_concious() && self.keywords.contains(&Keyword::Hidden)
     }
 
     ////////////////////////////////////////////////////////////
@@ -261,7 +350,7 @@ impl Actor {
             traits: new_traits,
             ..self
         }
-        .update_effects()
+        .process_traits()
     }
 
     pub fn ability_self(&self) -> Vec<(String, Trait, u8)> {
@@ -360,77 +449,46 @@ impl Actor {
         }
     }
 
-    // #[deprecated]
-    // pub fn melee_attack(&self) -> AttackOption {
-    //     AttackOption {
-    //         name: DisplayStr::new("Unarmed attack"),
-    //         min_distance: 0,
-    //         max_distance: 1,
-    //         advance: 0,
-    //         to_hit: 0,
-    //         to_wound: 0,
-    //         attack_type: AttackType::Melee("fx-hit-1".to_string()),
-    //         difficulty: 3,
-    //         required_effort: 2, // TODO read from effect
-    //     }
-    // }
+    fn process_traits(mut self) -> Self {
+        let mut effects = vec![];
+        let mut keywords = vec![];
 
-    // #[deprecated]
-    // pub fn range_attack(&self, d: u8) -> Option<AttackOption> {
-    //     None
-    // }
+        for t in self.traits.values() {
+            for e in t.effects.iter() {
+                match e {
+                    Effect::Keyword(k) => {
+                        keywords.push(k.clone());
+                    }
+                    _ => {
+                        effects.push((t.name.clone(), e.clone()));
+                    }
+                }
+            }
 
-    // pub fn defence(&self, attack: &Attack) -> Option<Defence> {
-    //     for (name, eff) in self.effects.iter() {
-    //         match eff {
-    //             Effect::Defence(modifier, defence_type) => {
-    //                 match attack.attack_type {
-    //                     AttackType::Melee(..) => {
-    //                         return Some(Defence {
-    //                             defence_type: defence_type.clone(),
-    //                             defence: self
-    //                                 .attr(Attr::MeleeDefence)
-    //                                 .modify(name.clone(), *modifier),
-    //                             num_dice: 3, // TODO
-    //                         });
-    //                     }
+            if let Some(visuals) = &t.visuals {
+                for (vstate, velements) in visuals {
+                    for (l, n) in velements {
+                        self.visual = self.visual.add_elements(*vstate, *l, n.to_string());
+                    }
+                }
+            }
+        }
 
-    //                     AttackType::Ranged(..) => {
-    //                         // TODO: implement "take cover"
-    //                     }
-    //                 }
-    //             }
-    //             _ => {}
-    //         }
-    //     }
-
-    //     None
-    // }
-
-    fn update_effects(mut self) -> Self {
-        let effects = self
-            .traits
-            .values()
-            .flat_map(|t| {
-                t.effects
-                    .iter()
-                    .map(|e| (t.name.clone(), e.clone()))
-                    .collect::<Vec<_>>()
-            })
-            .collect();
-
-        self.effects = effects;
-        self
+        Self {
+            effects,
+            keywords,
+            ..self
+        }
     }
 
     pub fn add_trait(mut self, key: String, new_trait: Trait) -> Self {
         self.traits.insert(key, new_trait);
-        self.update_effects()
+        self.process_traits()
     }
 
     // pub fn remove_trait(mut self, key: &str) -> Self {
     //     if let Some(_) = self.traits.remove(key) {
-    //         self.update_effects()
+    //         self.process_traits()
     //     } else {
     //         self
     //     }
@@ -439,15 +497,6 @@ impl Actor {
     pub fn wound(mut self, w: Wound) -> Self {
         self.health = self.health.wound(w);
         self
-
-        // let wounds = self.wounds + w.wound;
-        // let focus = self.focus - w.pain as i8;
-
-        // Self {
-        //     wounds,
-        //     focus,
-        //     ..self
-        // }
     }
 
     pub fn is_alive(&self) -> bool {
@@ -466,17 +515,16 @@ impl Actor {
         }
     }
 
-    pub fn look(&self) -> Vec<String> {
-        let mut result = self.look.clone();
-
-        for Trait { visuals, .. } in self.traits.values() {
-            if let Some(v) = visuals {
-                result.push(v.clone());
-            }
+    pub fn visuals(&self) -> impl Iterator<Item = &String> {
+        if !self.is_concious() {
+            return self.visual.get_state(VisualState::Prone);
         }
 
-        result.sort();
-        result.drain(..).map(|(_, v)| v).collect()
+        if self.is_hidden() {
+            return self.visual.get_state(VisualState::Hidden);
+        }
+
+        self.visual.get_state(VisualState::Idle)
     }
 
     /// Returns the active modifier for a given attribute
@@ -574,12 +622,6 @@ impl<'a> Iterator for ActiveTraitIter<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
-pub struct Activation {
-    pub val: D6,
-    pub is_used: bool,
-}
-
 #[derive(Debug, Clone)]
 pub struct AttackOption {
     pub name: DisplayStr,
@@ -664,16 +706,3 @@ pub struct Wound {
     pub pain: u8,
     pub wound: u8,
 }
-
-// impl Wound {
-//     pub fn from_wound_roll(r: &Roll) -> Self {
-//         match r.successes() {
-//             0 => Self { pain: 0, wound: 0 },
-//             1 => Self { pain: 1, wound: 0 },
-//             n => Self {
-//                 pain: n,
-//                 wound: n - 1,
-//             },
-//         }
-//     }
-// }

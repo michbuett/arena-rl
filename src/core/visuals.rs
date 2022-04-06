@@ -1,13 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
-pub struct SpriteConfig {
-    pub source: SpriteSource,
-    pub offset: (i32, i32),
-    pub dim: (u32, u32),
-    pub alpha: u8,
-    pub scale: f32,
-}
+use super::Direction;
 
 #[derive(Debug, Clone)]
 pub struct Sprite {
@@ -22,6 +15,17 @@ pub struct Sprite {
     pub dim: (u32, u32),
     pub alpha: u8,
     pub scale: f32,
+    pub rotate: Option<Direction>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SpriteConfig {
+    pub source: SpriteSource,
+    pub offset: (i32, i32),
+    pub dim: (u32, u32),
+    pub alpha: u8,
+    pub scale: f32,
+    pub rotate: Option<Direction>,
 }
 
 impl SpriteConfig {
@@ -32,6 +36,7 @@ impl SpriteConfig {
             dim: self.dim,
             alpha: self.alpha,
             scale: self.scale,
+            rotate: self.rotate,
         }
     }
 }

@@ -1,13 +1,18 @@
-use std::collections::{HashMap, };
+use std::collections::HashMap;
 use std::fs::File;
-use std::path::Path;
 use std::iter::FromIterator;
+use std::path::Path;
 
 use ron::de::from_reader;
 
-use crate::core::{WorldPos};
+use crate::core::WorldPos;
 
-use super::actor::{Actor, ActorBuilder, AiBehaviour, Team, Trait};
+use super::{
+    actor::{Actor, ActorBuilder, AiBehaviour, Team, Trait},
+    Visual, VisualElements,
+    VisualState::Hidden,
+    VisualState::Prone,
+};
 
 pub enum ActorType {
     Tank,
@@ -74,7 +79,7 @@ pub struct ObjectGenerator {
 impl ObjectGenerator {
     pub fn new(path: &Path) -> Self {
         let traits = load_traits_from_file(path);
-            
+
         Self {
             traits: HashMap::from_iter(traits),
         }
@@ -158,7 +163,11 @@ impl ObjectGenerator {
 
     fn generate_actor_heavy(&self, pos: WorldPos, t: Team) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
-            .look(vec![vbody("body-heavy", 1), vhead("head-heavy", 1)])
+            .visual(Visual::new(
+                VisualElements::new()
+                    .body("body-heavy_1")
+                    .head("head-heavy_1"),
+            ))
             .traits(vec![
                 self.get_trait("item#Armor_PlateMail").unwrap(),
                 self.get_trait("item#Shield_TowerShield").unwrap(),
@@ -166,18 +175,20 @@ impl ObjectGenerator {
             ])
     }
 
-    fn generate_actor_saw(&self, pos: WorldPos, t: Team) -> ActorBuilder {
-        ActorBuilder::new(generate_name(), pos, t)
-            .look(vec![vbody("body-heavy", 1), vhead("head-heavy", 2)])
-            .traits(vec![
-                self.get_trait("item#Armor_PlateMail").unwrap(),
-                self.get_trait("item#Weapon_PowerSaw").unwrap(),
-            ])
-    }
+    fn generate_actor_saw(&self, pos: WorldPos, t: Team) ->
+        ActorBuilder { ActorBuilder::new(generate_name(), pos, t)
+        .visual(Visual::new( VisualElements::new()
+        .body("body-heavy_1") .head("head-heavy_2"), )) .traits(vec![
+        self.get_trait("item#Armor_PlateMail").unwrap(),
+        self.get_trait("item#Weapon_PowerSaw").unwrap(), ]) }
 
     fn generate_actor_spear(&self, pos: WorldPos, t: Team) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
-            .look(vec![vbody("body-light", 2), vhead("head", between(1, 4))])
+            .visual(Visual::new(
+                VisualElements::new()
+                    .body("body-light_2")
+                    .head(format!("head_{}", between(1, 4))),
+            ))
             .traits(vec![
                 self.get_trait("item#Armor_ChainMail").unwrap(),
                 self.get_trait("item#Weapon_Spear").unwrap(),
@@ -186,7 +197,11 @@ impl ObjectGenerator {
 
     fn generate_actor_healer(&self, pos: WorldPos, t: Team) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
-            .look(vec![vbody("body-light", 1), vhead("head", 5)])
+            .visual(Visual::new(
+                VisualElements::new()
+                    .body("body-light_1")
+                    .head("head_5")
+            ))
             .traits(vec![
                 self.get_trait("item#Armor_ChainMail").unwrap(),
                 self.get_trait("item#Weapon_Injector").unwrap(),
@@ -195,7 +210,9 @@ impl ObjectGenerator {
 
     fn generate_actor_gunner(&self, pos: WorldPos, t: Team) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
-            .look(vec![vbody("body-light", 4), vhead("head", 6)])
+            .visual(Visual::new(
+                VisualElements::new().body("body-light_4").head("head_6"),
+            ))
             .traits(vec![
                 self.get_trait("item#Armor_ChainMail").unwrap(),
                 self.get_trait("item#Weapon_IonGun").unwrap(),
@@ -204,31 +221,41 @@ impl ObjectGenerator {
 
     fn generate_monster_sucker(&self, pos: WorldPos, t: Team) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
-            .look(vec![(1, "monster-sucker".to_string())])
+            .visual(
+                Visual::new(VisualElements::new().body("monster-sucker_1"))
+                    .add_state(Prone, VisualElements::new().body("monster-sucker-prone_1")),
+            )
             .traits(vec![
                 self.get_trait("intrinsic#Weapon_SharpTeeth").unwrap(),
                 self.get_trait("intrinsic#Trait_Weak").unwrap(),
                 self.get_trait("intrinsic#Trait_Quick").unwrap(),
+                self.get_trait("intrinsic#Trait_Flyer").unwrap(),
             ])
     }
 
     fn generate_monster_worm(&self, pos: WorldPos, t: Team) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
-            .look(vec![
-                (1, "monster-worm".to_string()),
-                (2, "monster-worm-dust".to_string()),
+            .visual(
+                Visual::new(
+                    VisualElements::new()
+                        .body("monster-worm_1")
+                        .head("monster-worm-dust_1"),
+                )
+                .add_state(Hidden, VisualElements::new().body("monster-worm-hidden_1")),
+            )
+            .traits(vec![
+                self.get_trait("intrinsic#Trait_Hidden").unwrap(),
+                self.get_trait("intrinsic#Weapon_CrushingJaw").unwrap(),
             ])
-            .traits(vec![self
-                .get_trait("intrinsic#Weapon_CrushingJaw")
-                .unwrap()])
     }
 
     fn generate_monster_zombi(&self, pos: WorldPos, t: Team) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
-            .look(vec![
-                vbody("body-zombi", between(1, 2)),
-                vhead("head-zombi", between(1, 7)),
-            ])
+            .visual(Visual::new(
+                VisualElements::new()
+                    .body(format!("body-zombi_{}", between(1, 2)))
+                    .head(format!("head-zombi_{}", between(1, 7))),
+            ))
             .traits(vec![
                 self.get_trait("intrinsic#Weapon_Claws").unwrap(),
                 self.get_trait("intrinsic#Trait_Slow").unwrap(),
@@ -236,17 +263,22 @@ impl ObjectGenerator {
     }
 }
 
-fn vbody(name: impl std::fmt::Display, variant: u16) -> (u8, String) {
-    (0, format!("{}_{}", name, variant))
-}
+// fn vbody(name: impl std::fmt::Display, variant: u16) -> (u8, String) {
+//     (0, format!("{}_{}", name, variant))
+// }
 
-fn vhead(name: impl std::fmt::Display, variant: u16) -> (u8, String) {
-    (10, format!("{}_{}", name, variant))
-}
+// fn vhead(name: impl std::fmt::Display, variant: u16) -> (u8, String) {
+//     (10, format!("{}_{}", name, variant))
+// }
 
 fn between(a: u16, b: u16) -> u16 {
     *one_of(&(a..=b).collect())
 }
+
+// fn vname(name: impl std::fmt::Display, variant_from: u16, variant_to: u16) -> String {
+//     let variant = *one_of(&(variant_from..=variant_to).collect());
+//     format!("{}_{}", name, variant)
+// }
 
 fn one_of<'a, T>(v: &'a Vec<T>) -> &'a T {
     use rand::seq::SliceRandom;

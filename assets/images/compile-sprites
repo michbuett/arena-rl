@@ -31,6 +31,8 @@ resize "96x96" "map"
 resize "32x32" "ui/action"
 resize "96x96" "ui/floor"
 resize "16x16" "ui/icons"
+resize "64x64" "ui/directed"
+#resize "128x128" "ui/directed"
 
 resize "96x96"   "fx/gore"
 resize "32x32"   "fx/projectiles"

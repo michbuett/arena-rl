@@ -29,6 +29,7 @@ pub fn register(world: &mut World) {
     world.register::<MovementAnimation>();
     world.register::<FadeAnimation>();
     world.register::<ScaleAnimation>();
+    world.register::<HoverAnimation>();
 
     // from sprites module
     world.register::<Sprites>();

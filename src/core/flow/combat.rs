@@ -36,6 +36,7 @@ pub fn init_combat_data<'a, 'b>(
         .with(MovementAnimationSystem, "MovementAnimationSystem", &[])
         .with(FadeAnimationSystem, "FadeAnimatonSystem", &[])
         .with(ScaleAnimationSystem, "ScaleAnimationSystem", &[])
+        .with(HoverAnimationSystem, "HoverAnimationSystem", &[])
         .with(EndOfLiveSystem, "EOL", &[])
         .with(DelayedSpawnSystem, "DelayedSpawnSystem", &[])
         .build();
@@ -378,12 +379,20 @@ fn next_state<'a, 'b>(
             if ea.1.is_pc() {
                 // the next ready actor is a player controlled entity
                 // => wait for user input;
-                //    so far we have no context for the input (e.g. selected
-                //    world position, ...) and no reactions
+                //    So far we have no context for the input (e.g. selected
+                //    world position, ...) but we can default to preselecting
+                //    the actors position. This will reduce the number of clicks
+                //    for some actions (eg resting) while not increasing it for
+                //    others.
+                let pos = MapPos::from_world_pos(ea.1.pos);
+                let objects = find_objects_at(pos, &w);
+                let actions = actions_at(&ea.1, pos.to_world_pos(), CoreWorld::new(&w));
+                let input_ctxt = InputContext::SelectedArea(pos, objects, actions);
+
                 (
                     round,
                     active_team_idx,
-                    Some(CombatState::WaitForUserAction(ea.clone(), None)),
+                    Some(CombatState::WaitForUserAction(ea.clone(), Some(input_ctxt))),
                     None,
                     score,
                 )

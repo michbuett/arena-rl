@@ -38,7 +38,7 @@
             fx: "fx-hit-1",
         )],
         source: IntrinsicProperty,
-        visuals: Some((30, "melee-2h_1")),
+        visuals: Some([(Idle, [(Weapon1, "melee-2h_1")])]),
     )),
 
     ("item#Weapon_Injector", (
@@ -51,7 +51,7 @@
             fx: "fx-hit-1",
         )],
         source: IntrinsicProperty,
-        visuals: Some((30, "staff_1")),
+        visuals: Some([(Idle, [(Weapon1, "staff_1")])]),
     )),
 
     ("item#Weapon_Spear", (
@@ -75,7 +75,7 @@
             ), OnSelf,
         )],
         source: IntrinsicProperty,
-        visuals: Some((30, "melee-2h_2")),
+        visuals: Some([(Idle, [(Weapon1, "melee-2h_2")])]),
     )),
 
     // === BEGIN SECTION weapons-1h ================================
@@ -94,7 +94,7 @@
             ), OnSelf,
         )],
         source: IntrinsicProperty,
-        visuals: Some((30, "melee-1h_1")),
+        visuals: Some([(Idle, [(Weapon2, "melee-1h_1")])]),
     )),
 
     // === BEGIN SECTION weapons-ranged ================================
@@ -108,7 +108,7 @@
             fx: "fx-projectile-2",
         )],
         source: IntrinsicProperty,
-        visuals: Some((20, "gun-2h_1")),
+        visuals: Some([(Idle, [(Weapon1, "gun-2h_1")])]),
     )),
 
     // === BEGIN SECTION weapons-intrinsic ================================
@@ -142,7 +142,7 @@
             fx: "fx-hit-2",
         )],
         source: IntrinsicProperty,
-        visuals: Some((30, "claws_1")),
+        visuals: Some([(Idle, [(Weapon1, "claws_1")])]),
     )),
 
     // === BEGIN SECTION shields ================================
@@ -162,13 +162,19 @@
             ),
         ],
         source: IntrinsicProperty,
-        visuals: Some((20, "shild_1")),
+        visuals: Some([(Idle, [(Weapon1, "shild_1")])]),
     )),
 
     // === BEGIN SECTION traits ================================
     ("intrinsic#Trait_Weak", (
         name: ("Weak"),
         effects: [AttrMod(Physical, -1)],
+        source: IntrinsicProperty,
+    )),
+
+    ("intrinsic#Trait_Flyer", (
+        name: ("Flyer"),
+        effects: [Keyword(Flying)],
         source: IntrinsicProperty,
     )),
 
@@ -181,6 +187,12 @@
     ("intrinsic#Trait_Slow", (
         name: ("Slow"),
         effects: [AttrMod(Movement, -1)],
+        source: IntrinsicProperty,
+    )),
+
+    ("intrinsic#Trait_Hidden", (
+        name: ("Hidden"),
+        effects: [Keyword(Hidden)],
         source: IntrinsicProperty,
     )),
 ]

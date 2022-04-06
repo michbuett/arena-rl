@@ -17,7 +17,7 @@ use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
 use std::time::Instant;
 
-use crate::core::{DisplayStr, Game, Sprite, UserInput};
+use crate::core::{DisplayStr, Game, Sprite, UserInput, Direction};
 
 pub fn render(
     cvs: &mut WindowCanvas,
@@ -200,7 +200,6 @@ fn get_scrolling(sd: ScrollData, i: &UserInput) -> ScrollData {
 // fn get_scrolling(ui: &UI, game: &Game) -> Option<ScrollData> {
 //     if let Some
 // }
-
 fn draw_sprite(
     pos: ScreenPos,
     align: Align,
@@ -214,20 +213,69 @@ fn draw_sprite(
     let tw = (w as f32 * sprite.scale).round() as u32;
     let th = (h as f32 * sprite.scale).round() as u32;
     let pos = pos.align(align, tw, th);
-    let to = Rect::new(pos.0 + dx, pos.1 + dy, tw, th);
+    let frame = (x, y, w, h);
+    let to = (pos.0 + dx, pos.1 + dy, tw, th);
+
+    if let Some(dir) = sprite.rotate {
+        draw_with_ration(frame, prev_frame, next_frame, to, sprite.alpha, dir, tex, cvs)
+    } else {
+        draw(frame, prev_frame, next_frame, to, sprite.alpha, tex, cvs)
+    }
+}
+
+fn draw(
+    frame_pos: (i32, i32, u32, u32),
+    prev_frame: Option<(f64, i32, i32)>,
+    next_frame: Option<(f64, i32, i32)>,
+    target_pos: (i32, i32, u32, u32),
+    alpha: u8,
+    tex: &mut Texture,
+    cvs: &mut WindowCanvas,
+) -> Result<(), String> {
+    let (x, y, w, h) = frame_pos;
+    let to = Rect::new(target_pos.0, target_pos.1, target_pos.2, target_pos.3);
 
     if let Some((t, xp, yp)) = prev_frame {
-        tex.set_alpha_mod((t * sprite.alpha as f64).round() as u8);
+        tex.set_alpha_mod((t * alpha as f64).round() as u8);
         cvs.copy(tex, Rect::new(xp, yp, w, h), to)?;
     }
 
-    tex.set_alpha_mod(sprite.alpha);
+    tex.set_alpha_mod(alpha);
+    cvs.copy(tex, Rect::new(x, y, w, h), to)?;
     cvs.copy(tex, Rect::new(x, y, w, h), to)?;
 
     if let Some((t, xn, yn)) = next_frame {
-        tex.set_alpha_mod((t * sprite.alpha as f64).round() as u8);
+        tex.set_alpha_mod((t * alpha as f64).round() as u8);
         cvs.copy(tex, Rect::new(xn, yn, w, h), to)?;
     }
 
+    Ok(())
+}
+
+fn draw_with_ration(
+    frame_pos: (i32, i32, u32, u32),
+    prev_frame: Option<(f64, i32, i32)>,
+    next_frame: Option<(f64, i32, i32)>,
+    target_pos: (i32, i32, u32, u32),
+    alpha: u8,
+    angle: Direction,
+    tex: &mut Texture,
+    cvs: &mut WindowCanvas,
+) -> Result<(), String> {
+    let (x, y, w, h) = frame_pos;
+    let to = Rect::new(target_pos.0, target_pos.1, target_pos.2, target_pos.3);
+    
+    if let Some((t, xp, yp)) = prev_frame {
+        tex.set_alpha_mod((t * alpha as f64).round() as u8);
+        cvs.copy_ex(tex, Rect::new(xp, yp, w, h), to, angle.as_degree(), None, false, false)?;
+    }
+
+    tex.set_alpha_mod(alpha);
+    cvs.copy_ex(tex, Rect::new(x, y, w, h), to, angle.as_degree(), None, false, false)?;
+
+    if let Some((t, xn, yn)) = next_frame {
+        tex.set_alpha_mod((t * alpha as f64).round() as u8);
+        cvs.copy_ex(tex, Rect::new(xn, yn, w, h), to, angle.as_degree(), None, false, false)?;
+    }
     Ok(())
 }

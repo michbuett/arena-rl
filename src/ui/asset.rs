@@ -138,6 +138,7 @@ fn compile_texture_map(
                     offset: proto_cfg.offset.unwrap_or((0, 0)),
                     alpha: proto_cfg.alpha.unwrap_or(255),
                     scale: 1.0,
+                    rotate: None,
                 },
             );
         } else {
@@ -160,6 +161,7 @@ fn compile_texture_map(
                     offset: proto_cfg.offset.unwrap_or((0, 0)),
                     alpha: proto_cfg.alpha.unwrap_or(255),
                     scale: 1.0,
+                    rotate: None,
                 },
             );
         }

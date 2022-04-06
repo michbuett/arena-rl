@@ -139,17 +139,24 @@
         )),
 
     // === BEGIN SECTION body ================================
-    ("monster-sucker", ProtoSpriteConfig(
+    ("monster-sucker_1", ProtoSpriteConfig(
             files: ["monster/sucker-idle_1.png", "monster/sucker-idle_2.png", "monster/sucker-idle_3.png", "monster/sucker-idle_4.png"],
-            offset: Some((0, -20)),
+            // offset: Some((0, -20)),
             frame_durration: Some(150),
         )),
-    ("monster-worm", ProtoSpriteConfig(
+    ("monster-sucker-prone_1", ProtoSpriteConfig(
+            files: ["monster/sucker-idle_4.png"],
+        )),
+    ("monster-worm_1", ProtoSpriteConfig(
             files: ["monster/worm-idle.png"],
         )),
-    ("monster-worm-dust", ProtoSpriteConfig(
+    ("monster-worm-dust_1", ProtoSpriteConfig(
             files: ["monster/worm-dust_1.png", "monster/worm-dust_2.png", "monster/worm-dust_3.png"],
             frame_durration: Some(150),
+        )),
+    ("monster-worm-hidden_1", ProtoSpriteConfig(
+            files: ["fx/hit/dust-01_1.png", "fx/hit/dust-01_2.png", "fx/hit/dust-01_3.png"],
+            frame_durration: Some(100),
         )),
 
     // === BEGIN SECTION Weapons ================================
@@ -253,6 +260,18 @@
     ("selected", ProtoSpriteConfig(
             files: ["ui/floor/selected.png"],
         )),
+    ("action-indicator-Ambush", ProtoSpriteConfig(
+            files: ["ui/floor/indicator-ambush.png"], 
+        )),
+    ("action-indicator-MeleeAttack", ProtoSpriteConfig(
+            files: ["ui/directed/melee.png"],
+        )),
+    ("action-indicator-RangedAttack", ProtoSpriteConfig(
+            files: ["ui/directed/range.png"],
+        )),
+    // ("action-indicator-Defence", ProtoSpriteConfig(
+    //         files: ["ui/floor/indicator-defence.png"],
+    //     )),
     ("icon-floor-MoveTo", ProtoSpriteConfig(
             files: ["ui/floor/feet.png"],
             alpha: Some(100),  

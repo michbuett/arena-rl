@@ -3,26 +3,43 @@ use std::cmp::max;
 use crate::core::DisplayStr;
 use serde::Deserialize;
 
-// #[derive(Debug, Clone, Deserialize)]
-// pub struct ProtoTrait {
-//     name: String,
-//     effects: Vec<Effect>,
-//     source: TraitSource,
-//     visuals: Option<(u8, String)>,
-// }
+pub const NUM_VISUAL_STATES: usize = 3;
+pub const NUM_VISUAL_LAYERS: usize = 4;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Deserialize)]
+pub enum VisualState {
+    Idle = 0,
+    Prone = 1,
+    Hidden = 2,
+}
+
+#[derive(Debug, Copy, Clone, Deserialize)]
+pub enum VLayers {
+    Body = 0,
+    Head = 1,
+    Weapon1 = 2,
+    Weapon2 = 3,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Trait {
     pub name: DisplayStr,
     pub effects: Vec<Effect>,
     pub source: TraitSource,
-    pub visuals: Option<(u8, String)>,
+    // pub visuals: Option<(u8, String)>,
+    pub visuals: Option<Vec<(VisualState, Vec<(VLayers, String)>)>>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
 pub enum TraitSource {
     IntrinsicProperty,
     Temporary(u8),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub enum Keyword {
+    Flying,
+    Hidden,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -68,6 +85,8 @@ pub enum Effect {
     GiveTrait(String, Trait, AbilityTarget),
 
     GatherStrength,
+
+    Keyword(Keyword),
 }
 
 #[derive(Debug, Clone, Deserialize)]
