@@ -391,23 +391,17 @@ impl Actor {
                         to_wound,
                         fx,
                         effects,
-                    } => {
-                        if *required_effort <= self.available_effort() + 1 {
-                            Some(AttackOption {
-                                name: name.clone(),
-                                min_distance: 1,
-                                max_distance: max(1, distance.unwrap_or(1)),
-                                advance: advance.unwrap_or(0),
-                                to_hit: to_hit.unwrap_or(0),
-                                to_wound: to_wound.unwrap_or(0),
-                                attack_type: AttackType::Melee(fx.to_string()),
-                                required_effort: *required_effort,
-                                effects: effects.clone(),
-                            })
-                        } else {
-                            None
-                        }
-                    }
+                    } => Some(AttackOption {
+                        name: name.clone(),
+                        min_distance: 1,
+                        max_distance: max(1, distance.unwrap_or(1)),
+                        advance: advance.unwrap_or(0),
+                        to_hit: to_hit.unwrap_or(0),
+                        to_wound: to_wound.unwrap_or(0),
+                        attack_type: AttackType::Melee(fx.to_string()),
+                        required_effort: *required_effort,
+                        effects: effects.clone(),
+                    }),
 
                     Effect::RangeAttack {
                         name,

@@ -26,7 +26,6 @@ pub struct Trait {
     pub name: DisplayStr,
     pub effects: Vec<Effect>,
     pub source: TraitSource,
-    // pub visuals: Option<(u8, String)>,
     pub visuals: Option<Vec<(VisualState, Vec<(VLayers, String)>)>>,
 }
 

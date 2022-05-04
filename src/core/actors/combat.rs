@@ -185,6 +185,10 @@ fn roll_defence(defender: &Actor) -> Option<Roll> {
 
 fn to_hit_threshold(attack: &Attack, target: &Actor) -> u8 {
     // TODO implement expertise system
+    if !target.is_concious() {
+        return 2
+    }
+
     max(
         0,
         4 + attack.to_hit.val() + target.attr(Attr::MeleeDefence).val(),

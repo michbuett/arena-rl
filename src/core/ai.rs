@@ -5,9 +5,7 @@ mod primitives;
 use crate::core::*;
 use primitives::*;
 
-pub use primitives::{
-    attack_vector, can_attack_with, find_charge_path, AttackVector,
-};
+pub use primitives::{attack_vector, can_attack_with, find_charge_path, AttackVector};
 
 pub fn action(a: &Actor, w: CoreWorld) -> Act {
     zombi_action(a, w)
@@ -15,8 +13,13 @@ pub fn action(a: &Actor, w: CoreWorld) -> Act {
 
 fn zombi_action(a: &Actor, cw: CoreWorld) -> Act {
     for ta in find_enemies(&a, &cw) {
-        if let Some((attack, attack_vector)) = pick_one(possible_attacks(a, &ta, &cw)) {
-            // let attack_vector = attack_vector(a, &ta, &attack, &cw);
+        let attacks = possible_attacks(a, &ta, &cw)
+            .drain(..)
+            // exclude attacks where the required efford exeeds the avaliable efford (this could lead to a self-KO)
+            .filter(|(attack, _)| attack.required_effort <= a.available_effort())
+            .collect::<Vec<_>>();
+
+        if let Some((attack, attack_vector)) = pick_one(attacks) {
             return Act::attack(ta.id, attack, attack_vector, ta.name);
         }
 
@@ -33,11 +36,7 @@ fn zombi_action(a: &Actor, cw: CoreWorld) -> Act {
     Act::pass()
 }
 
-pub fn actions_at(
-    actor: &Actor,
-    selected_pos: WorldPos,
-    cw: CoreWorld,
-) -> Vec<Act> {
+pub fn actions_at(actor: &Actor, selected_pos: WorldPos, cw: CoreWorld) -> Vec<Act> {
     let mut result = vec![];
 
     if let Some(other_actor) = find_actor_at(&cw, &selected_pos) {

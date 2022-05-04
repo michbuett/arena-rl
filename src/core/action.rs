@@ -152,11 +152,6 @@ impl<'a> ActionResultBuilder<'a> {
         self
     }
 
-    // fn wait(mut self, ms: u64) -> Self {
-    //     self.fx_seq = self.fx_seq.wait(ms);
-    //     self
-    // }
-
     fn append_log(mut self, other_log: Option<DisplayStr>) -> Self {
         self.log = match (self.log, other_log) {
             (Some(l), None) => Some(l),
@@ -381,7 +376,7 @@ fn filter_attack_vector(input: &AttackVector, w: &CoreWorld) -> Vec<AttackTarget
 fn is_next_to_enemy(a_team: &Team, a_pos: MapPos, w: &CoreWorld) -> bool {
     w.find_actor(|other| {
         let o_pos = MapPos::from_world_pos(other.pos);
-        a_team != &other.team && a_pos.distance(o_pos) == 1
+        other.is_concious() && a_team != &other.team && a_pos.distance(o_pos) == 1
     })
     .is_some()
 }
@@ -523,107 +518,6 @@ fn create_fx_changes_for_wound(wound: &Wound, target_pos: WorldPos, delay: u64) 
     }
 }
 
-// fn find_ambush_enemy(attacker: &Actor, w: &World) -> Option<(Entity, Actor, WorldPos)> {
-//     let (entities, goc_storage, map, position_cmp, obstacle_cmp): (
-//         Entities,
-//         ReadStorage<GameObjectCmp>,
-//         Read<Map>,
-//         ReadStorage<Position>,
-//         ReadStorage<ObstacleCmp>,
-//     ) = w.system_data();
-
-//     let attacker_mpos = MapPos::from_world_pos(attacker.pos);
-//     let obstacles = find_movement_obstacles(&position_cmp, &obstacle_cmp, &attacker.team);
-
-//     for (e, goc) in (&entities, &goc_storage).join() {
-//         if let GameObjectCmp(GameObject::Actor(a)) = goc {
-//             let target_mpos = MapPos::from_world_pos(a.pos);
-//             let d = target_mpos.distance(attacker_mpos);
-
-//             if a.team != attacker.team && d == 2 {
-//                 let os = obstacles.clone().ignore(target_mpos);
-//                 if let Some(p) = map.find_straight_path(attacker_mpos, target_mpos, &os) {
-//                     return Some((e, a.clone(), p.first().unwrap().to_world_pos()));
-//                 }
-//             }
-//         }
-//     }
-
-//     None
-// }
-
-// fn post_move_action(e: Entity, a: Actor, w: &World) -> ActionResult {
-//     let (entities, goc_storage, map, position_cmp, obstacle_cmp): (
-//         Entities,
-//         ReadStorage<GameObjectCmp>,
-//         Read<Map>,
-//         ReadStorage<Position>,
-//         ReadStorage<ObstacleCmp>,
-//     ) = w.system_data();
-
-//     let p = MapPos::from_world_pos(a.pos);
-//     let obstacles = find_movement_obstacles(&position_cmp, &obstacle_cmp, &a.team).ignore(p);
-
-//     for (ambush_e, goc) in (&entities, &goc_storage).join() {
-//         if let GameObjectCmp(GameObject::Actor(ambush_a)) = goc {
-//             match &a.pending_action {
-//                 Some(Act {
-//                     action: Action::Ambush(attack),
-//                     delay,
-//                     allocated_effort,
-//                 }) => {
-//                     if a.team == ambush_a.team || !ambush_a.can_move() {
-//                         return no_op();
-//                     }
-
-//                     let other_pos = MapPos::from_world_pos(ambush_a.pos);
-//                     if p.distance(other_pos) > 3 {
-//                         return no_op();
-//                     }
-
-//                     if let Some(p) = map.find_straight_path(p, other_pos, &obstacles) {
-//                         let attacker = (ambush_e, ambush_a.clone());
-//                         let target = (e, a.clone());
-//                         let to_pos = p.first().unwrap().to_world_pos();
-
-//                         return perform_ambush(attacker, target, attack.clone(), to_pos, w);
-//                     }
-//                 }
-//                 _ => {}
-//             }
-//         }
-//     }
-
-//     ActionResult::new()
-// }
-
-// fn perform_ambush(
-//     attacker: (Entity, Actor),
-//     target: (Entity, Actor),
-//     attack: AttackOption,
-//     to_pos: WorldPos,
-//     w: &World,
-// ) -> ActionResult {
-//     let effort = attacker.1.available_effort();
-//     let from_pos = attacker.1.pos;
-//     let attack = attack.inc_difficulty(3); // TODO: use tile/obstacles to determine difficulty
-//     let attacker = (attacker.0, attacker.1.charge_to(to_pos), effort);
-
-//     ActionResult::new()
-//         .update_actor(attacker.0, attacker.1.clone())
-//         .fx(FxEffect::scream("Charge!", from_pos), 300)
-//         .fx(FxEffect::dust("fx-dust-1", from_pos, 300), 0)
-//         .fx(
-//             FxEffect::jump(attacker.0, vec![from_pos, target.1.pos, to_pos]),
-//             200,
-//         )
-//         .append(handle_attack(attacker, target, attack, w))
-// }
-
-// fn perform_move(a: Actor) -> ActionResult {
-//     no_op()
-// }
-
 fn handle_attack<'a>(
     attacker_id: ID,
     target_id: ID,
@@ -642,6 +536,10 @@ fn handle_attack<'a>(
     let max_distance = attack.advance + attack.max_distance;
     let from = MapPos::from_world_pos(attacker.pos);
     let to = MapPos::from_world_pos(target.pos);
+
+    if !attacker.is_concious() {
+        return ActionResultBuilder::new(cw).add_fx(FxEffect::say("Ahhh", attacker.pos));
+    }
 
     if from.distance(to) > max_distance.into() {
         return ActionResultBuilder::new(cw).add_fx(FxEffect::say("It's too far!", attacker.pos));
@@ -749,9 +647,13 @@ fn apply_hit_effect(eff: HitEffect, mut cw: CoreWorld) -> ActionResultBuilder {
             if let Some(t) = cw.get_actor(id).cloned() {
                 fx_seq = fx_seq.then_append(create_fx_changes_for_wound(&w, t.pos, 0));
 
-                let target = t.wound(w);
+                let mut target = t.wound(w);
 
                 if target.is_alive() {
+                    if !target.is_concious() {
+                        target = target.prepare(Act::rest());
+                    }
+
                     cw.update(target.into());
                 } else {
                     cw.remove(id);
