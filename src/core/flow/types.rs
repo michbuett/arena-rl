@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use specs::prelude::{Dispatcher, Entity, World};
 
-use crate::core::{Act, Action, Actor, DisplayStr, GameObject, MapPos, ObjectGenerator, Team, TextureMap};
+use crate::core::{Act, Actor, DisplayStr, GameObject, MapPos, ObjectGenerator, Team, TextureMap};
 
 #[derive(Debug)]
 pub enum UserInput {

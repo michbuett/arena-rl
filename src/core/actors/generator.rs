@@ -244,7 +244,7 @@ impl ObjectGenerator {
                 .add_state(Hidden, VisualElements::new().body("monster-worm-hidden_1")),
             )
             .traits(vec![
-                self.get_trait("intrinsic#Trait_Hidden").unwrap(),
+                self.get_trait("intrinsic#Trait_Underground").unwrap(),
                 self.get_trait("intrinsic#Weapon_CrushingJaw").unwrap(),
             ])
     }

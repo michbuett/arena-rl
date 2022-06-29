@@ -1,6 +1,6 @@
 mod primitives;
 
-// use specs::prelude::*;
+use std::cmp::max;
 
 use crate::core::*;
 use primitives::*;
@@ -24,12 +24,12 @@ fn zombi_action(a: &Actor, cw: CoreWorld) -> Act {
         }
 
         if let Some(path) = find_path_towards(a, &ta, &cw) {
-            return Act::move_to(
-                path.iter()
+            let p = path.iter()
                     .take(a.move_distance().into())
                     .cloned()
-                    .collect(),
-            );
+                    .collect();
+
+            return Act::move_to(move_effort(a, &p), p)
         }
     }
 
@@ -72,7 +72,7 @@ pub fn actions_at(actor: &Actor, selected_pos: WorldPos, cw: CoreWorld) -> Vec<A
     if actor.can_move() {
         if let Some(path) = find_path_for(actor, selected_pos, &cw) {
             if path.len() > 0 && path.len() <= actor.move_distance().into() {
-                result.push(Act::move_to(path));
+                result.push(Act::move_to(move_effort(actor, &path), path));
             }
         }
     }
@@ -106,4 +106,11 @@ fn pick_one<T>(mut list: Vec<T>) -> Option<T> {
     let idx = rng.sample(range);
 
     Some(list.remove(idx))
+}
+
+fn move_effort(a: &Actor, p: &Path) -> u8 {
+    let move_mod = a.attr(Attr::Movement).val() as i32;
+    let path_len = p.len() as i32;
+
+    max(1, path_len - move_mod) as u8
 }

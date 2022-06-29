@@ -4,13 +4,17 @@ mod fx;
 mod sprites;
 
 use crate::FontFace;
+use std::num::NonZeroU8;
 use std::time::{Duration, Instant};
 
-use specs::prelude::{Builder, Component, DenseVecStorage, Entities, Join, LazyUpdate, Read, ReadStorage, System, VecStorage, World, WorldExt};
+use specs::prelude::{
+    Builder, Component, DenseVecStorage, Entities, Join, LazyUpdate, Read, ReadStorage, System,
+    VecStorage, World, WorldExt,
+};
 use specs_derive::Component;
 
-use crate::core::{DisplayStr, GameObject, SpriteConfig, Team, WorldPos};
-use crate::ui::{Align, ScreenText, ScreenPos};
+use crate::core::{DisplayStr, GameObject, Obstacle, SpriteConfig, WorldPos};
+use crate::ui::{Align, ScreenPos, ScreenText};
 
 pub use crate::components::actors::*;
 pub use crate::components::animation::*;
@@ -51,17 +55,106 @@ pub struct Position(pub WorldPos);
 pub struct GameObjectCmp(pub GameObject);
 
 #[derive(Debug, Clone)]
-pub enum Restriction {
-    ForAll(u8),
-    ForTeam(Team, u8, u8)
+pub struct HitArea {
+    obstacle: Obstacle,
+    offset: (f32, f32),
+    dim: (f32, f32),
+}
+
+impl HitArea {
+    pub fn intersect_line_at(&self, pos: (f32, f32), p0: (f32, f32), p1: (f32, f32)) -> bool {
+        let (x0, y0) = p0;
+        let (x1, y1) = p1;
+        let dx = x1 - x0;
+        let dy = y1 - y0;
+        let (x, y) = (pos.0 + self.offset.0, pos.1 + self.offset.1);
+        let (w, h) = self.dim;
+
+        if dx == 0.0 {
+            // vertical line
+            return x <= x0 && x0 <= x + w;
+        }
+
+        let m = dy / dx;
+        let n = y0 - m * x0;
+
+        if m > 0.0 {
+            if m * x + n > y + h {
+                return false;
+            }
+
+            if m * (x + w) + n < y {
+                return false;
+            }
+        } else {
+            if m * x + n < y {
+                return false;
+            }
+
+            if m * (x + w) + n > y + h {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Hitbox {
+    inner: Option<HitArea>,
+    outer: HitArea,
+}
+
+impl Hitbox {
+    pub fn new_pillar() -> Self {
+        Self {
+            inner: Some(HitArea {
+                obstacle: Obstacle::Blocker,
+                offset: (-0.2, -0.2),
+                dim: (0.4, 0.4),
+            }),
+            outer: HitArea {
+                obstacle: Obstacle::Impediment(NonZeroU8::new(80).unwrap(), 2),
+                offset: (-0.5, -0.5),
+                dim: (1.0, 1.0),
+            }
+        }
+    }
+
+    pub fn new_normal_actor() -> Self {
+        Self {
+            inner: None,
+            outer: HitArea {
+                obstacle: Obstacle::Impediment(NonZeroU8::new(50).unwrap(), 1),
+                offset: (-0.4, -0.4),
+                dim: (0.8, 0.8),
+            }
+        }
+    }
+
+    pub fn obstacle_at(&self, pos: (f32, f32), p0: (f32, f32), p1: (f32, f32)) -> Option<Obstacle> {
+        if let Some(inner_hit_area) = self.inner.as_ref() {
+            if inner_hit_area.intersect_line_at(pos, p0, p1) {
+                return Some(inner_hit_area.obstacle)
+            }
+        }
+
+        if self.outer.intersect_line_at(pos, p0, p1) {
+            return Some(self.outer.obstacle)
+        }
+
+        None
+    }
 }
 
 #[derive(Component, Debug, Clone)]
 #[storage(VecStorage)]
 pub struct ObstacleCmp {
-    pub restrict_movement: Restriction,
-    pub restrict_melee_attack: Restriction,
-    pub restrict_ranged_attack: Restriction,
+    /// The handicaps for moving by foot, flying and underground
+    pub movement: (Option<Obstacle>, Option<Obstacle>, Option<Obstacle>),
+    /// The handicap for physically reaching sth (e.g. for an attack)
+    pub reach: Option<Hitbox>,
 }
 
 #[derive(Component, Debug, Clone)]
@@ -124,13 +217,13 @@ impl Text {
         self.align = new_alignment;
         self
     }
-    
-    pub fn offset(self, dx: i32, dy: i32) -> Self {
-        Self {
-            offset: Some((dx, dy)),
-            ..self
-        }
-    }
+
+    // pub fn offset(self, dx: i32, dy: i32) -> Self {
+    //     Self {
+    //         offset: Some((dx, dy)),
+    //         ..self
+    //     }
+    // }
 
     pub fn padding(self, padding: u32) -> Self {
         Self { padding, ..self }
@@ -143,12 +236,12 @@ impl Text {
         }
     }
 
-    pub fn background(self, r: u8, g: u8, b: u8, a: u8) -> Self {
-        Self {
-            background: Some((r, g, b, a)),
-            ..self
-        }
-    }
+    // pub fn background(self, r: u8, g: u8, b: u8, a: u8) -> Self {
+    //     Self {
+    //         background: Some((r, g, b, a)),
+    //         ..self
+    //     }
+    // }
 }
 
 #[derive(Component, Debug, Clone)]
@@ -206,7 +299,6 @@ impl<'a> System<'a> for DelayedSpawnSystem {
                     .create_entity(&entities)
                     .with(Sprites::new(spawn.sprites.clone()))
                     .with(Position(spawn.pos));
-
 
                 builder = match spawn.z_layer {
                     ZLayer::Floor => builder.with(ZLayerFloor),

@@ -171,7 +171,6 @@ fn handle_wait_for_user_action(
                 // it is allowed
                 // => determine the new possible actions and wait for the next
                 //    user input
-                // let pos = WorldPos::new(pos.x().floor(), pos.y().floor(), 0.0);
                 let objects = find_objects_at(*pos, &w);
                 let actions = actions_at(&e.1, pos.to_world_pos(), CoreWorld::new(&w));
                 let ui = InputContext::SelectedArea(*pos, objects, actions);
@@ -199,27 +198,6 @@ fn handle_wait_for_user_action(
         _ => None,
     }
 }
-
-// fn find_winning_team(world: &World) -> Option<Team> {
-//     let actors: ReadStorage<GameObjectCmp> = world.system_data();
-//     let mut winning_team = None;
-
-//     for GameObjectCmp(o) in (&actors).join() {
-//         if let GameObject::Actor(a) = o {
-//             if let Some(candidate) = winning_team {
-//                 if candidate != a.team {
-//                     // there are two actors of different team
-//                     // => no winning team so far (exit)
-//                     return None;
-//                 }
-//             }
-
-//             winning_team = Some(a.team.clone());
-//         }
-//     }
-
-//     winning_team
-// }
 
 fn find_objects_at(mpos: MapPos, world: &World) -> Vec<GameObject> {
     let game_objects: ReadStorage<GameObjectCmp> = world.system_data();
@@ -487,15 +465,6 @@ fn spawn_enemies(wave: u64, w: &World) {
 
         insert_game_object_components(GameObject::Actor(enemy), w);
     }
-
-    // vec![
-    //     GameObject::Actor(generate_enemy_easy(WorldPos::new(1.0, 6.0, 0.0), TEAM_CPU)),
-    //     GameObject::Actor(generate_enemy_easy(WorldPos::new(1.0, 5.0, 0.0), TEAM_CPU)),
-    //     GameObject::Actor(generate_enemy_easy(WorldPos::new(6.0, 0.0, 0.0), TEAM_CPU)),
-    //     GameObject::Actor(generate_enemy_easy(WorldPos::new(7.0, 0.0, 0.0), TEAM_CPU)),
-    // ]
-    // .drain(..)
-    // .for_each(move |enemy| insert_game_object_components(enemy, w));
 }
 
 fn spawn_obstacles(w: &World) {
@@ -522,9 +491,8 @@ fn spawn_obstacles(w: &World) {
             .with(Position(WorldPos::new(*x, *y, 0.0)))
             .with(ZLayerGameObject)
             .with(ObstacleCmp {
-                restrict_melee_attack: Restriction::ForAll(u8::MAX),
-                restrict_movement: Restriction::ForAll(u8::MAX),
-                restrict_ranged_attack: Restriction::ForAll(u8::MAX),
+                movement: (Some(Obstacle::Blocker), Some(Obstacle::Blocker), None),
+                reach: Some(Hitbox::new_pillar()),
             })
             .build();
     }

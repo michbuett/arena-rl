@@ -101,7 +101,6 @@ fn draw_action_buttons(
 fn display_text(action: &Action, is_first: bool) -> DisplayStr {
     let str = match action {
         Action::Done(_) => format!("Do nothing"),
-        Action::Rest() => format!("Rest"),
         Action::MoveTo(..) => format!("Move Here"),
         Action::Attack(_, a, _, _) => format!("{}", a.name),
         Action::Ambush(a) => format!("Ambush ({})", a.name),
@@ -151,11 +150,6 @@ fn describe_actor(a: &Actor) -> String {
             action: Action::Ambush(attack),
             ..
         }) => format!("Perpares an ambush ({})", attack.name),
-
-        Some(Act {
-            action: Action::Rest(),
-            ..
-        }) => "Resting".to_string(),
 
         Some(Act {
             action: Action::Done(msg),

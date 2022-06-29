@@ -213,14 +213,12 @@ impl<'a> System<'a> for ScaleAnimationSystem {
 #[storage(VecStorage)]
 pub struct HoverAnimation {
     start: Instant,
-    org_pos: WorldPos,
 }
 
 impl HoverAnimation {
-    pub fn start(p: WorldPos) -> Self {
+    pub fn start() -> Self {
         Self {
             start: Instant::now(),
-            org_pos: p,
         }
     }
 }
@@ -248,7 +246,7 @@ impl<'a> System<'a> for HoverAnimationSystem {
             }
 
             let delta: Duration = now - ha.start;
-            pos.0 = animate_hover(delta, ha.org_pos, pos.0);
+            pos.0 = animate_hover(delta, pos.0);
         }
     }
 }
@@ -258,7 +256,7 @@ fn animate_scale(delta: Duration, anim: &ScaleAnimation) -> f32 {
     anim.start_scale + dt * (anim.end_scale - anim.start_scale)
 }
 
-fn animate_hover(dt: Duration, p0: WorldPos, pt: WorldPos) -> WorldPos {
+fn animate_hover(dt: Duration, pt: WorldPos) -> WorldPos {
     if f32::abs(pt.z()) < HOVER_OFFSET {
         // current position is on the ground
         // => ascend slowly
@@ -268,7 +266,7 @@ fn animate_hover(dt: Duration, p0: WorldPos, pt: WorldPos) -> WorldPos {
     let dt = (dt.as_millis() % 2000) as f32 / 2000.0;
     let dz = HOVER_OFFSET + 0.1 * f32::min(dt, 1.0 - dt);
 
-    WorldPos::new(p0.x(), p0.y(), p0.z() - dz)
+    WorldPos::new(pt.x(), pt.y(), -dz)
 }
 
 fn animate_move(delta: Duration, anim: &MovementAnimation) -> WorldPos {

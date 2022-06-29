@@ -156,10 +156,10 @@ impl FxEffect {
             .build()
     }
 
-    pub fn projectile(s: impl ToString, from: WorldPos, to: WorldPos) -> Self {
+    pub fn projectile(s: impl ToString, from: WorldPos, to: WorldPos, speed: u64) -> Self {
         let p1 = MapPos::from_world_pos(from);
         let p2 = MapPos::from_world_pos(to);
-        let d = 50 * p1.distance(p2) as u64;
+        let d = speed * p1.distance(p2) as u64;
 
         FxBuilder::new(from, d)
             .sprite(s)

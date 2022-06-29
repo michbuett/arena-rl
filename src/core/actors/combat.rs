@@ -1,19 +1,49 @@
 use std::cmp::max;
 
-pub use super::actor::*;
-pub use super::traits::*;
+use super::actor::*;
 use super::traits::HitEffect as AttackHitEffect;
 
-use crate::core::WorldPos;
 use crate::core::dice::*;
-use crate::core::{MapPos, Obstacle};
+use crate::core::{MapPos, Obstacle, WorldPos};
+
+#[derive(Debug, Clone)]
+pub struct Cover {
+    pub obscured: u8,
+    pub last_obstacle: Option<(MapPos, i8, Option<ID>)>,
+}
+
+impl Cover {
+    pub fn none() -> Self {
+        Self {
+            obscured: 0,
+            last_obstacle: None,
+        }
+    }
+
+    pub fn add_obstacle(self, obs: Obstacle, pos: MapPos, id: Option<ID>) -> Self {
+        match obs {
+            Obstacle::Blocker => Self {
+                obscured: 100,
+                last_obstacle: Some((pos, i8::MAX, id)),
+            },
+
+            Obstacle::Impediment(o, max_block) => {
+                let curr_block = self.last_obstacle.map(|(_, b, _)| b).unwrap_or(0);
+                Self {
+                    obscured: max(self.obscured, o.get()),
+                    last_obstacle: Some((pos, max(curr_block, max_block), id)),
+                }
+            }
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct AttackTarget {
     pub pos: MapPos,
-    pub target: Option<Actor>,
     pub is_target: bool,
-    pub obstacle: Obstacle,
+    pub actor: Option<Actor>,
+    pub cover: Cover,
 }
 
 #[derive(Clone, Debug)]
@@ -35,7 +65,7 @@ pub enum HitEffect {
 
     Miss(),
 
-    Defence(Roll, ID),
+    Block(MapPos, ID),
 
     ForceMove {
         id: ID,
@@ -54,26 +84,11 @@ pub fn resolve_combat(attack: &Attack, vector: Vec<AttackTarget>) -> HitResult {
 
 fn resolve_hits(attack: &Attack, mut vector: Vec<AttackTarget>) -> Vec<Hit> {
     let mut result = vec![];
-    let mut remaing_effort = attack.num_dice;
 
     for t in vector.drain(..) {
-        if remaing_effort == 0 {
-            return result;
-        }
-
         if t.is_target {
-            if let Some(target_actor) = t.target {
-                let hit = resolve_hit_at_target(&attack, target_actor, t.pos, remaing_effort);
-
-                remaing_effort = hit.roll.num_fails;
-                result.push(hit);
-            }
-        } else {
-            let hit = resolve_hit_at_obstacle(t.pos, remaing_effort, t.obstacle.0, &attack, t.target);
-
-            if let Some(hit) = hit {
-                remaing_effort = hit.roll.num_successes;
-                result.push(hit);
+            if let Some(target_actor) = t.actor {
+                result.push(resolve_hit(&attack, &target_actor, t.pos, &t.cover));
             }
         }
     }
@@ -81,128 +96,184 @@ fn resolve_hits(attack: &Attack, mut vector: Vec<AttackTarget>) -> Vec<Hit> {
     result
 }
 
-fn resolve_hit_at_target(attack: &Attack, target_actor: Actor, pos: MapPos, effort: u8) -> Hit {
-    let attack_roll = Roll::new(effort, to_hit_threshold(attack, &target_actor));
+fn resolve_hit(attack: &Attack, target_actor: &Actor, pos: MapPos, cover: &Cover) -> Hit {
+    let attack_roll = roll_to_hit(attack, target_actor, cover);
 
     Hit {
         pos,
-        effects: calculate_hit_effects(attack_roll.num_successes, attack, target_actor),
+        effects: calculate_hit_effects(attack_roll.num_successes, attack, target_actor, cover),
         roll: attack_roll,
     }
 }
 
-fn resolve_hit_at_obstacle(
-    pos: MapPos,
-    effort: u8,
-    difficulty: u8,
+fn calculate_hit_effects(
+    mut attack_quality: u8,
     attack: &Attack,
-    target: Option<Actor>,
-) -> Option<Hit> {
-    let roll = Roll::new(effort, difficulty);
-    let num_hits = roll.num_fails; // a failed attack roll on an obstacle means an accicental hit
-
-    println!("Hit obstacle (difficulty={}, roll={:?}, num hits={})", difficulty, roll, num_hits);
-
-    if num_hits > 0 {
-        let effects = if let Some(target) = target {
-            calculate_hit_effects(num_hits, attack, target)
-        } else {
-            vec![]
-        };
-
-        Some(Hit { pos, roll, effects })
-    } else {
-        None
-    }
-}
-
-fn calculate_hit_effects(num_hits: u8, attack: &Attack, target_actor: Actor) -> Vec<HitEffect> {
-    if num_hits == 0 {
+    target_actor: &Actor,
+    cover: &Cover,
+) -> Vec<HitEffect> {
+    if attack_quality == 0 {
         return vec![HitEffect::Miss()];
     }
 
-    let mut effects = vec![];
-    let num_hits = if let Some(defence_roll) = roll_defence(&target_actor) {
-        let successes = defence_roll.num_successes;
-        effects.push(HitEffect::Defence(defence_roll, target_actor.id));
-        num_hits.checked_sub(successes).unwrap_or(0)
-    } else {
-        num_hits
-    };
+    if let Some((block_pos, block_mod)) = determine_blocking(attack, target_actor, cover) {
+        attack_quality = max(0, attack_quality as i8 - block_mod) as u8;
 
-    if num_hits > 0 {
-        let wound_roll = Roll::new(num_hits, to_wound_threshold(attack, &target_actor));
-        let w = Wound {
-            pain: num_hits,
-            wound: wound_roll.num_successes,
-        };
-
-        effects.push(HitEffect::Wound(w, target_actor.id));
-
-        if let Some(attack_eff_list) = &attack.effects {
-            for (cond, eff) in attack_eff_list {
-                match cond {
-                    HitEffectCondition::OnHit => {
-                        match eff {
-                            AttackHitEffect::PushBack(d) => {
-                                let (dx, dy) = direction(attack.origin_pos, target_actor.pos);
-                                effects.push(HitEffect::ForceMove {
-                                    id: target_actor.id,
-                                    dx,
-                                    dy,
-                                    distance: *d,
-                                    
-                                })
-                            }
-
-                            AttackHitEffect::PullCloser(d) => {
-                                let (dx, dy) = direction(target_actor.pos, attack.origin_pos);
-                                effects.push(HitEffect::ForceMove {
-                                    id: target_actor.id,
-                                    dx,
-                                    dy,
-                                    distance: *d,
-                                    
-                                })
-                            }
-                        }
-                    }
-                }
-            }
+        if attack_quality == 0 {
+            return vec![HitEffect::Block(block_pos, target_actor.id)];
         }
     }
+
+    let mut effects = vec![];
+
+    add_attack_effects(
+        HitEffectCondition::OnHit,
+        attack,
+        target_actor,
+        &mut effects,
+    );
+
+    add_wound_effects(attack_quality as i8 - 2, attack, target_actor, &mut effects);
 
     effects
 }
 
-fn roll_defence(defender: &Actor) -> Option<Roll> {
-    if defender.available_effort() == 0 {
-        return None;
-    }
+fn add_wound_effects(
+    roll_advantage: i8,
+    attack: &Attack,
+    target_actor: &Actor,
+    effects: &mut Vec<HitEffect>,
+) {
+    let wound_roll = Roll::new(roll_advantage, to_wound_threshold(attack, &target_actor));
+    let wound_quality =
+        wound_roll.num_successes as i8 + attack.rend - target_actor.attr(Attr::Resilience).val();
 
-    Some(Roll::new(defender.available_effort(), defence_threshold()))
+    if wound_quality > 0 {
+        let w = Wound {
+            pain: 1,
+            wound: wound_quality as u8 - 1,
+        };
+
+        effects.push(HitEffect::Wound(w, target_actor.id));
+    }
 }
 
-fn to_hit_threshold(attack: &Attack, target: &Actor) -> u8 {
-    // TODO implement expertise system
+fn add_attack_effects(
+    when_cond: HitEffectCondition,
+    attack: &Attack,
+    target_actor: &Actor,
+    effects: &mut Vec<HitEffect>,
+) {
+    if let Some(attack_eff_list) = &attack.effects {
+        for (cond, eff) in attack_eff_list {
+            if when_cond == *cond {
+                effects.push(convert_attack_hit_effect(eff, attack, target_actor));
+            }
+        }
+    }
+}
+
+fn convert_attack_hit_effect(
+    eff: &AttackHitEffect,
+    attack: &Attack,
+    target_actor: &Actor,
+) -> HitEffect {
+    match eff {
+        AttackHitEffect::PushBack(d) => {
+            let (dx, dy) = direction(attack.origin_pos, target_actor.pos);
+
+            HitEffect::ForceMove {
+                id: target_actor.id,
+                dx,
+                dy,
+                distance: *d,
+            }
+        }
+
+        AttackHitEffect::PullCloser(d) => {
+            let (dx, dy) = direction(target_actor.pos, attack.origin_pos);
+
+            HitEffect::ForceMove {
+                id: target_actor.id,
+                dx,
+                dy,
+                distance: *d,
+            }
+        }
+    }
+}
+
+fn roll_to_hit(attack: &Attack, target_actor: &Actor, cover: &Cover) -> Roll {
+    match attack.attack_type {
+        AttackType::Melee(..) => Roll::new(attack.advantage, melee_to_hit_threshold(attack, target_actor)),
+
+        AttackType::Ranged(..) => {
+            Roll::new(attack.advantage, ranged_to_hit_threshold(attack, target_actor, cover))
+        }
+    }
+}
+
+fn determine_blocking(
+    attack: &Attack,
+    target_actor: &Actor,
+    cover: &Cover,
+) -> Option<(MapPos, i8)> {
+    match attack.attack_type {
+        AttackType::Melee(..) => {
+            let block = target_actor.attr(Attr::MeleeBlock).val();
+            if block == 0 {
+                None
+            } else {
+                Some((MapPos::from_world_pos(target_actor.pos), block))
+            }
+        }
+
+        AttackType::Ranged(..) => {
+            if let Some((pos, max_block, _)) = cover.last_obstacle {
+                if pos.distance(MapPos::from_world_pos(target_actor.pos)) == 1 {
+                    return Some((pos, max_block));
+                }
+            }
+
+            None
+        }
+    }
+}
+
+fn melee_to_hit_threshold(attack: &Attack, target: &Actor) -> u8 {
     if !target.is_concious() {
-        return 2
+        return 2;
     }
 
-    max(
-        0,
-        4 + attack.to_hit.val() + target.attr(Attr::MeleeDefence).val(),
-    ) as u8
+    let offence_mod = attack.to_hit.val();
+    let defence_mod = target.attr(Attr::MeleeSkill).val() + target.attr(Attr::Evasion).val();
+    let th = 4 + defence_mod - offence_mod;
+
+    max(2, th) as u8
 }
 
-fn defence_threshold() -> u8 {
-    4
+fn ranged_to_hit_threshold(attack: &Attack, target: &Actor, cover: &Cover) -> u8 {
+    let base_th = match cover.obscured {
+        0..=24 => 2,
+        25..=49 => 3,
+        50..=74 => 4,
+        75..=99 => 5,
+        _ => {
+            // If target is completly obscured than it is not possible to hit it
+            // even for the most skilled marksman
+            // => exit here
+            return 7;
+        }
+    };
+
+    let th = base_th + target.attr(Attr::Evasion).val() - attack.to_hit.val();
+    max(2, th) as u8
 }
 
 fn to_wound_threshold(attack: &Attack, target: &Actor) -> u8 {
     max(
         0,
-        4 + attack.to_wound.val() + target.attr(Attr::Protection).val(),
+        4 + target.attr(Attr::Protection).val() - attack.to_wound.val(),
     ) as u8
 }
 

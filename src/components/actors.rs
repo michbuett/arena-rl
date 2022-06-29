@@ -1,17 +1,16 @@
-use std::convert::TryInto;
+use std::num::NonZeroU8;
 
 use specs::prelude::{Builder, Entities, Entity, LazyUpdate, Read, ReadStorage, World};
 
 use crate::components::{
-    GameObjectCmp, ObstacleCmp, Position, Restriction, Sprites, WorldPos, ZLayerFloor,
-    ZLayerGameObject,
+    GameObjectCmp, ObstacleCmp, Position, Sprites, WorldPos, ZLayerFloor, ZLayerGameObject,
 };
 use crate::core::{
-    Act, Action, Actor, AttackOption, AttackType, Attr, AttrVal, Direction, GameObject, Item,
-    MapPos, Obstacle, SpriteConfig, TextureMap, ID,
+    Act, Action, Actor, AttackOption, AttackType, Direction, GameObject, Item, Obstacle,
+    SpriteConfig, TextureMap, AttackVector
 };
 
-use super::HoverAnimation;
+use super::{Hitbox, HoverAnimation};
 
 type SysData<'a> = (
     Read<'a, LazyUpdate>,
@@ -50,10 +49,9 @@ fn lazy_insert_components<'a>(entity: Entity, obj: GameObject, data: SysData) {
 
 fn lazy_insert_component_for_actor<'a>(entity: Entity, a: Actor, data: SysData) {
     let (updater, texture_map, positions) = data;
-    let melee_def = a.attr(Attr::MeleeDefence);
-    let range_def = a.attr(Attr::RangeDefence);
 
     if positions.get(entity).is_none() {
+        // println!("[DEBUG] lazy_insert_component_for_actor update position to {:?}", a.pos);
         updater.insert(entity, Position(a.pos));
     }
 
@@ -61,28 +59,19 @@ fn lazy_insert_component_for_actor<'a>(entity: Entity, a: Actor, data: SysData) 
     updater.insert(
         entity,
         ObstacleCmp {
-            restrict_movement: Restriction::ForAll(u8::MAX),
-            restrict_melee_attack: Restriction::ForTeam(
-                a.team.clone(),
-                0,
-                to_difficulty(melee_def),
-            ),
-            restrict_ranged_attack: Restriction::ForAll(to_difficulty(range_def)),
+            movement: (Some(Obstacle::Blocker), None, None),
+            reach: Some(Hitbox::new_normal_actor()),
         },
     );
 
     if a.is_flying() {
-        updater.insert(entity, HoverAnimation::start(a.pos));
+        updater.insert(entity, HoverAnimation::start());
     } else {
         updater.remove::<HoverAnimation>(entity);
     }
 
     updater.insert(entity, ZLayerGameObject);
     updater.insert(entity, GameObjectCmp(GameObject::Actor(a)));
-}
-
-fn to_difficulty(av: AttrVal) -> u8 {
-    (4 + av.val()).try_into().unwrap_or(0)
 }
 
 fn lazy_insert_component_for_items<'a>(entity: Entity, pos: WorldPos, item: Item, data: SysData) {
@@ -97,9 +86,12 @@ fn lazy_insert_component_for_items<'a>(entity: Entity, pos: WorldPos, item: Item
     updater.insert(
         entity,
         ObstacleCmp {
-            restrict_movement: Restriction::ForAll(u8::MAX),
-            restrict_melee_attack: Restriction::ForAll(0),
-            restrict_ranged_attack: Restriction::ForAll(0),
+            movement: (
+                Some(Obstacle::Impediment(NonZeroU8::new(1).unwrap(), 0)),
+                None,
+                None,
+            ),
+            reach: None,
         },
     );
 
@@ -151,7 +143,7 @@ fn append_attack_indicator(
     sprites: &mut Vec<SpriteConfig>,
     actor_pos: WorldPos,
     attack: &AttackOption,
-    attack_vector: &Vec<(MapPos, bool, Option<(Obstacle, Option<ID>)>)>,
+    attack_vector: &AttackVector,
     texture_map: &TextureMap,
 ) {
     debug_assert!(!attack_vector.is_empty());

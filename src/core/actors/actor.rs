@@ -1,10 +1,9 @@
-use std::cmp::max;
+use std::cmp::{min, max};
 use std::collections::HashMap;
 use std::time::Instant;
 
 pub use super::traits::*;
 
-use crate::core::dice::Roll;
 use crate::core::{Act, DisplayStr, WorldPos};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -70,11 +69,10 @@ impl ActorBuilder {
             behaviour: self.behaviour,
             team: self.team,
             visual: self.visual,
-            engaged_in_combat: false,
         }
         .process_traits();
 
-        let physical_strength = 3 + AttrVal::new(Attr::Physical, &a.effects).val();
+        let physical_strength = 2 + AttrVal::new(Attr::Physical, &a.effects).val();
         a.health = Health::new(max(physical_strength, 1) as u8);
         a
     }
@@ -208,7 +206,6 @@ pub struct Actor {
     pub health: Health,
     pub keywords: Vec<Keyword>,
     pub effects: Vec<(DisplayStr, Effect)>,
-    pub engaged_in_combat: bool,
     pub name: String,
     pub active: bool,
     pub team: Team,
@@ -220,35 +217,8 @@ pub struct Actor {
 impl Actor {
     ////////////////////////////////////////////////////////////
     // Movement
-
-    pub fn charge_to(mut self, p: WorldPos) -> Self {
-        self.pos = p;
-
-        self.traits.insert(
-            "ability#charge-buff".to_string(),
-            Trait {
-                name: DisplayStr::new("Charging"),
-                effects: vec![Effect::AttrMod(Attr::ToWound, 1)],
-                source: TraitSource::Temporary(0),
-                visuals: None,
-            },
-        );
-
-        self.traits.insert(
-            "ability#charge-debuff".to_string(),
-            Trait {
-                name: DisplayStr::new("Did charge"),
-                effects: vec![Effect::AttrMod(Attr::MeleeDefence, -1)],
-                source: TraitSource::Temporary(1),
-                visuals: None,
-            },
-        );
-
-        self.process_traits()
-    }
-
     pub fn can_move(&self) -> bool {
-        !self.engaged_in_combat && self.is_concious()
+        self.is_concious()
     }
 
     pub fn move_distance(&self) -> u8 {
@@ -262,8 +232,8 @@ impl Actor {
         self.is_concious() && self.keywords.contains(&Keyword::Flying)
     }
 
-    pub fn is_hidden(&self) -> bool {
-        !self.engaged_in_combat && self.is_concious() && self.keywords.contains(&Keyword::Hidden)
+    pub fn is_underground(&self) -> bool {
+        self.is_concious() && self.keywords.contains(&Keyword::Underground)
     }
 
     ////////////////////////////////////////////////////////////
@@ -296,11 +266,9 @@ impl Actor {
     }
 
     pub fn prepare(mut self, act: Act) -> Self {
-        let effort = act.allocated_effort.unwrap_or(self.available_effort());
-
         self.pending_action = Some(act);
         self.active = false;
-        self.use_effort(effort)
+        self
     }
 
     pub fn use_ability(self, key: impl ToString, ability: Trait) -> Self {
@@ -311,6 +279,8 @@ impl Actor {
     }
 
     pub fn use_effort(mut self, effort: u8) -> Self {
+        // println!("[DEBUG] use_effort({}); available_effort={}", effort, self.available_effort());
+                
         if effort > self.available_effort() {
             self.health = self.health.wound(Wound { pain: 1, wound: 0 });
         }
@@ -318,12 +288,7 @@ impl Actor {
         self
     }
 
-    pub fn rest(mut self) -> Self {
-        self.health = self.health.rest();
-        self
-    }
-
-    pub fn start_next_turn(mut self, engaged_in_combat: bool) -> Actor {
+    pub fn start_next_turn(mut self) -> Actor {
         let mut new_traits = HashMap::new();
         let reserved_effort = self.available_effort();
         let (health, new_max_available_effort) = self.health.next_turn(reserved_effort);
@@ -343,7 +308,6 @@ impl Actor {
         }
 
         Self {
-            engaged_in_combat,
             health,
             effort: (0, new_max_available_effort),
             pending_action: None,
@@ -388,7 +352,8 @@ impl Actor {
                         advance,
                         distance,
                         to_hit,
-                        to_wound,
+                        ap,
+                        rend,
                         fx,
                         effects,
                     } => Some(AttackOption {
@@ -397,7 +362,9 @@ impl Actor {
                         max_distance: max(1, distance.unwrap_or(1)),
                         advance: advance.unwrap_or(0),
                         to_hit: to_hit.unwrap_or(0),
-                        to_wound: to_wound.unwrap_or(0),
+                        to_wound: ap.unwrap_or(0),
+                        rend: rend.unwrap_or(0),
+                        advantage: 0,
                         attack_type: AttackType::Melee(fx.to_string()),
                         required_effort: *required_effort,
                         effects: effects.clone(),
@@ -416,6 +383,8 @@ impl Actor {
                         advance: 0,
                         to_hit: *to_hit,
                         to_wound: *to_wound,
+                        rend: 0,
+                        advantage: 0,
                         attack_type: AttackType::Ranged(fx.to_string()),
                         required_effort: 3, // TODO read from effect
                         effects: None,      // TODO read from effect
@@ -434,6 +403,8 @@ impl Actor {
                 advance: 0,
                 to_hit: 0,
                 to_wound: -1,
+                rend: -1,
+                advantage: 0,
                 attack_type: AttackType::Melee("fx-hit-1".to_string()),
                 required_effort: 2,
                 effects: None,
@@ -514,7 +485,7 @@ impl Actor {
             return self.visual.get_state(VisualState::Prone);
         }
 
-        if self.is_hidden() {
+        if self.is_underground() {
             return self.visual.get_state(VisualState::Hidden);
         }
 
@@ -535,13 +506,6 @@ impl Actor {
     ///  7 => Godlike (unlimited power)
     pub fn attr(&self, s: Attr) -> AttrVal {
         AttrVal::new(s, &self.effects)
-        // let mut av = AttrVal::new(s, &self.effects);
-        // if self.health.focus > 0 {
-        //     av = av.modify(DisplayStr::new("Focus"), 1);
-        // } else if self.health.focus < 0 {
-        //     av = av.modify(DisplayStr::new("Distracted"), -1);
-        // }
-        // av
     }
 
     pub fn active_traits(&self) -> ActiveTraitIter {
@@ -567,32 +531,19 @@ impl Health {
         }
     }
 
-    fn rest(mut self) -> Self {
-        let roll = Roll::new(self.remaining_wounds, 4);
-        self.pain = self.pain.checked_sub(roll.num_successes).unwrap_or(0);
-        println!(
-            "[DEBUG REST] remaining wounds={}, pain={}, roll={:?}",
-            self.remaining_wounds, self.pain, roll
-        );
-        self
-    }
-
     fn next_turn(mut self, mut reserved_effort: u8) -> (Self, u8) {
-        let roll = Roll::new(reserved_effort, 4);
-
-        if roll.num_successes > self.pain {
-            reserved_effort = 1;
-            self.pain = 0;
-        } else {
+        if reserved_effort > 0 && self.pain > 0 {
             reserved_effort = 0;
-            self.pain -= roll.num_successes;
+            self.pain -= 1;
         }
 
-        let max_effort = self
+        let max_effort = self.max_wounds + 1;
+        let remaing_health = self
             .max_wounds
             .checked_sub(self.pain + self.recieved_wounds)
             .unwrap_or(0);
-        let new_available_effort = max_effort + reserved_effort;
+        let effort_inc = min(1, reserved_effort);
+        let new_available_effort = min(max_effort, remaing_health + effort_inc);
 
         (self, new_available_effort)
     }
@@ -601,7 +552,6 @@ impl Health {
         self.recieved_wounds += w.wound;
         self.remaining_wounds = self.remaining_wounds.checked_sub(w.wound).unwrap_or(0);
         self.pain += w.pain;
-        // println!("[DEBUG] wounding actor: {:?}", w);
         self
     }
 }
@@ -624,6 +574,8 @@ pub struct AttackOption {
     pub advance: u8,
     pub to_hit: i8,
     pub to_wound: i8,
+    pub rend: i8,
+    pub advantage: i8,
     pub attack_type: AttackType,
     pub required_effort: u8,
     pub effects: Option<Vec<(HitEffectCondition, HitEffect)>>,
@@ -631,25 +583,33 @@ pub struct AttackOption {
 
 impl AttackOption {
     pub fn into_attack(self, a: &Actor) -> Attack {
-        let to_hit = a.attr(Attr::ToHit).modify(self.name.clone(), self.to_hit);
+        let to_hit = match self.attack_type {
+            AttackType::Melee(..) => a.attr(Attr::MeleeSkill),
+            AttackType::Ranged(..) => a.attr(Attr::RangedSkill),
+        }
+        .modify(self.name.clone(), self.to_hit);
+
         let to_wound = a
-            .attr(Attr::ToWound)
+            .attr(Attr::ArmorPenetration)
             .modify(self.name.clone(), self.to_wound);
+
         let num_dice = self.required_effort;
 
-        // if a.available_effort() < self.required_effort {
-        //     to_hit = to_hit.modify(DisplayStr::new("Over commitment"), -1);
-        //     to_wound = to_wound.modify(DisplayStr::new("Over commitment"), -1);
-        //     num_dice = a.available_effort();
-        // }
+        let advantage = if self.required_effort > a.available_effort() {
+            -1
+        } else {
+            0
+        };
 
         Attack {
             origin_pos: a.pos,
             to_hit,
             to_wound,
+            rend: self.rend,
             name: self.name,
             attack_type: self.attack_type,
             num_dice,
+            advantage,
             effects: self.effects,
         }
     }
@@ -661,8 +621,10 @@ pub struct Attack {
     pub name: DisplayStr,
     pub to_hit: AttrVal,
     pub to_wound: AttrVal,
+    pub rend: i8,
     pub num_dice: u8,
     pub attack_type: AttackType,
+    pub advantage: i8,
     pub effects: Option<Vec<(HitEffectCondition, HitEffect)>>,
 }
 
@@ -670,22 +632,6 @@ pub struct Attack {
 pub enum AttackType {
     Melee(String),
     Ranged(String),
-}
-
-impl AttackType {
-    pub fn is_melee(&self) -> bool {
-        match self {
-            AttackType::Melee(_) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_ranged(&self) -> bool {
-        match self {
-            AttackType::Ranged(_) => true,
-            _ => false,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

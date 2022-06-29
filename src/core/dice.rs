@@ -16,17 +16,32 @@ impl D6 {
 
 #[derive(Debug, Clone)]
 pub struct Roll {
-    dice: Vec<D6>,
+    // dice: Vec<D6>,
     pub num_successes: u8,
     pub num_fails: u8,
 }
 
 impl Roll {
-    pub fn new(num_dice: u8, threshold: u8) -> Self {
-        Self::from_dice((1..=num_dice).map(|_| D6::roll()).collect(), threshold)
+    pub fn new(advantage: i8, threshold: u8) -> Self {
+        let num_dice = 3 + i8::abs(advantage);
+        let mut dice: Vec<D6> = (1..=num_dice).map(|_| D6::roll()).collect();
+
+        if advantage != 0 {
+            if advantage > 0 {
+                dice.sort_by(|a, b| b.cmp(a));
+            } else {
+                dice.sort();
+            }
+
+            dice = dice.drain(0..3).collect();
+        }
+
+        Self::from_dice(dice, threshold)
     }
 
     pub fn from_dice(dice: Vec<D6>, threshold: u8) -> Self {
+        debug_assert_eq!(dice.len(), 3);
+            
         let mut num_successes = 0;
         let mut num_fails = 0;
 
@@ -39,7 +54,7 @@ impl Roll {
         }
 
         Self {
-            dice,
+            // dice,
             num_successes,
             num_fails,
         }

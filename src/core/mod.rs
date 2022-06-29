@@ -10,6 +10,7 @@ mod visuals;
 mod world;
 
 
+pub use ai::AttackVector;
 pub use action::*;
 pub use map::*;
 pub use model::*;

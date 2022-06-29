@@ -189,18 +189,31 @@ fn render_action_buttons<'a>(
     let mut click_areas = vec![];
 
     if let (Some(mp), Some(act)) = default_action.clone() {
-        if let Some(max_effort) = act.allocated_effort {
+        let mut modifications = vec![];
+        
+        if act.allow_hastening {
+            modifications.push((DisplayStr::new("Hasten"), act.clone().quicken()));
+        }
+
+        if act.allow_empowering {
+            modifications.push((DisplayStr::new("Empower"), act.clone().empower()));
+        }
+        
+        if modifications.len() > 0 {
+        // if let Some(max_effort) = act.allocated_effort {
             // let default_effort = ((max_effort + 1) / 2) as u8;
             let p = ScreenCoord::from_world_pos(mp.to_world_pos()).to_screen_pos(scroll_offset);
-            let total_height = max_effort as i32 * EFFORT_BTN_SIZE as i32;
+            let total_height = modifications.len() as i32 * EFFORT_BTN_SIZE as i32;
+            // let total_height = max_effort as i32 * EFFORT_BTN_SIZE as i32;
             let x = p.0 + (TILE_WIDTH / 2) as i32;
             let y0 = p.1 - (total_height / 2);
 
-            for i in 1..=max_effort {
-                let a = act.clone();
-                let y = y0 + ((i - 1) * EFFORT_BTN_SIZE) as i32;
+            for (i, (txt, modified_act)) in modifications.drain(..).enumerate() {
+            // for i in 1..=max_effort {
+                // let a = act.clone();
+                let y = y0 + (i as i32 - 1) * EFFORT_BTN_SIZE as i32;
                 let pos = ScreenPos(x, y);
-                let txt = DisplayStr::new(format!("{}", i));
+                // let txt = DisplayStr::new(format!("{}", i));
 
                 scene.texts.push(
                     ScreenText::new(txt, pos)
@@ -214,9 +227,8 @@ fn render_action_buttons<'a>(
                 click_areas.push(ClickArea {
                     clipping_area: (x, y, EFFORT_BTN_SIZE.into(), EFFORT_BTN_SIZE.into()),
                     action: Box::new(move |_| {
-                        // let act = Act::new(a.action.clone()).delay(a.delay).effort(i);
-                        // let act = Act::new(a.action.clone()).delay(a.delay).effort(i);
-                        return UserInput::SelectAction(a.clone().effort(i));
+                        return UserInput::SelectAction(modified_act.clone());
+                        // return UserInput::SelectAction(a.clone().effort(i));
                     }),
                 });
             }
@@ -289,8 +301,8 @@ fn get_icons(action: &DefaultAction) -> Vec<(WorldPos, String)> {
 
         (_, Some(Act { action: Action::Attack(_, attack, attack_vector, _), .. })) => attack_vector
             .iter()
-            .map(|(map_pos, _is_target, obs)| {
-                let num = if let Some(..) = obs { 2 } else { 1 };
+            .map(|(map_pos, _is_target, cover, _id)| {
+                let num = if cover.obscured > 0 { 2 } else { 1 };
                 let p = map_pos.to_world_pos();
 
                 match attack.attack_type {

@@ -22,8 +22,7 @@
         name: ("Plate Mail"),
         effects: [
             AttrMod(Protection, 2),
-            AttrMod(MeleeDefence, -1),
-            AttrMod(RangeDefence, -1),
+            AttrMod(Evasion, -1),
         ],
         source: IntrinsicProperty,
     )),
@@ -33,8 +32,9 @@
         name: ("Power Saw"),
         effects: [MeleeAttack(
             name: ("Swing saw"),
-            required_effort: 3,
-            to_wound: Some(3),
+            required_effort: 2,
+            ap: Some(2),
+            rend: Some(2),
             fx: "fx-hit-1",
         )],
         source: IntrinsicProperty,
@@ -46,7 +46,7 @@
         effects: [MeleeAttack(
             name: ("Stab"),
             required_effort: 2,
-            to_wound: Some(-1),
+            ap: Some(-1),
             distance: Some(2),
             fx: "fx-hit-1",
         )],
@@ -116,7 +116,7 @@
         name: ("Sharp teeth"),
         effects: [MeleeAttack (
             name: ("Bite"),
-            required_effort: 2,
+            required_effort: 1,
             fx: "fx-hit-3",
         )],
         source: IntrinsicProperty,
@@ -127,7 +127,7 @@
         effects: [MeleeAttack (
             name: ("Bite"),
             required_effort: 2,
-            to_wound: Some(1),
+            ap: Some(1),
             fx: "fx-hit-3",
         )],
         source: IntrinsicProperty,
@@ -149,13 +149,15 @@
     ("item#Shield_TowerShield", (
         name: ("Towershield"),
         effects: [
-            AttrMod(MeleeDefence, 1),
-            AttrMod(RangeDefence, 1),
+            AttrMod(Evasion, 1),
             GiveTrait(
                 "ability#Block_Shield",
                 (
                     name: ("Raise shield"),
-                    effects: [Defence(1, Block)],
+                    effects: [
+                        AttrMod(Evasion, 1),
+                        AttrMod(MeleeBlock, 2),
+                    ],
                     source: Temporary(1),
                 ),
                 OnSelf,
@@ -190,9 +192,9 @@
         source: IntrinsicProperty,
     )),
 
-    ("intrinsic#Trait_Hidden", (
-        name: ("Hidden"),
-        effects: [Keyword(Hidden)],
+    ("intrinsic#Trait_Underground", (
+        name: ("Underground"),
+        effects: [Keyword(Underground)],
         source: IntrinsicProperty,
     )),
 ]

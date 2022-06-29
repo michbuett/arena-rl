@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 use std::hash::{Hash, Hasher};
 use std::iter::FromIterator;
+use std::num::NonZeroU8;
 
 use crate::core::model::*;
 
@@ -231,8 +232,16 @@ impl Map {
     // }
 }
 
-#[derive(Debug, Clone)]
-pub struct Obstacle(pub u8);
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Obstacle {
+    /// An obstacle that is impossible to overcome
+    Blocker,
+
+    /// An obstacle which one may overcome with skill and luck
+    /// obscurity (a modifiyer to the success chance of a roll) and blocking (a
+    /// modifiyer of roll quality)
+    Impediment(NonZeroU8, i8),
+}
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Hash)]
 pub struct MapPos(pub i32, pub i32);
@@ -276,7 +285,6 @@ impl Into<MapPos> for Tile {
         self.to_map_pos()
     }
 }
-
 
 #[derive(Clone)]
 pub struct ObstacleSet(pub HashMap<MapPos, Obstacle>);
@@ -616,6 +624,9 @@ fn costs(t: &Tile, obstacles: &ObstacleSet) -> f32 {
     obstacles
         .0
         .get(&t.to_map_pos())
-        .map(|Obstacle(costs)| *costs as f32)
+        .map(|obs| match obs {
+            Obstacle::Impediment(c, _) => c.get() as f32,
+            Obstacle::Blocker => f32::MAX,
+        })
         .unwrap_or(1.0)
 }

@@ -5,28 +5,28 @@ use super::super::actors::*;
 use crate::components::*;
 use crate::core::*;
 
-pub type AttackVector = Vec<(MapPos, bool, Option<(Obstacle, Option<ID>)>)>;
+pub type AttackVector = Vec<(MapPos, bool, Cover, Option<ID>)>;
+// pub type AttackVector = Vec<(MapPos, bool, Option<(ID, Cover)>)>;
+// pub type AttackVector = Vec<(MapPos, bool, Option<(Obstacle, Option<ID>)>)>;
 
 pub fn find_path_for(a: &Actor, to: impl Into<MapPos>, world: &CoreWorld) -> Option<Path> {
-    let team = &a.team;
     let from: MapPos = MapPos::from_world_pos(a.pos);
     let to: MapPos = to.into();
     let obstacles = world
         .collect_obstacles()
         .drain()
-        .filter_map(|(p, (oc, _))| to_obstancle(team, &oc.restrict_movement).map(|o| (p, o)))
+        .filter_map(|(p, (oc, _))| movement_obstacle(a, &oc).map(|o| (p, o)))
         .collect::<HashMap<_, _>>();
 
     world.map().find_path(from, to, &ObstacleSet(obstacles))
 }
 
 pub fn find_path_towards(actor: &Actor, target: &Actor, world: &CoreWorld) -> Option<Path> {
-    let team = &actor.team;
     let obstacles = ObstacleSet(
         world
             .collect_obstacles()
             .drain()
-            .filter_map(|(p, (oc, _))| to_obstancle(team, &oc.restrict_movement).map(|o| (p, o)))
+            .filter_map(|(p, (oc, _))| movement_obstacle(actor, &oc).map(|o| (p, o)))
             .collect::<HashMap<_, _>>(),
     )
     // We can ignore the target for pathfinding because we are looking for the place
@@ -58,7 +58,8 @@ pub fn find_enemies(actor: &Actor, world: &CoreWorld) -> Vec<Actor> {
                 }
             }
             None
-        }).collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
 
     enemies.sort_by(|a1, a2| {
         let d1 = apos.distance(MapPos::from_world_pos(a1.pos));
@@ -100,23 +101,16 @@ pub fn can_attack_with(
     attack_vector(attacker, target, attack, world).is_some()
 }
 
-fn to_obstancle(t: &Team, r: &Restriction) -> Option<Obstacle> {
-    let c = match r {
-        Restriction::ForAll(c) => c,
-        Restriction::ForTeam(team, c1, c2) => {
-            if team == t {
-                c1
-            } else {
-                c2
-            }
-        }
-    };
-
-    if *c > 0 {
-        Some(Obstacle(*c))
-    } else {
-        None
+fn movement_obstacle(a: &Actor, oc: &ObstacleCmp) -> Option<Obstacle> {
+    if a.is_flying() {
+        return oc.movement.1
     }
+
+    if a.is_underground() {
+        return oc.movement.2
+    }
+
+    oc.movement.0
 }
 
 pub fn attack_vector(
@@ -140,11 +134,11 @@ pub fn attack_vector(
         return None;
     }
 
-    let attackers_team = &attacker.team;
     let obstacles = world.collect_obstacles();
     let line_of_attack = SuperLineIter::new(from, to);
     let mut result: AttackVector = vec![];
     let mut is_advancing = true;
+    let mut cover = Cover::none();
 
     for pos in line_of_attack {
         if pos == from {
@@ -166,22 +160,44 @@ pub fn attack_vector(
             if is_advancing {
                 // we are still advancing
                 // => check for obstacles which hinder movement
-                if let Some(_) = to_obstancle(attackers_team, &obs.restrict_movement) {
+                if let Some(_) = movement_obstacle(attacker, &obs) {
                     // the path for advancing is blocked
                     // => no attack possible
                     return None;
                 }
-            } else if attack.attack_type.is_melee() {
-                if let Some(obs) = to_obstancle(attackers_team, &obs.restrict_melee_attack) {
-                    result.push((pos, is_target, Some((obs, *id))));
+            } else if let Some(obs) = obs.reach.as_ref().and_then(|hitbox| {
+                hitbox.obstacle_at(
+                    pos.to_world_pos().as_xy(),
+                    from.to_world_pos().as_xy(),
+                    to.to_world_pos().as_xy(),
+                )
+            }) {
+                match obs {
+                    Obstacle::Blocker => {
+                        // cannot reach target; obstacle blocks the way completely
+                        // => no attack possible
+                        return None;
+                    }
+
+                    Obstacle::Impediment(..) => {
+                        result.push((pos, is_target, cover.clone(), *id));
+
+                        if from.distance(pos) == 1 && !is_target {
+                            // the first obstacle in the line of attack which is directly
+                            // next to the attacker should not act as an obstacle for the
+                            // attacker (imagine e.g. some crates used for cover)
+                            // => ignore this case
+                        } else {
+                            // consider the current obstacle as cover for the next obstacle in the path
+                            cover = cover.add_obstacle(obs, pos, *id);
+                        }
+                    }
                 }
-            } else if attack.attack_type.is_ranged() {
-                if let Some(obs) = to_obstancle(attackers_team, &obs.restrict_ranged_attack) {
-                    result.push((pos, is_target, Some((obs, *id))));
-                }
+
             }
         } else {
-            result.push((pos, is_target, None))
+            // no obstacle (or anything to attack) here
+            result.push((pos, is_target, cover.clone(), None))
         }
 
         if from.distance(pos) >= max_distance.into() {
@@ -215,10 +231,9 @@ pub fn find_charge_path(
 
     for t in super_line_iter {
         let tile_pos = t.to_map_pos();
-        let team = &moving_actor.team;
         let hinderance = obstacles
             .get(&tile_pos)
-            .and_then(|(obs, _)| to_obstancle(team, &obs.restrict_movement));
+            .and_then(|(obs, _)| movement_obstacle(moving_actor, obs));
 
         if hinderance.is_some() {
             return None;

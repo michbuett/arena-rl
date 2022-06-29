@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use specs::prelude::*;
 use specs::World as SpecsWorld;
 
-use crate::components::{Position, GameObjectCmp, ObstacleCmp};
+use crate::components::{GameObjectCmp, ObstacleCmp, Position};
 
-use super::{Actor, GameObject, ID, MapPos, Map};
+use super::{Actor, GameObject, Map, MapPos, ID};
 
 pub enum Change {
     Update(Entity, GameObject),
@@ -83,31 +83,6 @@ impl<'a> CoreWorld<'a> {
         result
     }
 
-    // pub fn find<P>(&'a self, predicate: P) -> Option<(Entity, &'a GameObject)>
-    // where
-    //     P: Fn(&GameObject) -> bool,
-    // {
-    //     for (e, go) in self.updates.iter() {
-    //         if predicate(go) {
-    //             return Some((*e, go))
-    //         }
-    //     }
-
-    //     for (e, goc) in (&self.entities, &self.game_objects).join() {
-    //         if self.updates.contains_key(&e) {
-    //             // an updated for of this entity has already been tested
-    //             // -> do not return the old instance
-    //             continue;
-    //         }
-
-    //         if predicate(&goc.0) {
-    //             return self.game_objects.get(e).map(|GameObjectCmp(go)| (e, go));
-    //         }
-    //     }
-
-    //     None
-    // }
-
     pub fn find_map<F, T>(&'a self, f: F) -> Option<T>
     where
         F: Fn(&GameObject) -> Option<T>,
@@ -180,6 +155,15 @@ impl<'a> CoreWorld<'a> {
         self.update(GameObject::Actor(a));
     }
 
+    pub fn modify_actor<F>(&mut self, a_id: ID, f: F)
+    where
+        F: Fn(Actor) -> Actor,
+    {
+        if let Some(a) = self.get_actor(a_id).map(|a| f(a.clone())) {
+            self.update(GameObject::Actor(a));
+        }
+    }
+
     pub fn into_changes(self) -> Vec<Change> {
         let mut result = vec![];
         let mut updates = self.updates;
@@ -204,51 +188,4 @@ impl<'a> CoreWorld<'a> {
 
         result
     }
-
-    // pub fn game_objects(&self) -> GameObjectInterator {
-    //     GameObjectInterator {
-    //         updated_entites: vec![],
-    //         updated_idx: 0,
-    //         updated: &self.updates,
-    //         remaining_entites: vec![],
-    //         remaining_idx: 0,
-    //         remaining: &self.game_objects,
-    //     }
-    // }
 }
-
-// pub struct GameObjectInterator<'a> {
-//     updated_entites: Vec<Entity>,
-//     updated_idx: usize,
-//     updated: &'a HashMap<Entity, GameObject>,
-
-//     remaining_entites: Vec<Entity>,
-//     remaining_idx: usize,
-//     remaining: &'a ReadStorage<'a, GameObjectCmp>,
-// }
-
-// impl<'a> Iterator for GameObjectInterator<'a> {
-//     type Item = (Entity, &'a GameObject);
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         if self.updated_idx < self.updated_entites.len() {
-//             let e = self.updated_entites[self.updated_idx];
-//             let go = self.updated.get(&e).unwrap();
-
-//             self.updated_idx += 1;
-
-//             return Some((e, go));
-//         }
-
-//         if self.remaining_idx < self.remaining_entites.len() {
-//             let next_entity = self.remaining_entites[self.remaining_idx];
-//             let GameObjectCmp(go)= self.remaining.get(next_entity).unwrap();
-
-//             self.remaining_idx += 1;
-
-//             return Some((next_entity, go));
-//         }
-
-//         None
-//     }
-// }

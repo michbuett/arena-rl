@@ -38,7 +38,7 @@ pub enum TraitSource {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub enum Keyword {
     Flying,
-    Hidden,
+    Underground,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -49,21 +49,34 @@ pub enum Effect {
     /// (name, reach, to-hit, to-wound)
     MeleeAttack {
         name: DisplayStr,
-        /// The amount of effort this kind of attack requires 
+
+        /// The amount of effort this kind of attack requires
         required_effort: u8,
+
         /// The reach of the attack (defaults to 1)
         /// Values > 1 allows to attack across tiles in a straight line
         distance: Option<u8>,
+
         /// How far an actor will push forward during its attack (defaults to 0)
         advance: Option<u8>,
+
         /// A modifier of the hit roll (e.g. for a precice but less penetrating attack)
         /// Defaults to zero
         to_hit: Option<i8>,
-        /// A modifier of the wound roll (e.g. for an more brutal but less precice attack)
+
+        /// Armor Penetration. A modifier of the wound roll (e.g. for an more
+        /// brutal but less precice attack)
         /// Defaults to zero
-        to_wound: Option<i8>,
+        ap: Option<i8>,
+
+        /// A modifier of the wound roll quality (so even a slight hit may cause
+        /// a terrible wound)
+        /// Defaults to zero
+        rend: Option<i8>,
+
         /// The name of the animation which is played upon attacking
         fx: String,
+
         /// A set of effects which a apply if the hit roll was successfull
         effects: Option<Vec<(HitEffectCondition, HitEffect)>>,
     },
@@ -88,9 +101,9 @@ pub enum Effect {
     Keyword(Keyword),
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub enum HitEffectCondition {
-    OnHit
+    OnHit,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -116,13 +129,34 @@ pub enum AbilityTarget {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
 pub enum Attr {
-    MeleeDefence,
-    RangeDefence,
-    ToHit,
-    ToWound,
-    Protection,
     Physical,
     Movement,
+
+    /// Offensiv and defensiv stat; compared to the MeleeSkill of the opponent
+    /// to determine the chance of hitting an enemy with a melee attack
+    MeleeSkill,
+
+    /// Offensiv stat; compared to the level of obscurity (cover) to determine
+    /// the chance of hitting an enemy with a ranged attack
+    RangedSkill,
+    
+    /// Defensiv stat; used during melee and ranged combat to determine the
+    /// chance of hitting the opponent
+    Evasion,
+
+    /// Offensiv stat, compared to amor (Protection) to determine the chance of
+    /// wounding an enemy
+    ArmorPenetration,
+
+    /// Defensiv stat, compared to amor penetration to determine the
+    /// chance of wounding an enemy
+    Protection,
+
+    /// Defensiv stat, increases/decreases the quality of the wound roll
+    Resilience,
+
+    /// Defensiv stat, increases/decreases the quality of a hit roll in melee combat
+    MeleeBlock,
 }
 
 const ATTR_BASE_VALUE: i8 = 3;

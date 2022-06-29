@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use crate::components::{FxEffect, FxSequence};
 use crate::core::ai::{attack_vector, AttackVector};
 use crate::core::{DisplayStr, MapPos, Path, WorldPos};
@@ -17,13 +15,11 @@ pub enum Action {
     ResolvePendingActions(),
     EndTurn(Team),
     Done(String),
-    Rest(),
     MoveTo(Path),
     Activate(ID),
     Attack(ID, AttackOption, AttackVector, String),
     Ambush(AttackOption),
     UseAbility(ID, String, Trait),
-    // Disengage(Tile), // need conceptual overhaul
 }
 
 #[derive(Debug, Clone)]
@@ -31,6 +27,9 @@ pub struct Act {
     pub action: Action,
     pub delay: u8,
     pub allocated_effort: Option<u8>,
+    pub is_empowerd: bool,
+    pub allow_hastening: bool,
+    pub allow_empowering: bool,
 }
 
 impl Act {
@@ -39,6 +38,9 @@ impl Act {
             action: a,
             delay: 0,
             allocated_effort: None,
+            is_empowerd: false,
+            allow_hastening: false,
+            allow_empowering: false,
         }
     }
 
@@ -49,6 +51,47 @@ impl Act {
 
     pub fn effort(mut self, e: u8) -> Self {
         self.allocated_effort = Some(e);
+        self
+    }
+
+    pub fn empower(mut self) -> Self {
+        if self.allow_empowering {
+            match self.action {
+                Action::Attack(id, attack, av, label) => {
+                    let empored_attack = AttackOption {
+                        required_effort: attack.required_effort + 1,
+                        advantage: 1,
+                        ..attack
+                    };
+
+                    self.action = Action::Attack(id, empored_attack, av, label);
+                }
+                _ => {}
+            }
+
+            self.is_empowerd = true;
+            self.allocated_effort = self.allocated_effort.map(|e| e + 1);
+        }
+
+        self
+    }
+
+    pub fn quicken(mut self) -> Self {
+        if self.allow_hastening && self.delay > 0 {
+            self.delay -= 1;
+            self.allocated_effort = self.allocated_effort.map(|e| e + 1);
+        }
+
+        self
+    }
+
+    pub fn allow_hastening(mut self) -> Self {
+        self.allow_hastening = true;
+        self
+    }
+
+    pub fn allow_empowering(mut self) -> Self {
+        self.allow_empowering = true;
         self
     }
 
@@ -65,15 +108,15 @@ impl Act {
     }
 
     pub fn rest() -> Self {
-        Self::new(Action::Rest()).delay(1).effort(0)
+        Self::new(Action::Done("Gathering strength...".to_string())).delay(1)
     }
 
-    pub fn activate(e: ID) -> Self {
-        Self::new(Action::Activate(e))
+    pub fn activate(actor_id: ID) -> Self {
+        Self::new(Action::Activate(actor_id))
     }
 
-    pub fn move_to(p: Path) -> Self {
-        Self::new(Action::MoveTo(p))
+    pub fn move_to(effort: u8, p: Path) -> Self {
+        Self::new(Action::MoveTo(p)).effort(effort)
     }
 
     pub fn attack(target: ID, ao: AttackOption, av: AttackVector, n: String) -> Self {
@@ -81,15 +124,14 @@ impl Act {
         Self::new(Action::Attack(target, ao, av, n))
             .delay(1)
             .effort(e)
+            .allow_empowering()
+            .allow_hastening()
     }
 
     pub fn ambush(attack: AttackOption) -> Self {
-        Self::new(Action::Ambush(attack)).delay(1).effort(0)
+        let e = attack.required_effort;
+        Self::new(Action::Ambush(attack)).delay(1).effort(e)
     }
-
-    // pub fn disengage(to_pos: Tile) -> Self {
-    //     Self::new(Action::Disengage(to_pos)).delay(1).effort(0)
-    // }
 
     pub fn use_ability(target: ID, key: impl ToString, t: Trait, delay: u8) -> Self {
         Self::new(Action::UseAbility(target, key.to_string(), t)).delay(delay)
@@ -175,33 +217,41 @@ pub struct ActionResult {
     pub score: u64,
 }
 
-impl ActionResult {
-    fn empty() -> Self {
-        Self {
-            changes: vec![],
-            fx_seq: FxSequence::new(),
-            log: None,
-            score: 0,
-        }
+pub fn act(actor_id: ID, a: Act, cw: CoreWorld) -> ActionResult {
+    let effort = a.allocated_effort.unwrap_or(0);
+    let mut result_builder = ActionResultBuilder::new(cw);
+
+    if effort > 0 {
+        result_builder = result_builder.chain(|mut w| {
+            w.modify_actor(actor_id, |actor| actor.use_effort(effort));
+            ActionResultBuilder::new(w)
+        })
     }
+
+    result_builder
+        .chain(|w| perform_act(actor_id, a, w))
+        .into_result()
 }
 
-pub fn act(actor_id: ID, a: Act, mut cw: CoreWorld) -> ActionResult {
+fn perform_act(actor_id: ID, a: Act, mut cw: CoreWorld) -> ActionResultBuilder {
     if let Some(actor) = cw.get_actor(actor_id).cloned() {
         let delay = a.delay;
+
         if delay > 0 {
+            // act is delayed until next turn
+            // => not this try to run it by reducing the count down
             cw.update_actor(actor.prepare(a.delay(delay - 1)));
 
-            ActionResultBuilder::new(cw).into_result()
+            ActionResultBuilder::new(cw)
         } else {
-            run_action(actor, a, cw)
+            return run_action(actor, a, cw);
         }
     } else {
-        no_op()
+        ActionResultBuilder::new(cw)
     }
 }
 
-fn run_action<'a>(actor: Actor, a: Act, mut cw: CoreWorld) -> ActionResult {
+fn run_action<'a>(actor: Actor, a: Act, mut cw: CoreWorld) -> ActionResultBuilder {
     let actor_id = actor.id;
 
     match a.action {
@@ -209,9 +259,7 @@ fn run_action<'a>(actor: Actor, a: Act, mut cw: CoreWorld) -> ActionResult {
             if let Some(actor) = cw.get_actor(actor.id).cloned() {
                 // we need to get the most current actor since this action is executed immediatly
                 // after resolving pending actions
-                let a_pos = MapPos::from_world_pos(actor.pos);
-                let engaged_in_combat = is_next_to_enemy(&actor.team, a_pos, &cw);
-                let mut actor = actor.start_next_turn(engaged_in_combat);
+                let mut actor = actor.start_next_turn();
 
                 if !actor.is_concious() {
                     actor = actor.prepare(Act::rest().delay(0));
@@ -219,17 +267,13 @@ fn run_action<'a>(actor: Actor, a: Act, mut cw: CoreWorld) -> ActionResult {
 
                 cw.update_actor(actor);
 
-                ActionResultBuilder::new(cw).into_result()
-            } else {
-                no_op()
+                return ActionResultBuilder::new(cw);
             }
         }
 
         Action::ResolvePendingActions() => {
             if let Some(pending_action) = actor.pending_action.clone() {
-                act(actor_id, pending_action, cw)
-            } else {
-                no_op()
+                return perform_act(actor_id, pending_action, cw);
             }
         }
 
@@ -238,39 +282,10 @@ fn run_action<'a>(actor: Actor, a: Act, mut cw: CoreWorld) -> ActionResult {
                 cw.update_actor(a.prepare(Act::pass()));
             }
 
-            ActionResultBuilder::new(cw).into_result()
+            return ActionResultBuilder::new(cw);
         }
 
-        Action::Done(_) => no_op(),
-
-        Action::Rest() => {
-            let prev_pain = actor.health.pain;
-            let actor = actor.rest();
-            let mut fx_seq = FxSequence::new();
-
-            if prev_pain == 0 {
-                fx_seq = fx_seq
-                    .then(FxEffect::say(
-                        "I try summon extra strength".to_string(),
-                        actor.pos,
-                    ))
-                    .wait(500);
-            } else if prev_pain > actor.health.pain {
-                let recover = prev_pain - actor.health.pain;
-                fx_seq = fx_seq
-                    .then(FxEffect::say(
-                        format!("Pain is fading away ({})", recover),
-                        actor.pos,
-                    ))
-                    .wait(500);
-            }
-
-            cw.update(actor.into());
-
-            ActionResultBuilder::new(cw)
-                .append_fx_seq(fx_seq)
-                .into_result()
-        }
+        Action::Done(_) => {}
 
         Action::UseAbility(target_entity, ability_name, t) => {
             if let Some(target_actor) = cw.get_actor(target_entity).cloned() {
@@ -281,50 +296,32 @@ fn run_action<'a>(actor: Actor, a: Act, mut cw: CoreWorld) -> ActionResult {
 
                 cw.update_actor(target_actor.use_ability(ability_name, t));
 
-                ActionResultBuilder::new(cw)
+                return ActionResultBuilder::new(cw)
                     .add_fx(FxEffect::say(fx_str, fx_pos))
-                    .append_log(log.into())
-                    .into_result()
-            } else {
-                no_op()
+                    .append_log(log.into());
             }
         }
 
         Action::MoveTo(path) => {
             if path.is_empty() {
-                return no_op();
+                return ActionResultBuilder::new(cw);
             }
 
-            let mut result_builder = ActionResultBuilder::new(cw);
-            let mut num_steps = 0;
+            let mut result_builder = handle_aoo(actor_id, cw);
 
             for t in path {
-                result_builder = result_builder.chain(|w| {
-                    let (result, did_move) = take_step(actor_id, t.to_world_pos(), w);
-
-                    if did_move {
-                        num_steps += 1;
-                    }
-
-                    result
-                });
+                result_builder = result_builder.chain(|w| take_step(actor_id, t.to_world_pos(), w));
             }
 
-            result_builder
-                .chain(|mut w| {
-                    // test if actor actually exists (it is possible that the moving actor has been killed by now; e.g. from some ambush)
-                    if let Some(actor) = w.get_actor(actor_id).cloned() {
-                        let required_effort = num_steps - actor.attr(super::Attr::Movement).val();
-                        w.update_actor(
-                            actor.prepare(
-                                Act::done("Did move...")
-                                    .effort(required_effort.try_into().unwrap_or(0)),
-                            ),
-                        );
+            return result_builder.chain(|mut w| {
+                // test if actor actually exists (it is possible that the moving actor has been killed by now; e.g. from some ambush)
+                if let Some(actor) = w.get_actor(actor_id).cloned() {
+                    if actor.available_effort() == 0 {
+                        w.update_actor(actor.prepare(Act::done("Did move...")));
                     }
-                    ActionResultBuilder::new(w)
-                })
-                .into_result()
+                }
+                ActionResultBuilder::new(w)
+            });
         }
 
         Action::Activate(id) => {
@@ -332,26 +329,21 @@ fn run_action<'a>(actor: Actor, a: Act, mut cw: CoreWorld) -> ActionResult {
                 cw.update_actor(actor.deactivate());
                 cw.update_actor(target.activate());
 
-                ActionResultBuilder::new(cw).into_result()
-            } else {
-                no_op()
+                return ActionResultBuilder::new(cw);
             }
         }
 
         Action::Attack(target_id, attack, _, _) => {
-            handle_attack(actor.id, target_id, attack, cw).into_result()
+            return handle_attack(actor.id, target_id, attack, cw)
         }
 
         Action::Ambush(_attack) => {
             // an ambush is trigger when an enemy walks into the zone of danger
             // => if it has not been triggered yet, then ignore it
-            no_op()
         }
     }
-}
 
-fn no_op() -> ActionResult {
-    ActionResult::empty()
+    ActionResultBuilder::new(cw)
 }
 
 /// filter items where there is no actual target
@@ -359,26 +351,16 @@ fn filter_attack_vector(input: &AttackVector, w: &CoreWorld) -> Vec<AttackTarget
     let mut input = input.to_vec();
     (&mut input)
         .drain(..)
-        .fold(vec![], |mut result, (pos, is_target, o)| {
-            if let Some((obs, id)) = o {
-                result.push(AttackTarget {
-                    pos,
-                    obstacle: obs,
-                    target: id.and_then(|id| w.get_actor(id).cloned()),
-                    is_target,
-                });
-            }
+        .fold(vec![], |mut result, (pos, is_target, cover, id)| {
+            result.push(AttackTarget {
+                pos,
+                cover,
+                actor: id.and_then(|id| w.get_actor(id).cloned()),
+                is_target,
+            });
 
             result
         })
-}
-
-fn is_next_to_enemy(a_team: &Team, a_pos: MapPos, w: &CoreWorld) -> bool {
-    w.find_actor(|other| {
-        let o_pos = MapPos::from_world_pos(other.pos);
-        other.is_concious() && a_team != &other.team && a_pos.distance(o_pos) == 1
-    })
-    .is_some()
 }
 
 fn create_combat_fx(
@@ -449,7 +431,7 @@ fn create_hit_fx(effects: &Vec<HitEffect>, target_pos: WorldPos) -> FxSequence {
                 fx_seq.then_append(create_fx_changes_for_wound(&wound, target_pos, 0))
             }
 
-            HitEffect::Defence(..) => fx_seq.then(FxEffect::say("Defended", target_pos)),
+            HitEffect::Block(pos, ..) => fx_seq.then(FxEffect::say("Defended", pos.to_world_pos())),
 
             HitEffect::Miss() => fx_seq.then(FxEffect::say("Missed", target_pos)),
 
@@ -468,15 +450,21 @@ fn create_ranged_combat_fx(
 ) -> FxSequence {
     let mut fx_seq = FxSequence::new();
     let attacker_mpos = MapPos::from_world_pos(attacker_pos);
+    let projectile_speed = 50;
 
-    fx_seq = fx_seq.then(FxEffect::projectile(attack_fx, attacker_pos, last_pos));
+    fx_seq = fx_seq.then(FxEffect::projectile(
+        attack_fx,
+        attacker_pos,
+        last_pos,
+        projectile_speed,
+    ));
 
     for hit in hits.iter() {
         let target_pos = hit.pos.to_world_pos();
         let impact = !is_miss(hit);
 
         if impact {
-            let dur = 50 * attacker_mpos.distance(hit.pos) as u64;
+            let dur = projectile_speed * attacker_mpos.distance(hit.pos) as u64;
             let impact_fx_dur = 300;
 
             fx_seq = fx_seq
@@ -493,7 +481,7 @@ fn create_ranged_combat_fx(
             .wait(300)
     }
 
-    fx_seq
+    fx_seq.wait_until_finished()
 }
 
 fn create_fx_changes_for_wound(wound: &Wound, target_pos: WorldPos, delay: u64) -> FxSequence {
@@ -531,7 +519,7 @@ fn handle_attack<'a>(
         return ActionResultBuilder::new(cw);
     }
 
-    let attacker = attacker.unwrap();
+    let mut attacker = attacker.unwrap();
     let target = target.unwrap();
     let max_distance = attack.advance + attack.max_distance;
     let from = MapPos::from_world_pos(attacker.pos);
@@ -561,7 +549,9 @@ fn handle_attack<'a>(
         let p0 = from.to_world_pos();
         let p1 = p.last().unwrap().to_world_pos();
 
-        cw.update_actor(attacker.charge_to(p1));
+        attacker.pos = p1;
+
+        cw.update_actor(attacker);
 
         let mut charge_fx = FxSequence::new()
             .then(FxEffect::scream("Charge!", p0))
@@ -627,11 +617,11 @@ fn perform_attack(
 
 fn apply_hit_effect(eff: HitEffect, mut cw: CoreWorld) -> ActionResultBuilder {
     match eff {
-        HitEffect::Defence(roll, id) => {
+        HitEffect::Block(mpos, id) => {
             let mut fx_seq = FxSequence::new();
             if let Some(t) = cw.get_actor(id).cloned() {
-                let target = t.use_effort(roll.num_successes + roll.num_fails);
-                let target_pos = target.pos;
+                let target = t.use_effort(1); // TODO pass number of blocks
+                let target_pos = mpos.to_world_pos();
 
                 cw.update(target.into());
                 fx_seq = fx_seq.then(FxEffect::say("Blocked", target_pos));
@@ -679,28 +669,20 @@ fn apply_hit_effect(eff: HitEffect, mut cw: CoreWorld) -> ActionResultBuilder {
     }
 }
 
-fn take_step(actor_id: ID, target_pos: WorldPos, mut cw: CoreWorld) -> (ActionResultBuilder, bool) {
+fn take_step(actor_id: ID, target_pos: WorldPos, cw: CoreWorld) -> ActionResultBuilder {
     let actor = cw.get_actor(actor_id);
     if actor.is_none() {
         // moving actor may have been killed by now
-        return (ActionResultBuilder::new(cw), false);
+        return ActionResultBuilder::new(cw);
     }
 
     let actor = actor.unwrap();
-    let actor_pos = actor.pos;
 
     if !actor.can_move() {
-        return (ActionResultBuilder::new(cw), false);
+        return ActionResultBuilder::new(cw);
     }
 
-    if is_next_to_enemy(&actor.team, MapPos::from_world_pos(actor_pos), &cw) {
-        let mut actor = actor.clone();
-        actor.engaged_in_combat = true;
-        cw.update_actor(actor);
-        return (ActionResultBuilder::new(cw), false);
-    }
-
-    (move_to(actor.clone(), target_pos, cw, true), true)
+    move_to(actor.clone(), target_pos, cw, true)
 }
 
 fn force_move(actor_id: ID, dx: i32, dy: i32, distance: u8, cw: CoreWorld) -> ActionResultBuilder {
@@ -750,8 +732,6 @@ fn move_to(
     let actor_pos = actor.pos;
 
     actor.pos = target_pos;
-    actor.engaged_in_combat =
-        is_next_to_enemy(&actor.team, MapPos::from_world_pos(target_pos), &cw);
 
     cw.update_actor(actor);
 
@@ -769,37 +749,51 @@ fn move_to(
 
     ActionResultBuilder::new(cw)
         .append_fx_seq(fx_seq)
-        .chain(|w| handle_post_move_actions(actor_id, w))
+        .chain(|w| handle_aoo(actor_id, w))
 }
 
-fn handle_post_move_actions(id: ID, mut world: CoreWorld) -> ActionResultBuilder {
-    if let Some((ambusher, attack)) = world.find_map(|a| can_ambush(a, id, &world)) {
-        if let Some(a) = world.get_actor(ambusher).cloned() {
-            world.update_actor(a.prepare(Act::done("Did ambush ...")));
-        }
-        handle_attack(ambusher, id, attack, world).chain(|w| handle_post_move_actions(id, w))
+/// Check for attacks of opportunities (aoo)
+fn handle_aoo(moving_actor_id: ID, mut world: CoreWorld) -> ActionResultBuilder {
+    if let Some((attacker, attack)) = world.find_map(|go| can_attack(go, moving_actor_id, &world)) {
+        // println!("[DEBUG] handle_aoo attacker={:?} target={:?}", attacker, moving_actor_id);
+
+        world.modify_actor(attacker, |a| a.prepare(Act::done("Did attack ...")));
+
+        handle_attack(attacker, moving_actor_id, attack, world)
+            .chain(|w| handle_aoo(moving_actor_id, w))
     } else {
         ActionResultBuilder::new(world)
     }
 }
 
-fn can_ambush(obj: &GameObject, target: ID, world: &CoreWorld) -> Option<(ID, AttackOption)> {
-    if let GameObject::Actor(ambusher) = obj {
-        if let Some(Act {
-            action: Action::Ambush(attack),
-            ..
-        }) = &ambusher.pending_action
-        {
-            if let Some(target) = world.get_actor(target) {
-                if target.team == ambusher.team {
-                    // do not ambush teammates
-                    return None;
-                }
-
-                if can_attack_with(ambusher, target, attack, world) {
-                    return Some((ambusher.id, attack.clone()));
+fn can_attack(obj: &GameObject, target: ID, world: &CoreWorld) -> Option<(ID, AttackOption)> {
+    if let GameObject::Actor(attacker) = obj {
+        match &attacker.pending_action {
+            Some(Act {
+                action: Action::Attack(attacker_target, attack, ..),
+                ..
+            }) => {
+                if target == *attacker_target {
+                    return Some((attacker.id, attack.clone()));
                 }
             }
+
+            Some(Act {
+                action: Action::Ambush(attack),
+                ..
+            }) => {
+                if let Some(target) = world.get_actor(target) {
+                    if target.team == attacker.team {
+                        // do not ambush teammates
+                        return None;
+                    }
+
+                    if can_attack_with(attacker, target, attack, world) {
+                        return Some((attacker.id, attack.clone()));
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
