@@ -288,18 +288,20 @@ fn run_action<'a>(actor: Actor, a: Act, mut cw: CoreWorld) -> ActionResultBuilde
         Action::Done(_) => {}
 
         Action::UseAbility(target_entity, ability_name, t) => {
-            if let Some(target_actor) = cw.get_actor(target_entity).cloned() {
-                let fx_pos = target_actor.pos.clone();
-                let fx_str = t.name.to_string();
-                let actor_name = target_actor.name.clone();
-                let log = DisplayStr::new(format!("{} used ability: {}", actor_name, ability_name));
+            // TODO overhaul action
 
-                cw.update_actor(target_actor.use_ability(ability_name, t));
+            // if let Some(target_actor) = cw.get_actor(target_entity).cloned() {
+            //     let fx_pos = target_actor.pos.clone();
+            //     let fx_str = t.name.to_string();
+            //     let actor_name = target_actor.name.clone();
+            //     let log = DisplayStr::new(format!("{} used ability: {}", actor_name, ability_name));
 
-                return ActionResultBuilder::new(cw)
-                    .add_fx(FxEffect::say(fx_str, fx_pos))
-                    .append_log(log.into());
-            }
+            //     cw.update_actor(target_actor.use_ability(ability_name, t));
+
+            //     return ActionResultBuilder::new(cw)
+            //         .add_fx(FxEffect::say(fx_str, fx_pos))
+            //         .append_log(log.into());
+            // }
         }
 
         Action::MoveTo(path) => {

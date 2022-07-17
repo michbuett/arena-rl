@@ -67,12 +67,6 @@
             advance: Some(1),
             fx: "fx-hit-1",
             effects: Some([(OnHit, PushBack(1))])
-        ), GiveTrait(
-            "ability#Parry_Spear", (
-                name: ("Parry (spear)"),
-                effects: [Defence(3, Parry)],
-                source: Temporary(1),
-            ), OnSelf,
         )],
         source: IntrinsicProperty,
         visuals: Some([(Idle, [(Weapon1, "melee-2h_2")])]),
@@ -86,12 +80,6 @@
             required_effort: 2,
             to_hit: Some(1),
             fx: "fx-hit-1",
-        ), GiveTrait(
-            "ability#Parry_Flail", (
-                name: ("Parry (flail)"),
-                effects: [Defence(2, Parry)],
-                source: Temporary(1),
-            ), OnSelf,
         )],
         source: IntrinsicProperty,
         visuals: Some([(Idle, [(Weapon2, "melee-1h_1")])]),
@@ -150,18 +138,6 @@
         name: ("Towershield"),
         effects: [
             AttrMod(Evasion, 1),
-            GiveTrait(
-                "ability#Block_Shield",
-                (
-                    name: ("Raise shield"),
-                    effects: [
-                        AttrMod(Evasion, 1),
-                        AttrMod(MeleeBlock, 2),
-                    ],
-                    source: Temporary(1),
-                ),
-                OnSelf,
-            ),
         ],
         source: IntrinsicProperty,
         visuals: Some([(Idle, [(Weapon1, "shild_1")])]),

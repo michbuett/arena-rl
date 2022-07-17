@@ -5,6 +5,8 @@ use specs::World as SpecsWorld;
 
 use crate::components::{GameObjectCmp, ObstacleCmp, Position};
 
+use super::ObjectGenerator;
+use super::TraitStorage;
 use super::{Actor, GameObject, Map, MapPos, ID};
 
 pub enum Change {
@@ -14,11 +16,15 @@ pub enum Change {
 }
 
 pub struct CoreWorld<'a> {
+    // world resources
+    map: Read<'a, Map>,
+    generator: Read<'a, ObjectGenerator>,
+
+    // component storages
     game_objects: ReadStorage<'a, GameObjectCmp>,
     obstacles: ReadStorage<'a, ObstacleCmp>,
     positions: ReadStorage<'a, Position>,
     entities: Entities<'a>,
-    map: Read<'a, Map>,
 
     entity_map: HashMap<ID, Entity>,
     updates: HashMap<ID, Option<GameObject>>,
@@ -27,12 +33,13 @@ pub struct CoreWorld<'a> {
 impl<'a> CoreWorld<'a> {
     pub fn new(w: &'a SpecsWorld) -> Self {
         let mut entity_map = HashMap::new();
-        let (entities, game_objects, obstacles, positions, map): (
+        let (map, generator, entities, game_objects, obstacles, positions): (
+            Read<Map>,
+            Read<ObjectGenerator>,
             Entities,
             ReadStorage<GameObjectCmp>,
             ReadStorage<ObstacleCmp>,
             ReadStorage<Position>,
-            Read<Map>,
         ) = w.system_data();
 
         for (e, GameObjectCmp(go)) in (&entities, &game_objects).join() {
@@ -40,11 +47,12 @@ impl<'a> CoreWorld<'a> {
         }
 
         Self {
+            map,
+            generator,
             entities,
             game_objects,
             obstacles,
             positions,
-            map,
             entity_map,
             updates: HashMap::new(),
         }
@@ -52,6 +60,10 @@ impl<'a> CoreWorld<'a> {
 
     pub fn map(&self) -> &Map {
         &self.map
+    }
+
+    pub fn traits(&self) -> &TraitStorage {
+        &self.generator.traits()
     }
 
     pub fn collect_obstacles(&self) -> HashMap<MapPos, (ObstacleCmp, Option<ID>)> {

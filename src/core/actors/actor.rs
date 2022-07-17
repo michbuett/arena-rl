@@ -279,8 +279,6 @@ impl Actor {
     }
 
     pub fn use_effort(mut self, effort: u8) -> Self {
-        // println!("[DEBUG] use_effort({}); available_effort={}", effort, self.available_effort());
-                
         if effort > self.available_effort() {
             self.health = self.health.wound(Wound { pain: 1, wound: 0 });
         }
@@ -317,28 +315,29 @@ impl Actor {
         .process_traits()
     }
 
-    pub fn ability_self(&self) -> Vec<(String, Trait, u8)> {
-        let mut result = vec![];
+    // TODO overhaul 
+    // pub fn ability_self(&self) -> Vec<(String, Trait, u8)> {
+    //     let mut result = vec![];
 
-        for e in self.effects.iter() {
-            if let (_, Effect::GiveTrait(key, t, AbilityTarget::OnSelf)) = e {
-                result.push((key.clone(), t.clone(), 0));
-            }
-        }
+    //     for e in self.effects.iter() {
+    //         if let (_, Effect::GiveTrait(key, t, AbilityTarget::OnSelf)) = e {
+    //             result.push((key.clone(), t.clone(), 0));
+    //         }
+    //     }
 
-        result.push((
-            "ability#GatherStrength".to_string(),
-            Trait {
-                name: DisplayStr::new("Gather strength"),
-                effects: vec![Effect::GatherStrength],
-                source: TraitSource::Temporary(1),
-                visuals: None,
-            },
-            0,
-        ));
+    //     result.push((
+    //         "ability#GatherStrength".to_string(),
+    //         Trait {
+    //             name: DisplayStr::new("Gather strength"),
+    //             effects: vec![Effect::GatherStrength],
+    //             source: TraitSource::Temporary(1),
+    //             visuals: None,
+    //         },
+    //         0,
+    //     ));
 
-        result
-    }
+    //     result
+    // }
 
     pub fn attacks(&self) -> Vec<AttackOption> {
         let attacks = self

@@ -42,9 +42,9 @@ pub fn actions_at(actor: &Actor, selected_pos: WorldPos, cw: CoreWorld) -> Vec<A
     if let Some(other_actor) = find_actor_at(&cw, &selected_pos) {
         if actor.id == other_actor.id {
             // selected position contains the acting character itself
-            for (k, t, d) in actor.ability_self() {
-                result.push(Act::use_ability(actor.id, k, t, d));
-            }
+            // for (k, t, d) in actor.ability_self() {
+            //     result.push(Act::use_ability(actor.id, k, t, d));
+            // }
 
             for attack in actor.attacks() {
                 result.push(Act::ambush(attack));

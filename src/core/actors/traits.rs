@@ -1,4 +1,10 @@
 use std::cmp::max;
+use std::collections::HashMap;
+use std::path::Path;
+use std::fs::File;
+use std::iter::FromIterator;
+
+use ron::de::from_reader;
 
 use crate::core::DisplayStr;
 use serde::Deserialize;
@@ -94,11 +100,48 @@ pub enum Effect {
     Defence(i8, DefenceType),
 
     /// (key, trait, target)
-    GiveTrait(String, Trait, AbilityTarget),
+    GiveTrait(String, AbilityTarget),
+    // GiveTrait(String, Trait, AbilityTarget),
 
     GatherStrength,
 
     Keyword(Keyword),
+}
+
+#[derive(Default)]
+pub struct TraitStorage {
+    traits: HashMap<String, Trait>,
+}
+
+impl TraitStorage {
+    pub fn new(path: &Path) -> Self {
+        let p = path.join("traits.ron");
+        let f = match File::open(p) {
+            Ok(result) => result,
+            Err(e) => {
+                panic!("Error opening proto sprite config file: {:?}", e);
+            }
+        };
+
+        let traits: Vec<(String, Trait)> = match from_reader(f) {
+            Ok(result) => result,
+            Err(e) => {
+                panic!("Error parsing proto sprite config: {:?}", e);
+            }
+        };
+
+        Self {
+            traits: HashMap::from_iter(traits),
+        }
+    }
+
+    pub fn get(&self, key: &str) -> &Trait {
+        if !self.traits.contains_key(key) {
+            panic!("Unknown trait: {}", key);
+        }
+        
+        self.traits.get(key).unwrap()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
