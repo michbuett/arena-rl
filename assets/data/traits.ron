@@ -138,6 +138,10 @@
         name: ("Towershield"),
         effects: [
             AttrMod(Evasion, 1),
+            Ability(
+                key: "",
+                target: OnSelf
+            ),
         ],
         source: IntrinsicProperty,
         visuals: Some([(Idle, [(Weapon1, "shild_1")])]),
@@ -172,5 +176,11 @@
         name: ("Underground"),
         effects: [Keyword(Underground)],
         source: IntrinsicProperty,
+    )),
+
+    ("temp#Trait_Block", (
+        name: ("Block"),
+        effects: [AttrMod(MeleeBlock, 1)],
+        source: Temporary(1),
     )),
 ]

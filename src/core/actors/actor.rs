@@ -1,10 +1,10 @@
-use std::cmp::{min, max};
+use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::time::Instant;
 
 pub use super::traits::*;
 
-use crate::core::{Act, DisplayStr, WorldPos};
+use crate::core::{ActorAction, DisplayStr, WorldPos, D6};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct ID(Instant, u64, u64);
@@ -30,6 +30,12 @@ pub enum AiBehaviour {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Team(pub &'static str, pub u8, pub bool);
+
+impl Team {
+    pub fn is_member(&self, a: &Actor) -> bool {
+        self.1 == a.team.1
+    }
+}
 
 pub struct ActorBuilder {
     behaviour: Option<AiBehaviour>,
@@ -61,18 +67,22 @@ impl ActorBuilder {
             active: false,
             pos: self.pos,
             health: Health::new(0),
-            effort: (0, 0),
+            effort: vec![],
+            saved_effort: vec![],
             keywords: self.keywords,
             effects: Vec::new(),
             traits: self.traits,
-            pending_action: None,
+            // #[deprecated]
+            // pending_action: None,
+            prepared_action: None,
             behaviour: self.behaviour,
             team: self.team,
             visual: self.visual,
+            state: ReadyState::Done,
         }
         .process_traits();
 
-        let physical_strength = 2 + AttrVal::new(Attr::Physical, &a.effects).val();
+        let physical_strength = 3 + AttrVal::new(Attr::Physical, &a.effects).val();
         a.health = Health::new(max(physical_strength, 1) as u8);
         a
     }
@@ -194,13 +204,21 @@ impl Visual {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReadyState {
+    ExecutePreparedAction,
+    SelectAction,
+    AllocateEffort,
+    Done,
+}
+
 #[derive(Debug, Clone)]
 pub struct Actor {
     traits: HashMap<String, Trait>,
     visual: Visual,
 
-    /// used, max
-    effort: (u8, u8),
+    effort: Vec<D6>,
+    saved_effort: Vec<D6>,
 
     pub id: ID,
     pub health: Health,
@@ -210,8 +228,12 @@ pub struct Actor {
     pub active: bool,
     pub team: Team,
     pub pos: WorldPos,
-    pub pending_action: Option<Act>,
+
+    // #[deprecated]
+    // pub pending_action: Option<Act>,
+    pub prepared_action: Option<ActorAction>,
     pub behaviour: Option<AiBehaviour>,
+    pub state: ReadyState,
 }
 
 impl Actor {
@@ -244,11 +266,57 @@ impl Actor {
     }
 
     pub fn available_effort(&self) -> u8 {
-        self.effort.1.checked_sub(self.effort.0).unwrap_or(0)
+        self.effort.len() as u8
+    }
+
+    pub fn max_available_effort(&self, D6(reqired): D6) -> u8 {
+        self.effort.iter().fold((0, 0), |(acc_eff, acc_quality), D6(eff)| {
+            if acc_eff + eff >= reqired {
+                (0, acc_quality + 1)
+            } else {
+                (acc_eff + eff, acc_quality)
+            }
+        }).1
+    }
+
+    pub fn effort_dice(&self) -> &Vec<D6> {
+        &self.effort
+    }
+
+    pub fn can_afford_effort(&self, d: D6) -> bool {
+        self.effort.iter().max().unwrap_or(&D6(1)) >= &d
+    }
+
+    pub fn combine_lowest_effort_dice(mut self) -> Self {
+        if self.available_effort() <= 1 {
+            return self;
+        }
+
+        // let (mut lowest_index, mut lowest_value) = (usize::MAX, u8::MAX);
+        // let (mut second_lowest_index, mut second_lowest_value) = (usize::MAX, u8::MAX);
+
+        // for (i, D6(d)) in self.effort.iter().enumerate() {
+        //     if *d <= lowest_value {
+        //         second_lowest_index = lowest_index;
+        //         second_lowest_value = lowest_value;
+        //         lowest_index = i;
+        //         lowest_value = *d;
+        //     }
+        // }
+
+        // self.effort[0] = D6(min(6, lowest_value + second_lowest_value));
+        // self.effort.remove(second_lowest_index);
+
+        // since the vector is sorted it is guaranteed that the first two elements are the lowest
+        self.effort[0] = D6(min(6, self.effort[0].0 + self.effort[1].0));
+        self.effort.swap_remove(1);
+        self.effort.sort();
+        self
     }
 
     pub fn can_activate(&self) -> bool {
-        self.pending_action.is_none()
+        // self.pending_action.is_none()
+        !self.active && self.state != ReadyState::Done
     }
 
     pub fn activate(self) -> Self {
@@ -265,33 +333,57 @@ impl Actor {
         }
     }
 
-    pub fn prepare(mut self, act: Act) -> Self {
-        self.pending_action = Some(act);
+    // pub fn use_ability(self, key: impl ToString, ability: Trait) -> Self {
+    //     let msg = format!("Used ability {}", ability.name);
+
+    //     self.add_trait(key.to_string(), ability)
+    //         .prepare(Act::done(msg))
+    // }
+
+    pub fn use_effort(mut self, effort: D6) -> Self {
+        if let Some(i) = self.effort.iter().position(|d| *d >= effort) {
+            self.effort.remove(i);
+        } else {
+            // actor cannot affort using the effort
+            // > this stresses health
+            if self.available_effort() > 0 {
+                self.health = self.health.wound(Wound { pain: 1, wound: 0 });
+                self.effort.pop(); // remove largest effort dice (list is sorted)
+            } else {
+                self.health = self.health.wound(Wound { pain: 2, wound: 0 });
+            }
+        }
+
+        if self.effort.is_empty() {
+            self.done()
+        } else {
+            self
+        }
+    }
+
+    ////////////////////////////////////////////////////////////
+    // Handle turn cycle
+
+    pub fn done(mut self) -> Actor {
+        self.state = ReadyState::Done;
         self.active = false;
         self
     }
 
-    pub fn use_ability(self, key: impl ToString, ability: Trait) -> Self {
-        let msg = format!("Used ability {}", ability.name);
-
-        self.add_trait(key.to_string(), ability)
-            .prepare(Act::done(msg))
-    }
-
-    pub fn use_effort(mut self, effort: u8) -> Self {
-        if effort > self.available_effort() {
-            self.health = self.health.wound(Wound { pain: 1, wound: 0 });
+    pub fn save_effort(mut self) -> Actor {
+        while self.effort.len() >= 2 {
+            self = self.combine_lowest_effort_dice();
         }
-        self.effort.0 += effort;
-        self
+        self.saved_effort = self.effort;
+        self.effort = vec![];
+        self.done()
     }
 
     pub fn start_next_turn(mut self) -> Actor {
-        let mut new_traits = HashMap::new();
-        let reserved_effort = self.available_effort();
-        let (health, new_max_available_effort) = self.health.next_turn(reserved_effort);
+        let (health, effort) = self.health.next_turn(self.saved_effort);
 
         // handle temporary traits
+        let mut new_traits = HashMap::new();
         for (k, t) in self.traits.drain() {
             if let TraitSource::Temporary(time) = t.source {
                 if time > 1 {
@@ -305,17 +397,57 @@ impl Actor {
             }
         }
 
+        let state = if self.prepared_action.is_some() {
+            ReadyState::ExecutePreparedAction
+        } else {
+            ReadyState::SelectAction
+        };
+
         Self {
             health,
-            effort: (0, new_max_available_effort),
-            pending_action: None,
+            effort,
+            saved_effort: vec![],
             traits: new_traits,
+            state,
             ..self
         }
         .process_traits()
     }
 
-    // TODO overhaul 
+    // pub fn prepare(mut self, act: Act) -> Self {
+    //     self.pending_action = Some(act);
+    //     self.active = false;
+    //     self
+    // }
+
+    pub fn prepare(mut self, action: ActorAction) -> Self {
+        let req_eff_one_charge = action.charge_threshold();
+        let current_charge = action.current_charge();
+        
+        self.prepared_action = Some(action);
+
+        for _ in 1..=current_charge {
+            while !self.can_afford_effort(req_eff_one_charge) && self.available_effort() > 1 {
+                self = self.combine_lowest_effort_dice();
+            }
+
+            self = self.use_effort(req_eff_one_charge);
+        }
+
+        self.state = ReadyState::AllocateEffort;
+        self
+    }
+
+    pub fn cancel_action(mut self) -> Self {
+        self.prepared_action = None;
+        self.state = match self.state {
+            ReadyState::Done => ReadyState::Done,
+            _ => ReadyState::SelectAction,
+        };
+        self
+    }
+
+    // TODO overhaul
     // pub fn ability_self(&self) -> Vec<(String, Trait, u8)> {
     //     let mut result = vec![];
 
@@ -366,7 +498,9 @@ impl Actor {
                         advantage: 0,
                         attack_type: AttackType::Melee(fx.to_string()),
                         required_effort: *required_effort,
+                        allocated_effort: 0,
                         effects: effects.clone(),
+                        to_hit_threshold: 4, // TODO calculate from to-hit modifier and defence
                     }),
 
                     Effect::RangeAttack {
@@ -386,7 +520,9 @@ impl Actor {
                         advantage: 0,
                         attack_type: AttackType::Ranged(fx.to_string()),
                         required_effort: 3, // TODO read from effect
-                        effects: None,      // TODO read from effect
+                        allocated_effort: 0,
+                        effects: None, // TODO read from effect
+                        to_hit_threshold: 4,
                     }),
 
                     _ => None,
@@ -406,7 +542,9 @@ impl Actor {
                 advantage: 0,
                 attack_type: AttackType::Melee("fx-hit-1".to_string()),
                 required_effort: 2,
+                allocated_effort: 0,
                 effects: None,
+                to_hit_threshold: 4,
             }]
         } else {
             attacks
@@ -460,7 +598,13 @@ impl Actor {
 
     pub fn wound(mut self, w: Wound) -> Self {
         self.health = self.health.wound(w);
-        self
+
+        if self.is_concious() {
+            self
+        } else {
+            // K.O. => cancel any prepared action and skip turn
+            self.done()
+        }
     }
 
     pub fn is_alive(&self) -> bool {
@@ -530,9 +674,9 @@ impl Health {
         }
     }
 
-    fn next_turn(mut self, mut reserved_effort: u8) -> (Self, u8) {
-        if reserved_effort > 0 && self.pain > 0 {
-            reserved_effort = 0;
+    fn next_turn(mut self, mut saved_effort: Vec<D6>) -> (Self, Vec<D6>) {
+        if saved_effort.len() > 0 && self.pain > 0 {
+            saved_effort.pop();
             self.pain -= 1;
         }
 
@@ -541,10 +685,15 @@ impl Health {
             .max_wounds
             .checked_sub(self.pain + self.recieved_wounds)
             .unwrap_or(0);
-        let effort_inc = min(1, reserved_effort);
-        let new_available_effort = min(max_effort, remaing_health + effort_inc);
+        // let effort_inc = min(1, reserved_effort);
+        let new_available_effort = min(max_effort, remaing_health);
+        let mut effort: Vec<D6> = (1..=new_available_effort).map(|_| D6::roll()).collect();
 
-        (self, new_available_effort)
+        effort.append(&mut saved_effort);
+
+        // sorting the effort might be not es efficient but it makes implementing other logic much simpler
+        effort.sort();
+        (self, effort)
     }
 
     fn wound(mut self, w: Wound) -> Self {
@@ -577,7 +726,9 @@ pub struct AttackOption {
     pub advantage: i8,
     pub attack_type: AttackType,
     pub required_effort: u8,
+    pub allocated_effort: u8,
     pub effects: Option<Vec<(HitEffectCondition, HitEffect)>>,
+    pub to_hit_threshold: u8,
 }
 
 impl AttackOption {
@@ -594,11 +745,11 @@ impl AttackOption {
 
         let num_dice = self.required_effort;
 
-        let advantage = if self.required_effort > a.available_effort() {
-            -1
-        } else {
-            0
-        };
+        // let advantage = if self.required_effort > a.available_effort() {
+        //     -1
+        // } else {
+        //     0
+        // };
 
         Attack {
             origin_pos: a.pos,
@@ -608,9 +759,14 @@ impl AttackOption {
             name: self.name,
             attack_type: self.attack_type,
             num_dice,
-            advantage,
+            advantage: 0,
             effects: self.effects,
         }
+    }
+
+    pub fn allocate_effort(mut self, delta: i8) -> Self {
+        self.allocated_effort = max(0, self.allocated_effort as i16 + delta as i16) as u8;
+        self
     }
 }
 

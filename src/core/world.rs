@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use specs::join::JoinIter;
 use specs::prelude::*;
 use specs::World as SpecsWorld;
 
@@ -199,5 +200,37 @@ impl<'a> CoreWorld<'a> {
         }
 
         result
+    }
+
+    pub fn game_objects<'b>(&'b self) -> GameObjectIterator<'b> {
+        GameObjectIterator {
+            game_objects: self.game_objects.join(),
+            updates: &self.updates,
+        }
+    }
+}
+
+pub struct GameObjectIterator<'a> {
+    game_objects: JoinIter<&'a ReadStorage<'a, GameObjectCmp>>,
+    updates: &'a HashMap<ID, Option<GameObject>>,
+}
+
+impl<'a> Iterator for GameObjectIterator<'a> {
+    type Item = &'a GameObject;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(GameObjectCmp(go)) = self.game_objects.next() {
+            if self.updates.contains_key(&go.id()) {
+                if let Some(Some(go)) = self.updates.get(&go.id()) {
+                    return Some(go);
+                } else {
+                    continue;
+                }
+            } else {
+                return Some(&go)
+            }
+        }
+
+        None
     }
 }

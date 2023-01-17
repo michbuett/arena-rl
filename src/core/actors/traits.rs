@@ -103,6 +103,11 @@ pub enum Effect {
     GiveTrait(String, AbilityTarget),
     // GiveTrait(String, Trait, AbilityTarget),
 
+    Ability {
+        key: String,
+        target: AbilityTarget,
+    },
+
     GatherStrength,
 
     Keyword(Keyword),
@@ -200,6 +205,8 @@ pub enum Attr {
 
     /// Defensiv stat, increases/decreases the quality of a hit roll in melee combat
     MeleeBlock,
+    /// Defensiv stat, increases/decreases the quality of a hit roll in ranged combat
+    RangedBlock,
 }
 
 const ATTR_BASE_VALUE: i8 = 3;

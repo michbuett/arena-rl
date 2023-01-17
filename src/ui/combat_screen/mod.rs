@@ -5,8 +5,7 @@ use specs::prelude::*;
 
 use super::types::*;
 
-use crate::core::{CombatData, Map, DisplayStr};
-
+use crate::core::{CombatData, CombatPhase, DisplayStr, Map, TurnData};
 
 pub fn render(
     (x, y, w, h): (i32, i32, u32, u32),
@@ -32,7 +31,11 @@ fn render_screen_texts(
 ) {
     scene.texts.push(
         ScreenText::new(
-            DisplayStr::new(format!("Turn: {}, Score: {}", game.turn, game.score)),
+            DisplayStr::new(format!(
+                "Turn: {}, Score: {}",
+                render_turn_data(&game.turn_data),
+                game.score
+            )),
             ScreenPos(10, 10),
         )
         .color((20, 150, 20, 255))
@@ -91,4 +94,13 @@ pub fn init_scroll_offset(
             - TILE_WIDTH as i32,
         (viewport_height as i32 - map_height as i32) / 2,
     )
+}
+
+fn render_turn_data(td: &TurnData) -> String {
+    let phase_str = match td.phase {
+        CombatPhase::Plan => format!("Team {} selects actions ...", td.active_team().0),
+        CombatPhase::React => format!("Team {} reacting ...", td.active_team().0),
+        CombatPhase::Resolve => "Resolving results".to_string(),
+    };
+    format!("{} ({})", td.turn_number, phase_str)
 }

@@ -6,8 +6,8 @@ use crate::components::{
     GameObjectCmp, ObstacleCmp, Position, Sprites, WorldPos, ZLayerFloor, ZLayerGameObject,
 };
 use crate::core::{
-    Act, Action, Actor, AttackOption, AttackType, Direction, GameObject, Item, Obstacle,
-    SpriteConfig, TextureMap, AttackVector
+    Actor, ActorAction, AttackOption, AttackType, AttackVector, Attr, Direction, GameObject, Item,
+    Obstacle, SpriteConfig, TextureMap,
 };
 
 use super::{Hitbox, HoverAnimation};
@@ -110,12 +110,25 @@ fn get_sprites_actor(a: &Actor, texture_map: &TextureMap) -> Sprites {
             .collect(),
     );
 
-    if let Some(Act {
-        action: Action::Attack(_, attack, attack_vector, _),
+    // if let Some(Act {
+    //     action: Action::Attack(_, attack, attack_vector, _),
+    //     charge,
+    //     ..
+    // }) = &a.pending_action
+    if let Some(ActorAction::Attack {
+        attack,
+        attack_vector,
         ..
-    }) = &a.pending_action
+    }) = &a.prepared_action
     {
-        append_attack_indicator(&mut sprites, a.pos, attack, attack_vector, texture_map);
+        append_attack_indicator(
+            &mut sprites,
+            a.pos,
+            attack,
+            attack_vector,
+            // *charge,
+            texture_map,
+        );
     }
 
     append_status_icons(&mut sprites, a, texture_map);
@@ -144,6 +157,7 @@ fn append_attack_indicator(
     actor_pos: WorldPos,
     attack: &AttackOption,
     attack_vector: &AttackVector,
+    // charge: u8,
     texture_map: &TextureMap,
 ) {
     debug_assert!(!attack_vector.is_empty());
@@ -164,7 +178,8 @@ fn append_attack_indicator(
 
     sprites.push(s);
 
-    let num_icons = attack.required_effort;
+    let num_icons = attack.allocated_effort;
+    // let num_icons = attack.required_effort;
     let icon_space = std::f64::consts::FRAC_PI_8;
     let icon_offset = 0.5 * (num_icons as f64 - 1.0) * icon_space;
 
@@ -177,25 +192,12 @@ fn append_attack_indicator(
 }
 
 fn append_status_icons(sprites: &mut Vec<SpriteConfig>, a: &Actor, texture_map: &TextureMap) {
-    let mut icons = vec![];
-    let mut icons_wounds = (0..a.health.recieved_wounds)
+    let icons = (0..a.health.recieved_wounds)
         .map(|_| "icon-dot-red")
+        .chain((0..a.health.pain).map(|_| "icon-dot-yellow"))
+        .chain((0..a.attr(Attr::MeleeBlock).val()).map(|_| "icon-action-Defend"))
+        .chain((0..a.attr(Attr::RangedBlock).val()).map(|_| "icon-action-Defend"))
         .collect::<Vec<_>>();
-    let mut icons_pain = (0..a.health.pain)
-        .map(|_| "icon-dot-yellow")
-        .collect::<Vec<_>>();
-    let reserve_icon_name = if a.pending_action.is_none() {
-        "icon-dot-blue"
-    } else {
-        "icon-action-Defend"
-    };
-    let mut icons_reserve = (0..a.available_effort())
-        .map(|_| reserve_icon_name)
-        .collect::<Vec<_>>();
-
-    icons.append(&mut icons_wounds);
-    icons.append(&mut icons_pain);
-    icons.append(&mut icons_reserve);
 
     let icon_space = 16;
     let icon_offset = (icons.len() as i32 - 1) * icon_space / 2;
@@ -215,13 +217,13 @@ fn get_visual_elements(a: &Actor) -> Vec<String> {
         visual_elements.push("bg_active".to_string());
     }
 
-    if let Some(Act {
-        action: Action::Ambush(..),
-        ..
-    }) = &a.pending_action
-    {
-        visual_elements.push("action-indicator-Ambush".to_string());
-    }
+    // if let Some(Act {
+    //     action: Action::Ambush(..),
+    //     ..
+    // }) = &a.pending_action
+    // {
+    //     visual_elements.push("action-indicator-Ambush".to_string());
+    // }
 
     for l in a.visuals() {
         visual_elements.push(l.to_string());

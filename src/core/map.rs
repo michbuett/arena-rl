@@ -146,13 +146,19 @@ impl Map {
         }
     }
 
-    pub fn neighbors<'a>(&'a self, tile: Tile, obstacles: &'a ObstacleSet) -> NeighborTileIter<'a> {
+    pub fn neighbors<'a>(
+        &'a self,
+        tile: Tile,
+        distance: NonZeroU8,
+        obstacles: &'a ObstacleSet,
+    ) -> NeighborTileIter<'a> {
         NeighborTileIter {
             map: self,
             center_col: tile.column() as i32,
             center_row: tile.row() as i32,
             step: 0,
             obstacles,
+            distance,
         }
     }
 
@@ -413,19 +419,9 @@ impl<'a> Iterator for TileIter<'a> {
     }
 }
 
-const NEIGHBOR_CANDIDATES: [(i32, i32); 8] = [
-    (-1, -1),
-    (0, -1),
-    (1, -1),
-    (-1, 0),
-    (1, 0),
-    (-1, 1),
-    (0, 1),
-    (1, 1),
-];
-
 pub struct NeighborTileIter<'a> {
     map: &'a Map,
+    distance: NonZeroU8,
     center_col: i32,
     center_row: i32,
     step: usize,
@@ -436,10 +432,20 @@ impl<'a> Iterator for NeighborTileIter<'a> {
     type Item = Tile;
 
     fn next(&mut self) -> Option<Tile> {
-        while self.step < NEIGHBOR_CANDIDATES.len() {
+        let dim = 2 * self.distance.get() as usize + 1;
+        let last_step_num = dim * dim;
+
+        while self.step < last_step_num {
             self.step += 1;
 
-            let (dx, dy) = NEIGHBOR_CANDIDATES[self.step - 1];
+            let dx = ((self.step - 1) % dim) as i32 - self.distance.get() as i32;
+            let dy = ((self.step - 1) / dim) as i32 - self.distance.get() as i32;
+
+            if dx == 0 && dy == 0 {
+                // the center is not a neighbor
+                continue;
+            }
+
             let p = MapPos(self.center_col + dx, self.center_row + dy);
 
             if let Some(t) = self.map.get_tile(p) {
@@ -586,7 +592,7 @@ fn find_path_astar(m: &Map, start: Tile, goal: Tile, obstacles: &ObstacleSet) ->
         } else {
             // the current candidate is not the goal
             // -> ... and look its at its neighbors
-            for n in m.neighbors(tile, obstacles) {
+            for n in m.neighbors(tile, NonZeroU8::new(1).unwrap(), obstacles) {
                 let new_costs = current_costs + costs(&n, obstacles);
                 let costs = costs_so_far.get(&n);
 

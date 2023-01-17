@@ -10,11 +10,12 @@ mod visuals;
 mod world;
 
 
-pub use ai::AttackVector;
 pub use action::*;
+pub use ai::AttackVector;
+pub use dice::D6;
+pub use flow::{UserInput, InputContext, Game, CombatData, CombatState, TurnData, CombatPhase, step};
 pub use map::*;
 pub use model::*;
-pub use flow::{UserInput, InputContext, Game, CombatData, CombatState, step};
 pub use text::DisplayStr; 
 pub use visuals::*; 
 pub use world::*;
