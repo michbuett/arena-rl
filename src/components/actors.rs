@@ -56,7 +56,7 @@ fn lazy_insert_component_for_actor<'a>(entity: Entity, a: Actor, data: SysData) 
     }
 
     if let Some(text) = get_text_actor(&a) {
-        updater.insert((entity), text);
+        updater.insert(entity, text);
     } else {
         updater.remove::<Text>(entity);
     }

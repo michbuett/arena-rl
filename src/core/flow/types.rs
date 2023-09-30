@@ -2,7 +2,6 @@ use core::panic;
 use std::{cmp::Ordering, collections::HashMap, time::Instant};
 
 use specs::prelude::*;
-use specs::prelude::{Dispatcher, World};
 
 use crate::core::{
     ai::PlayerActionOptions, Card, Deck, DisplayStr, GameObject, MapPos, ObjectGenerator,
@@ -14,11 +13,8 @@ pub enum UserInput {
     Exit(),
     NewGame,
     SelectTeam(Vec<GameObject>),
-    // SelectAction(Act),
     SelectPlayerAction(PlayerAction),
     SelectActivationCard(usize),
-    // RunPreparedAction(Act),
-    // DelayPreparedAction(Act),
     AssigneActivation(ID, usize),
     SelectWorldPos(MapPos),
     StartScrolling(),
@@ -28,29 +24,14 @@ pub enum UserInput {
 
 #[derive(Debug, Clone)]
 pub enum InputContext {
-    // SelectedArea(MapPos, Vec<GameObject>, Vec<Act>),
-
-    // AllocateEffort {
-    //     options: Vec<(DisplayStr, ID, Act, u8)>,
-    //     remaining_effort: Vec<D6>
-    // },
-
-    // TriggerPreparedAction(Act),
-    // Opportunity(Opportunity, Vec<(Action, u8)>),
     ActivateActor {
         hand: Vec<Card>,
         possible_actors: HashMap<MapPos, (ID, u8)>,
         selected_card_idx: Option<usize>,
     },
     SelectAction {
-        // active_actor: Actor,
         options: PlayerActionOptions,
     },
-    // SelectActionAt {
-    //     selected_pos: MapPos,
-    //     objects_at_selected_pos: Vec<GameObject>,
-    //     options: PlayerActionOptions,
-    // },
 }
 
 pub enum Game<'a, 'b> {
@@ -105,10 +86,6 @@ impl<'a, 'b> CombatData<'a, 'b> {
         self.world.maintain();
         self
     }
-
-    // pub fn active_team(&self) -> Team {
-    //     self.teams.get(self.active_team_idx).unwrap().clone()
-    // }
 }
 
 enum StepChange {
@@ -185,8 +162,6 @@ impl StepResult {
                 }
             }
         }
-
-        // (state, turn, score, log)
     }
 }
 
@@ -196,19 +171,11 @@ pub enum CombatState {
     StartTurn(),
     FindActor(),
     AdvanceGame(),
-    // TriggerAction(EntityAction, Vec<EntityAction>),
-    // SelectAction(ID),
     SelectInitiative(),
     SelectPlayerAction(ID),
-    // PrepareAction(ID),
-    // ExecuteOrDelayAction(ID),
     WaitForUserInput(InputContext, Option<SelectedPos>),
-    // WaitForUserAction(Actor, Option<InputContext>),
     WaitUntil(Instant, Vec<PlayerAction>),
     ResolveAction(Vec<PlayerAction>),
-    // WaitUntil(Instant, Vec<EntityAction>),
-    // ResolveAction(Vec<EntityAction>),
-    // Win(Team),
 }
 
 #[derive(Debug, Clone)]
@@ -273,17 +240,6 @@ impl TurnState {
         }
     }
 
-    // TODO: find more elgant solution to mutate team data (e.g. after assigning activations)
-    // pub fn modify_team<F>(&mut self, team_id: TeamId, f: F)
-    // where
-    //     F: FnOnce(TeamData) -> TeamData,
-    // {
-    //     let idx = self.teams.iter().position(|t| t.team.id == team_id);
-    //     if let Some(idx) = idx {
-    //         self.teams[idx] = f(self.teams[idx].clone());
-    //     }
-    // }
-
     pub fn get_active_team(&self) -> &TeamData {
         &self.teams.get(self.active_team_idx).unwrap()
     }
@@ -310,25 +266,6 @@ impl TurnState {
         }
     }
 
-    // fn activate_next_team(&mut self) -> Option<&TeamData> {
-    //     if self.teams_left == 0 {
-    //         return None;
-    //     }
-
-    //     println!(
-    //         "activate next team - teams left: {}, active team: {}",
-    //         self.teams_left, self.active_team_idx
-    //     );
-    //     self.teams_left -= 1;
-    //     self.active_team_idx = (self.active_team_idx + 1) % self.teams.len();
-
-    //     println!(
-    //         "activate next team - teams left: {}, active team: {}",
-    //         self.teams_left, self.active_team_idx
-    //     );
-    //     self.teams.get(self.active_team_idx)
-    // }
-
     pub fn step(mut self) -> Self {
         // println!("\n[DEBUG] TurnData::step - current turn {}, phase: {:?}, active team index: {}, priority team index: {}", self.turn_number, self.phase, self.active_team_idx, self.priority_team_idx);
         if let CombatPhase::Planning = self.phase {
@@ -339,35 +276,17 @@ impl TurnState {
                 self.teams_left -= 1;
                 self.active_team_idx = (self.active_team_idx + 1) % self.teams.len();
             }
-
-            // let next_team = self.activate_next_team();
-            // if next_team.is_none() {
-            //     self.phase = CombatPhase::Action;
-            // }
         } else {
             self.priority_team_idx = (self.priority_team_idx + 1) % self.teams.len();
             self.active_team_idx = self.priority_team_idx;
             self.teams_left = self.teams.len();
             self.phase = CombatPhase::Planning;
             self.turn_number += 1;
-            // self.reset_team_data();
         }
 
         println!("[DEBUG] TurnData::step - current turn {}, phase: {:?}, active team index: {}, priority team index: {}", self.turn_number, self.phase, self.active_team_idx, self.priority_team_idx);
         self
     }
-
-    // fn reset_team_data(&mut self) {
-    //     for t in self.teams.iter_mut() {
-    //         t.ready = false;
-    //         if t.team.is_pc {
-    //             let num = std::cmp::min(5, 10 - t.hand.len());
-    //             let mut new_cards = (1..=num).map(|_| t.deck.deal()).collect::<Vec<_>>();
-
-    //             t.hand.append(&mut new_cards);
-    //         }
-    //     }
-    // }
 
     pub fn cmp_team_by_priority(&self, ta: TeamId, tb: TeamId) -> Ordering {
         if ta == tb {

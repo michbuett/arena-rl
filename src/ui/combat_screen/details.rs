@@ -137,7 +137,7 @@ fn draw_action_buttons(
 fn draw_cards(
     scene: &mut Scene,
     click_areas: &mut ClickAreas,
-    (viewport_width, viewport_height): (u32, u32),
+    (_viewport_width, viewport_height): (u32, u32),
     hand: &Vec<Card>,
     selected_card_idx: &Option<usize>,
 ) {
@@ -343,11 +343,10 @@ fn create_action_buttons(
         }
     }
 
-    // Todo: add butto to end turn
-    // result.push((
-    //     DisplayStr::new(format!("End Turn {}", game.turn)),
-    //     PlayerAction::EndTurn(game.active_team()),
-    // ));
+    result.push((
+        DisplayStr::new(format!("End Turn {}", game.turn.turn_number)),
+        PlayerAction::EndTurn(game.turn.get_active_team().team.clone()),
+    ));
 
     result
 }

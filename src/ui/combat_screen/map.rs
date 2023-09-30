@@ -5,8 +5,8 @@ use specs::prelude::*;
 
 use crate::components::{Position, Sprites, Text, ZLayerFX, ZLayerFloor, ZLayerGameObject};
 use crate::core::{
-    ActorAction, AttackType, CombatData, CombatState, InputContext, Map, MapPos, PlayerAction,
-    TextureMap, Tile, TileType, UserInput, WorldPos,
+    CombatData, CombatState, InputContext, Map, MapPos, TextureMap, Tile, TileType, UserInput,
+    WorldPos,
 };
 use crate::ui::{Align, ClickArea, Scene, ScreenCoord, ScreenPos, ScreenSprite};
 
@@ -22,8 +22,6 @@ pub type SystemData<'a> = (
 );
 
 type DefaultAction = (Option<MapPos>, HashMap<MapPos, UserInput>);
-
-// const EFFORT_BTN_SIZE: u8 = 50;
 
 pub fn render(
     viewport: (i32, i32, u32, u32),
@@ -189,7 +187,6 @@ fn render_action_buttons<'a>(
     default_action: DefaultAction,
 ) -> Vec<ClickArea> {
     let mut click_areas = vec![];
-    // let default_action = default_action.clone();
 
     click_areas.push(ClickArea {
         clipping_area: viewport,
@@ -204,76 +201,6 @@ fn render_action_buttons<'a>(
             UserInput::SelectWorldPos(clicked_pos)
         }),
     });
-
-    //     if let (Some(mp), Some(act)) = default_action.clone() {
-    //         // let mut modifications = vec![];
-
-    //         // if act.allow_hastening {
-    //         //     modifications.push((DisplayStr::new("Hasten"), act.clone().quicken()));
-    //         // }
-
-    //         // if act.allow_empowering {
-    //         //     modifications.push((DisplayStr::new("Empower"), act.clone().empower()));
-    //         // }
-
-    //         // if modifications.len() > 0 {
-    //         // // if let Some(max_effort) = act.allocated_effort {
-    //         //     // let default_effort = ((max_effort + 1) / 2) as u8;
-    //         //     let p = ScreenCoord::from_world_pos(mp.to_world_pos()).to_screen_pos(scroll_offset);
-    //         //     let total_height = modifications.len() as i32 * EFFORT_BTN_SIZE as i32;
-    //         //     // let total_height = max_effort as i32 * EFFORT_BTN_SIZE as i32;
-    //         //     let x = p.0 + (TILE_WIDTH / 2) as i32;
-    //         //     let y0 = p.1 - (total_height / 2);
-
-    //         //     for (i, (txt, modified_act)) in modifications.drain(..).enumerate() {
-    //         //     // for i in 1..=max_effort {
-    //         //         // let a = act.clone();
-    //         //         let y = y0 + (i as i32 - 1) * EFFORT_BTN_SIZE as i32;
-    //         //         let pos = ScreenPos(x, y);
-    //         //         // let txt = DisplayStr::new(format!("{}", i));
-
-    //         //         scene.texts.push(
-    //         //             ScreenText::new(txt, pos)
-    //         //                 .background((250, 251, 252, 180))
-    //         //                 .text_align(Align::MidCenter)
-    //         //                 .width(EFFORT_BTN_SIZE.into())
-    //         //                 .height(EFFORT_BTN_SIZE.into()),
-    //         //         );
-
-    //         //         click_areas.push(ClickArea {
-    //         //             clipping_area: (x, y, EFFORT_BTN_SIZE.into(), EFFORT_BTN_SIZE.into()),
-    //         //             action: Box::new(move |_| {
-    //         //                 return UserInput::SelectAction(modified_act.clone());
-    //         //                 // return UserInput::SelectAction(a.clone().effort(i));
-    //         //             }),
-    //         //         });
-    //         //     }
-    //         // }
-
-    //         click_areas.push(ClickArea {
-    //             clipping_area: viewport,
-    //             action: Box::new(move |screen_pos| {
-    //                 let clicked_pos = screen_pos_to_map_pos(screen_pos, scroll_offset);
-
-    //                 if clicked_pos == mp {
-    //                     return UserInput::SelectPlayerAction(act.clone());
-    //                     // return UserInput::SelectAction(act.clone());
-    //                 }
-
-    //                 UserInput::SelectWorldPos(clicked_pos)
-    //             }),
-    //         });
-    //     } else {
-    //         click_areas.push(ClickArea {
-    //             clipping_area: viewport,
-    //             action: Box::new(move |screen_pos| {
-    //                 UserInput::SelectWorldPos(screen_pos_to_map_pos(screen_pos, scroll_offset))
-    //             }),
-    //         });
-    //     }
-
-    //     // if let Some(action) = default_action.1  {
-    //     // }
 
     click_areas
 }
@@ -303,7 +230,6 @@ fn get_default_action(game: &CombatData) -> DefaultAction {
             InputContext::ActivateActor {
                 possible_actors,
                 selected_card_idx: Some(idx),
-                // selected_card_idx,
                 ..
             } => {
                 let card = game.turn.get_active_team().hand[*idx];
@@ -311,7 +237,6 @@ fn get_default_action(game: &CombatData) -> DefaultAction {
                     .iter()
                     .filter_map(|(pos, (id, max))| {
                         if card.value <= *max {
-                            // Some((*pos, PlayerAction::AssigneActivation(*id, card)))
                             Some((*pos, UserInput::AssigneActivation(*id, *idx)))
                         } else {
                             None
@@ -329,83 +254,11 @@ fn get_default_action(game: &CombatData) -> DefaultAction {
     }
 
     (None, HashMap::new())
-    // match &game.state {
-    //     CombatState::WaitForUserAction(
-    //         _,
-    //         Some(InputContext::SelectActionAt {
-    //             selected_pos,
-    //             options,
-    //             ..
-    //         }),
-    //     ) => {
-    //         let selected_action = options
-    //             .get(selected_pos)
-    //             .and_then(|action_list| action_list.first().cloned());
-
-    //         (Some(*selected_pos), selected_action)
-    //     }
-    //     // CombatState::WaitForUserAction(_, Some(InputContext::SelectedArea(pos, _, actions_at))) => {
-    //     //     let selected_pos = Some(*pos);
-    //     //     let selected_action = actions_at.iter().cloned().next().map(|a| a);
-
-    //     //     (selected_pos, selected_action)
-    //     // }
-    //     _ => (None, None),
-    // }
 }
 
-// fn get_icons(game_state: &CombatState) -> Vec<(WorldPos, String)> {
 fn get_icons(action: &DefaultAction) -> Vec<(WorldPos, String)> {
     match &action.1 {
         // Some(player_action) => map_player_action_to_floor_icon(player_action),
         _ => vec![],
     }
 }
-
-fn map_actor_action_to_floor_icons(action: &ActorAction) -> Vec<(WorldPos, String)> {
-    match action {
-        ActorAction::MoveTo { path, .. } => path
-            .iter()
-            .map(|tile| (tile.to_world_pos(), "icon-floor-MoveTo".to_string()))
-            .collect(),
-
-        ActorAction::Attack {
-            attack,
-            attack_vector,
-            ..
-        } => attack_vector
-            .iter()
-            .map(|(map_pos, _is_target, cover, _id)| {
-                let num = if cover.obscured > 0 { 2 } else { 1 };
-                let p = map_pos.to_world_pos();
-
-                match attack.attack_type {
-                    AttackType::Melee(..) => (p, format!("icon-floor-RangedAttack-{}", num)),
-                    AttackType::Ranged(..) => (p, format!("icon-floor-RangedAttack-{}", num)),
-                }
-            })
-            .collect(),
-
-        _ => vec![],
-    }
-}
-
-fn map_player_action_to_floor_icon(action: &PlayerAction) -> Vec<(WorldPos, String)> {
-    match action {
-        PlayerAction::PrepareAction(_, aa) => map_actor_action_to_floor_icons(aa),
-
-        _ => vec![],
-    }
-}
-
-// fn map_action_icons(actions: &Vec<PlayerAction>) -> String {
-//     if actions.len() > 1 {
-//         return "icon-floor-MultipleActions".to_string();
-//     }
-
-//     match actions.first() {
-//         Some(PlayerAction::PrepareAction(_, aa)) => "icon-floor-UnkownAction".to_string(),
-
-//         _ => "icon-floor-UnkownAction".to_string(),
-//     }
-// }
