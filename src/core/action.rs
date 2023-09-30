@@ -7,12 +7,13 @@ use super::actors::{
     Team, Wound, ID,
 };
 use super::ai::find_charge_path;
-use super::{Change, CoreWorld, HitEffect, SuperLineIter, D6};
+use super::{Card, Change, CoreWorld, HitEffect, SuperLineIter, D6};
 
 #[derive(Debug, Clone)]
 pub enum PlayerAction {
     StartTurn(ID),
     EndTurn(Team),
+    AssigneActivation(ID, Card),
     SaveEffort(ID),
     CombineEffortDice(ID),
     ActivateActor(ID),
@@ -37,7 +38,6 @@ pub enum ActorAction {
         msg: String,
     },
     // Ambush(AttackOption),
-
     AddTrait {
         targets: Vec<ID>,
         trait_ref: String,
@@ -527,6 +527,12 @@ pub fn run_player_action<'a>(action: PlayerAction, mut cw: CoreWorld) -> ActionR
             ActionResultBuilder::new(cw)
         }
 
+        PlayerAction::AssigneActivation(id, card) => {
+            println!("[ACTOR] assign activation {:?}", card);
+            cw.modify_actor(id, |a| a.assigne_activation(card));
+            ActionResultBuilder::new(cw)
+        }
+
         PlayerAction::ActivateActor(id) => {
             if let Some(actor) = cw.find_actor(|a| a.active) {
                 cw.modify_actor(actor.id, |a| a.deactivate());
@@ -608,7 +614,9 @@ fn run_actor_action<'a>(actor_id: ID, action: ActorAction, cw: CoreWorld) -> Act
 
         ActorAction::Attack { target, attack, .. } => handle_attack(actor_id, target, attack, cw),
 
-        ActorAction::AddTrait { targets, trait_ref, ..} => handle_add_trait(targets, trait_ref, cw),
+        ActorAction::AddTrait {
+            targets, trait_ref, ..
+        } => handle_add_trait(targets, trait_ref, cw),
     }
 }
 

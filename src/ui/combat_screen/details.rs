@@ -1,11 +1,13 @@
 use crate::core::{
-    Actor, ActorAction, CombatData, CombatState, DisplayStr, GameObject, Health, InputContext,
-    MapPos, PlayerAction, Trait, TraitSource, UserInput, D6,
+    Actor, ActorAction, Card, CombatData, CombatState, DisplayStr, GameObject, Health,
+    InputContext, MapPos, PlayerAction, SelectedPos, Trait, TraitSource, UserInput, D6,
 };
 use crate::ui::types::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenText};
 
 const DLG_WIDTH: u32 = 400;
 const BTN_HEIGHT: u32 = 65;
+const CARD_WIDTH: u32 = 120;
+const CARD_HEIGHT: u32 = 150;
 
 pub fn render(
     scene: &mut Scene,
@@ -13,31 +15,55 @@ pub fn render(
     viewport: (u32, u32),
     game: &CombatData,
 ) {
-    if let CombatState::WaitForUserAction(_, ctxt) = &game.state {
-        match ctxt {
-            Some(InputContext::SelectActionAt {
-                selected_pos,
-                objects_at_selected_pos,
-                options,
-            }) => {
-                let actions = options.get(&selected_pos);
-                draw_area_details(scene, viewport.0, *selected_pos, objects_at_selected_pos);
+    if let CombatState::WaitForUserInput(ctxt, selected_pos) = &game.state {
+        if let Some(SelectedPos { pos, objects }) = selected_pos {
+            draw_area_details(scene, viewport.0, *pos, objects);
+
+            if let InputContext::SelectAction { options, .. } = ctxt {
+                let actions = options.get(pos);
                 draw_action_buttons(scene, click_areas, game, viewport, actions);
             }
-
-            // Some(InputContext::SelectedArea(p, objects, actions)) => {
-            //     draw_area_details(scene, viewport.0, *p, objects);
-            //     draw_action_buttons(scene, click_areas, game, viewport, Some(actions));
-            // }
-
-            // Some(InputContext::TriggerPreparedAction(act)) => {
-            //     draw_action_details(scene, viewport.0, act);
-            //     draw_exec_phase_buttons(scene, click_areas, viewport, act);
-            // }
-            _ => {
-                draw_action_buttons(scene, click_areas, game, viewport, None);
-            }
         }
+
+        if let InputContext::ActivateActor {
+            hand,
+            selected_card_idx,
+            ..
+        } = ctxt
+        {
+            draw_cards(scene, click_areas, viewport, hand, selected_card_idx);
+        }
+
+        // match ctxt {
+        //     // InputContext::SelectActionAt {
+        //     //     selected_pos,
+        //     //     objects_at_selected_pos,
+        //     //     options,
+        //     // } => {
+        //     //     let actions = options.get(&selected_pos);
+        //     //     draw_action_buttons(scene, click_areas, game, viewport, actions);
+        //     // }
+        //     InputContext::ActivateActor {
+        //         hand,
+        //         selected_card_idx,
+        //         ..
+        //     } => {
+        //         draw_cards(scene, click_areas, viewport, hand, selected_card_idx);
+        //     }
+
+        //     // Some(InputContext::SelectedArea(p, objects, actions)) => {
+        //     //     draw_area_details(scene, viewport.0, *p, objects);
+        //     //     draw_action_buttons(scene, click_areas, game, viewport, Some(actions));
+        //     // }
+
+        //     // Some(InputContext::TriggerPreparedAction(act)) => {
+        // //     //     draw_action_details(scene, viewport.0, act);
+        // //     //     draw_exec_phase_buttons(scene, click_areas, viewport, act);
+        //     // }
+        //     _ => {
+        //         draw_action_buttons(scene, click_areas, game, viewport, None);
+        //     }
+        // }
     };
 }
 
@@ -105,6 +131,44 @@ fn draw_action_buttons(
         });
 
         y += BTN_HEIGHT as i32;
+    }
+}
+
+fn draw_cards(
+    scene: &mut Scene,
+    click_areas: &mut ClickAreas,
+    (viewport_width, viewport_height): (u32, u32),
+    hand: &Vec<Card>,
+    selected_card_idx: &Option<usize>,
+) {
+    for (idx, Card { value, suite }) in hand.iter().enumerate() {
+        let x = 50 + idx as i32 * (CARD_WIDTH as i32 + 15);
+        let mut y = viewport_height as i32 - CARD_HEIGHT as i32 - 10;
+        let txt = format!("{} of {:?}", value, suite);
+        let border_color = (23, 22, 21, 255);
+
+        if let Some(selected_card_idx) = selected_card_idx {
+            if *selected_card_idx == idx {
+                // TODO: overiding border color does not work at the moment because of the
+                //       caching mechanic of text boxes
+                // border_color = (230, 172, 21, 255);
+                y -= 20;
+            }
+        }
+
+        scene.texts.push(
+            ScreenText::new(DisplayStr::new(txt), ScreenPos(x, y))
+                .width(CARD_WIDTH)
+                .height(CARD_HEIGHT)
+                .padding(5)
+                .background((252, 251, 250, 255))
+                .border(5, border_color),
+        );
+
+        click_areas.push(ClickArea {
+            clipping_area: (x, y, CARD_WIDTH, CARD_HEIGHT),
+            action: Box::new(move |_| UserInput::SelectActivationCard(idx)),
+        });
     }
 }
 
@@ -214,6 +278,13 @@ fn describe_actor(a: &Actor) -> String {
         _ => format!("{:?}", &a.prepared_action),
     };
 
+    let activation_str = a
+        .activations
+        .iter()
+        .map(|card| format!("[{} of {:?}]", card.value, card.suite))
+        .collect::<Vec<_>>()
+        .join(" ");
+
     let effort_str = a
         .effort_dice()
         .iter()
@@ -230,8 +301,8 @@ fn describe_actor(a: &Actor) -> String {
     let debug_str = format!("[DEBUG state: {:?}]", a.state);
 
     format!(
-        "\n{} (condition: {})\n\nAction: {}\n\nEffort: {}\n\nTraits:\n - {}\n\n{}",
-        a.name, condition, action_str, effort_str, traits_str, debug_str
+        "\n{} (condition: {})\n\nAction: {}\n\nEffort: {}\n\nActivations: {}\n\nTraits:\n - {}\n\n{}",
+        a.name, condition, action_str, effort_str, activation_str, traits_str, debug_str
     )
 }
 
@@ -272,11 +343,11 @@ fn create_action_buttons(
         }
     }
 
-    result.push((
-        DisplayStr::new(format!("End Turn {}", game.turn)),
-        PlayerAction::EndTurn(game.active_team()),
-        // Act::end_turn(game.active_team()),
-    ));
+    // Todo: add butto to end turn
+    // result.push((
+    //     DisplayStr::new(format!("End Turn {}", game.turn)),
+    //     PlayerAction::EndTurn(game.active_team()),
+    // ));
 
     result
 }

@@ -118,7 +118,7 @@ impl Hitbox {
                 obstacle: Obstacle::Impediment(NonZeroU8::new(80).unwrap(), 2),
                 offset: (-0.5, -0.5),
                 dim: (1.0, 1.0),
-            }
+            },
         }
     }
 
@@ -129,19 +129,19 @@ impl Hitbox {
                 obstacle: Obstacle::Impediment(NonZeroU8::new(50).unwrap(), 1),
                 offset: (-0.4, -0.4),
                 dim: (0.8, 0.8),
-            }
+            },
         }
     }
 
     pub fn obstacle_at(&self, pos: (f32, f32), p0: (f32, f32), p1: (f32, f32)) -> Option<Obstacle> {
         if let Some(inner_hit_area) = self.inner.as_ref() {
             if inner_hit_area.intersect_line_at(pos, p0, p1) {
-                return Some(inner_hit_area.obstacle)
+                return Some(inner_hit_area.obstacle);
             }
         }
 
         if self.outer.intersect_line_at(pos, p0, p1) {
-            return Some(self.outer.obstacle)
+            return Some(self.outer.obstacle);
         }
 
         None
@@ -218,12 +218,10 @@ impl Text {
         self
     }
 
-    // pub fn offset(self, dx: i32, dy: i32) -> Self {
-    //     Self {
-    //         offset: Some((dx, dy)),
-    //         ..self
-    //     }
-    // }
+    pub fn offset(mut self, dx: i32, dy: i32) -> Self {
+        self.offset = Some((dx, dy));
+        self
+    }
 
     pub fn padding(self, padding: u32) -> Self {
         Self { padding, ..self }

@@ -5,7 +5,7 @@ use specs::prelude::*;
 
 use super::types::*;
 
-use crate::core::{CombatData, CombatPhase, DisplayStr, Map, TurnData};
+use crate::core::{CombatData, CombatPhase, DisplayStr, Map, TurnState};
 
 pub fn render(
     (x, y, w, h): (i32, i32, u32, u32),
@@ -33,8 +33,8 @@ fn render_screen_texts(
         ScreenText::new(
             DisplayStr::new(format!(
                 "Turn: {}, Score: {}",
-                render_turn_data(&game.turn_data),
-                game.score
+                render_turn_data(&game.turn),
+                game.score,
             )),
             ScreenPos(10, 10),
         )
@@ -96,11 +96,10 @@ pub fn init_scroll_offset(
     )
 }
 
-fn render_turn_data(td: &TurnData) -> String {
+fn render_turn_data(td: &TurnState) -> String {
     let phase_str = match td.phase {
-        CombatPhase::Plan => format!("Team {} selects actions ...", td.active_team().0),
-        CombatPhase::React => format!("Team {} reacting ...", td.active_team().0),
-        CombatPhase::Resolve => "Resolving results".to_string(),
+        CombatPhase::Planning => "Plan your turn",
+        CombatPhase::Action => "Time for action",
     };
     format!("{} ({})", td.turn_number, phase_str)
 }

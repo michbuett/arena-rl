@@ -6,11 +6,11 @@ use crate::components::{
     GameObjectCmp, ObstacleCmp, Position, Sprites, WorldPos, ZLayerFloor, ZLayerGameObject,
 };
 use crate::core::{
-    Actor, ActorAction, AttackOption, AttackType, AttackVector, Attr, Direction, GameObject, Item,
-    Obstacle, SpriteConfig, TextureMap,
+    Actor, ActorAction, AttackOption, AttackType, AttackVector, Attr, Card, Direction, GameObject,
+    Item, Obstacle, SpriteConfig, Suite, TextureMap,
 };
 
-use super::{Hitbox, HoverAnimation};
+use super::{Hitbox, HoverAnimation, Text};
 
 type SysData<'a> = (
     Read<'a, LazyUpdate>,
@@ -55,6 +55,12 @@ fn lazy_insert_component_for_actor<'a>(entity: Entity, a: Actor, data: SysData) 
         updater.insert(entity, Position(a.pos));
     }
 
+    if let Some(text) = get_text_actor(&a) {
+        updater.insert((entity), text);
+    } else {
+        updater.remove::<Text>(entity);
+    }
+
     updater.insert(entity, get_sprites_actor(&a, &texture_map));
     updater.insert(
         entity,
@@ -97,6 +103,31 @@ fn lazy_insert_component_for_items<'a>(entity: Entity, pos: WorldPos, item: Item
 
     updater.insert(entity, ZLayerFloor);
     updater.insert(entity, GameObjectCmp(GameObject::Item(pos, item)));
+}
+
+fn get_text_actor(a: &Actor) -> Option<Text> {
+    return a
+        .activations
+        .iter()
+        .map(activation_str)
+        .fold(None, |acc, s| match acc {
+            Some(beginng) => Some(format!("{}, {}", beginng, s)),
+            None => Some(s),
+        })
+        .map(|txt| Text::new(txt, crate::ui::FontFace::Normal).offset(-32, 16));
+}
+
+fn activation_str(card: &Card) -> String {
+    format!(
+        "[{}{}]",
+        card.value,
+        match card.suite {
+            Suite::Clubs => "C",
+            Suite::Hearts => "H",
+            Suite::Spades => "S",
+            Suite::Diamonds => "D",
+        }
+    )
 }
 
 fn get_sprites_actor(a: &Actor, texture_map: &TextureMap) -> Sprites {

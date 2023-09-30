@@ -1,11 +1,12 @@
+use std::collections::HashMap;
 use std::vec;
 
 use specs::prelude::*;
 
 use crate::components::{Position, Sprites, Text, ZLayerFX, ZLayerFloor, ZLayerGameObject};
 use crate::core::{
-    ActorAction, AttackType, CombatData, CombatState, InputContext, Map, MapPos,
-    PlayerAction, TextureMap, Tile, TileType, UserInput, WorldPos,
+    ActorAction, AttackType, CombatData, CombatState, InputContext, Map, MapPos, PlayerAction,
+    TextureMap, Tile, TileType, UserInput, WorldPos,
 };
 use crate::ui::{Align, ClickArea, Scene, ScreenCoord, ScreenPos, ScreenSprite};
 
@@ -20,7 +21,7 @@ pub type SystemData<'a> = (
     Read<'a, TextureMap>,
 );
 
-type DefaultAction = (Option<MapPos>, Option<PlayerAction>);
+type DefaultAction = (Option<MapPos>, HashMap<MapPos, UserInput>);
 
 // const EFFORT_BTN_SIZE: u8 = 50;
 
@@ -49,9 +50,6 @@ pub fn render(
     // (3) draw game objects (e.g. characters, obstacles, ...)
     render_game_objects(&mut scene, scroll_offset, &pos, &sprites, &zlayer_gameobj);
 
-    let click_areas = render_action_buttons(viewport, scroll_offset, &default_action);
-    // let click_areas = render_action_buttons(&mut scene, viewport, scroll_offset, &default_action);
-
     // (4) draw visual effects
     render_fx(
         &mut scene,
@@ -66,7 +64,10 @@ pub fn render(
     // (5) draw texts which are positioned relative to game objects
     render_texts(&mut scene, scroll_offset, &pos, &texts);
 
-    (scene, click_areas)
+    (
+        scene,
+        render_action_buttons(viewport, scroll_offset, default_action),
+    )
 }
 
 fn render_floor_objects<'a>(
@@ -185,79 +186,94 @@ fn render_action_buttons<'a>(
     // scene: &mut Scene,
     viewport: (i32, i32, u32, u32),
     scroll_offset: (i32, i32),
-    default_action: &DefaultAction,
+    default_action: DefaultAction,
 ) -> Vec<ClickArea> {
     let mut click_areas = vec![];
+    // let default_action = default_action.clone();
 
-    if let (Some(mp), Some(act)) = default_action.clone() {
-        // let mut modifications = vec![];
+    click_areas.push(ClickArea {
+        clipping_area: viewport,
+        action: Box::new(move |screen_pos| {
+            let clicked_pos = screen_pos_to_map_pos(screen_pos, scroll_offset);
+            let possible_inputs = default_action.1.clone();
 
-        // if act.allow_hastening {
-        //     modifications.push((DisplayStr::new("Hasten"), act.clone().quicken()));
-        // }
+            if let Some(input) = possible_inputs.get(&clicked_pos) {
+                return input.clone();
+            }
 
-        // if act.allow_empowering {
-        //     modifications.push((DisplayStr::new("Empower"), act.clone().empower()));
-        // }
+            UserInput::SelectWorldPos(clicked_pos)
+        }),
+    });
 
-        // if modifications.len() > 0 {
-        // // if let Some(max_effort) = act.allocated_effort {
-        //     // let default_effort = ((max_effort + 1) / 2) as u8;
-        //     let p = ScreenCoord::from_world_pos(mp.to_world_pos()).to_screen_pos(scroll_offset);
-        //     let total_height = modifications.len() as i32 * EFFORT_BTN_SIZE as i32;
-        //     // let total_height = max_effort as i32 * EFFORT_BTN_SIZE as i32;
-        //     let x = p.0 + (TILE_WIDTH / 2) as i32;
-        //     let y0 = p.1 - (total_height / 2);
+    //     if let (Some(mp), Some(act)) = default_action.clone() {
+    //         // let mut modifications = vec![];
 
-        //     for (i, (txt, modified_act)) in modifications.drain(..).enumerate() {
-        //     // for i in 1..=max_effort {
-        //         // let a = act.clone();
-        //         let y = y0 + (i as i32 - 1) * EFFORT_BTN_SIZE as i32;
-        //         let pos = ScreenPos(x, y);
-        //         // let txt = DisplayStr::new(format!("{}", i));
+    //         // if act.allow_hastening {
+    //         //     modifications.push((DisplayStr::new("Hasten"), act.clone().quicken()));
+    //         // }
 
-        //         scene.texts.push(
-        //             ScreenText::new(txt, pos)
-        //                 .background((250, 251, 252, 180))
-        //                 .text_align(Align::MidCenter)
-        //                 .width(EFFORT_BTN_SIZE.into())
-        //                 .height(EFFORT_BTN_SIZE.into()),
-        //         );
+    //         // if act.allow_empowering {
+    //         //     modifications.push((DisplayStr::new("Empower"), act.clone().empower()));
+    //         // }
 
-        //         click_areas.push(ClickArea {
-        //             clipping_area: (x, y, EFFORT_BTN_SIZE.into(), EFFORT_BTN_SIZE.into()),
-        //             action: Box::new(move |_| {
-        //                 return UserInput::SelectAction(modified_act.clone());
-        //                 // return UserInput::SelectAction(a.clone().effort(i));
-        //             }),
-        //         });
-        //     }
-        // }
+    //         // if modifications.len() > 0 {
+    //         // // if let Some(max_effort) = act.allocated_effort {
+    //         //     // let default_effort = ((max_effort + 1) / 2) as u8;
+    //         //     let p = ScreenCoord::from_world_pos(mp.to_world_pos()).to_screen_pos(scroll_offset);
+    //         //     let total_height = modifications.len() as i32 * EFFORT_BTN_SIZE as i32;
+    //         //     // let total_height = max_effort as i32 * EFFORT_BTN_SIZE as i32;
+    //         //     let x = p.0 + (TILE_WIDTH / 2) as i32;
+    //         //     let y0 = p.1 - (total_height / 2);
 
-        click_areas.push(ClickArea {
-            clipping_area: viewport,
-            action: Box::new(move |screen_pos| {
-                let clicked_pos = screen_pos_to_map_pos(screen_pos, scroll_offset);
+    //         //     for (i, (txt, modified_act)) in modifications.drain(..).enumerate() {
+    //         //     // for i in 1..=max_effort {
+    //         //         // let a = act.clone();
+    //         //         let y = y0 + (i as i32 - 1) * EFFORT_BTN_SIZE as i32;
+    //         //         let pos = ScreenPos(x, y);
+    //         //         // let txt = DisplayStr::new(format!("{}", i));
 
-                if clicked_pos == mp {
-                    return UserInput::SelectPlayerAction(act.clone());
-                    // return UserInput::SelectAction(act.clone());
-                }
+    //         //         scene.texts.push(
+    //         //             ScreenText::new(txt, pos)
+    //         //                 .background((250, 251, 252, 180))
+    //         //                 .text_align(Align::MidCenter)
+    //         //                 .width(EFFORT_BTN_SIZE.into())
+    //         //                 .height(EFFORT_BTN_SIZE.into()),
+    //         //         );
 
-                UserInput::SelectWorldPos(clicked_pos)
-            }),
-        });
-    } else {
-        click_areas.push(ClickArea {
-            clipping_area: viewport,
-            action: Box::new(move |screen_pos| {
-                UserInput::SelectWorldPos(screen_pos_to_map_pos(screen_pos, scroll_offset))
-            }),
-        });
-    }
+    //         //         click_areas.push(ClickArea {
+    //         //             clipping_area: (x, y, EFFORT_BTN_SIZE.into(), EFFORT_BTN_SIZE.into()),
+    //         //             action: Box::new(move |_| {
+    //         //                 return UserInput::SelectAction(modified_act.clone());
+    //         //                 // return UserInput::SelectAction(a.clone().effort(i));
+    //         //             }),
+    //         //         });
+    //         //     }
+    //         // }
 
-    // if let Some(action) = default_action.1  {
-    // }
+    //         click_areas.push(ClickArea {
+    //             clipping_area: viewport,
+    //             action: Box::new(move |screen_pos| {
+    //                 let clicked_pos = screen_pos_to_map_pos(screen_pos, scroll_offset);
+
+    //                 if clicked_pos == mp {
+    //                     return UserInput::SelectPlayerAction(act.clone());
+    //                     // return UserInput::SelectAction(act.clone());
+    //                 }
+
+    //                 UserInput::SelectWorldPos(clicked_pos)
+    //             }),
+    //         });
+    //     } else {
+    //         click_areas.push(ClickArea {
+    //             clipping_area: viewport,
+    //             action: Box::new(move |screen_pos| {
+    //                 UserInput::SelectWorldPos(screen_pos_to_map_pos(screen_pos, scroll_offset))
+    //             }),
+    //         });
+    //     }
+
+    //     // if let Some(action) = default_action.1  {
+    //     // }
 
     click_areas
 }
@@ -280,35 +296,68 @@ fn map_tile_to_texture(t: Tile) -> Option<String> {
 }
 
 fn get_default_action(game: &CombatData) -> DefaultAction {
-    match &game.state {
-        CombatState::WaitForUserAction(
-            _,
-            Some(InputContext::SelectActionAt {
-                selected_pos,
-                options,
+    if let CombatState::WaitForUserInput(ctxt, selected_pos) = &game.state {
+        let selected_mpos = selected_pos.as_ref().map(|sp| sp.pos.clone());
+
+        match ctxt {
+            InputContext::ActivateActor {
+                possible_actors,
+                selected_card_idx: Some(idx),
+                // selected_card_idx,
                 ..
-            }),
-        ) => {
-            let selected_action = options
-                .get(selected_pos)
-                .and_then(|action_list| action_list.first().cloned());
+            } => {
+                let card = game.turn.get_active_team().hand[*idx];
+                let activations = possible_actors
+                    .iter()
+                    .filter_map(|(pos, (id, max))| {
+                        if card.value <= *max {
+                            // Some((*pos, PlayerAction::AssigneActivation(*id, card)))
+                            Some((*pos, UserInput::AssigneActivation(*id, *idx)))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<HashMap<_, _>>();
 
-            (Some(*selected_pos), selected_action)
+                return (selected_mpos, activations);
+            }
+
+            _ => {
+                return (selected_mpos, HashMap::new());
+            }
         }
-        // CombatState::WaitForUserAction(_, Some(InputContext::SelectedArea(pos, _, actions_at))) => {
-        //     let selected_pos = Some(*pos);
-        //     let selected_action = actions_at.iter().cloned().next().map(|a| a);
-
-        //     (selected_pos, selected_action)
-        // }
-        _ => (None, None),
     }
+
+    (None, HashMap::new())
+    // match &game.state {
+    //     CombatState::WaitForUserAction(
+    //         _,
+    //         Some(InputContext::SelectActionAt {
+    //             selected_pos,
+    //             options,
+    //             ..
+    //         }),
+    //     ) => {
+    //         let selected_action = options
+    //             .get(selected_pos)
+    //             .and_then(|action_list| action_list.first().cloned());
+
+    //         (Some(*selected_pos), selected_action)
+    //     }
+    //     // CombatState::WaitForUserAction(_, Some(InputContext::SelectedArea(pos, _, actions_at))) => {
+    //     //     let selected_pos = Some(*pos);
+    //     //     let selected_action = actions_at.iter().cloned().next().map(|a| a);
+
+    //     //     (selected_pos, selected_action)
+    //     // }
+    //     _ => (None, None),
+    // }
 }
 
 // fn get_icons(game_state: &CombatState) -> Vec<(WorldPos, String)> {
 fn get_icons(action: &DefaultAction) -> Vec<(WorldPos, String)> {
     match &action.1 {
-        Some(player_action) => map_player_action_to_floor_icon(player_action),
+        // Some(player_action) => map_player_action_to_floor_icon(player_action),
         _ => vec![],
     }
 }

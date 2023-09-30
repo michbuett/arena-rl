@@ -4,7 +4,7 @@ use std::time::Instant;
 
 pub use super::traits::*;
 
-use crate::core::{ActorAction, DisplayStr, WorldPos, D6};
+use crate::core::{ActorAction, Card, DisplayStr, RndDeck, WorldPos, D6};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct ID(Instant, u64, u64);
@@ -28,12 +28,18 @@ pub enum AiBehaviour {
     Default,
 }
 
+pub type TeamId = u8; // TODO use opaque type
+
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Team(pub &'static str, pub u8, pub bool);
+pub struct Team {
+    pub name: &'static str,
+    pub id: TeamId,
+    pub is_pc: bool,
+}
 
 impl Team {
     pub fn is_member(&self, a: &Actor) -> bool {
-        self.1 == a.team.1
+        self.id == a.team.id
     }
 }
 
@@ -79,6 +85,7 @@ impl ActorBuilder {
             team: self.team,
             visual: self.visual,
             state: ReadyState::Done,
+            activations: vec![],
         }
         .process_traits();
 
@@ -228,6 +235,7 @@ pub struct Actor {
     pub active: bool,
     pub team: Team,
     pub pos: WorldPos,
+    pub activations: Vec<Card>,
 
     // #[deprecated]
     // pub pending_action: Option<Act>,
@@ -265,18 +273,33 @@ impl Actor {
         self.behaviour.is_none()
     }
 
+    pub fn assigne_activation(mut self, card: Card) -> Self {
+        self.activations.push(card);
+        self
+    }
+
+    /// Returns the max value a the next activation card can have
+    pub fn max_available_activation_val(&self) -> u8 {
+        14
+        // TODO: determine value based on assigned activation
+        // and the actors speed factor
+    }
+
     pub fn available_effort(&self) -> u8 {
         self.effort.len() as u8
     }
 
     pub fn max_available_effort(&self, D6(reqired): D6) -> u8 {
-        self.effort.iter().fold((0, 0), |(acc_eff, acc_quality), D6(eff)| {
-            if acc_eff + eff >= reqired {
-                (0, acc_quality + 1)
-            } else {
-                (acc_eff + eff, acc_quality)
-            }
-        }).1
+        self.effort
+            .iter()
+            .fold((0, 0), |(acc_eff, acc_quality), D6(eff)| {
+                if acc_eff + eff >= reqired {
+                    (0, acc_quality + 1)
+                } else {
+                    (acc_eff + eff, acc_quality)
+                }
+            })
+            .1
     }
 
     pub fn effort_dice(&self) -> &Vec<D6> {
@@ -315,15 +338,29 @@ impl Actor {
     }
 
     pub fn can_activate(&self) -> bool {
-        // self.pending_action.is_none()
-        !self.active && self.state != ReadyState::Done
+        !self.active && !self.activations.is_empty()
     }
 
-    pub fn activate(self) -> Self {
-        Self {
-            active: true,
-            ..self
-        }
+    pub fn activate(mut self) -> Self {
+        debug_assert!(
+            !self.activations.is_empty(),
+            "Activating an actor who has no more activations"
+        );
+        // if self.activations.is_empty() {
+        //     return self;
+        // }
+
+        self.active = true;
+
+        let (min_activation_idx, _) = self
+            .activations
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, c)| c.value)
+            .unwrap();
+
+        self.activations.swap_remove(min_activation_idx);
+        self
     }
 
     pub fn deactivate(self) -> Self {
@@ -423,7 +460,7 @@ impl Actor {
     pub fn prepare(mut self, action: ActorAction) -> Self {
         let req_eff_one_charge = action.charge_threshold();
         let current_charge = action.current_charge();
-        
+
         self.prepared_action = Some(action);
 
         for _ in 1..=current_charge {
