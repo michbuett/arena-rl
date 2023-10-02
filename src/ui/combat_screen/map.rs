@@ -181,7 +181,6 @@ fn render_map(
 }
 
 fn render_action_buttons<'a>(
-    // scene: &mut Scene,
     viewport: (i32, i32, u32, u32),
     scroll_offset: (i32, i32),
     default_action: DefaultAction,
@@ -192,10 +191,13 @@ fn render_action_buttons<'a>(
         clipping_area: viewport,
         action: Box::new(move |screen_pos| {
             let clicked_pos = screen_pos_to_map_pos(screen_pos, scroll_offset);
-            let possible_inputs = default_action.1.clone();
 
-            if let Some(input) = possible_inputs.get(&clicked_pos) {
-                return input.clone();
+            if let Some(selected_pos) = default_action.0 {
+                if clicked_pos == selected_pos {
+                    if let Some(input) = default_action.1.get(&clicked_pos) {
+                        return input.clone();
+                    }
+                }
             }
 
             UserInput::SelectWorldPos(clicked_pos)
@@ -245,6 +247,19 @@ fn get_default_action(game: &CombatData) -> DefaultAction {
                     .collect::<HashMap<_, _>>();
 
                 return (selected_mpos, activations);
+            }
+
+            InputContext::SelectAction { options } => {
+                let mut user_inputs = HashMap::new();
+                for (pos, player_actions) in options.iter() {
+                    if !player_actions.is_empty() {
+                        user_inputs.insert(
+                            *pos,
+                            UserInput::SelectPlayerAction(player_actions.first().unwrap().clone()),
+                        );
+                    }
+                }
+                return (selected_mpos, user_inputs);
             }
 
             _ => {
