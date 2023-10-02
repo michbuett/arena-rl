@@ -5,10 +5,7 @@ use specs::prelude::{Builder, Entities, Entity, LazyUpdate, Read, ReadStorage, W
 use crate::components::{
     GameObjectCmp, ObstacleCmp, Position, Sprites, WorldPos, ZLayerFloor, ZLayerGameObject,
 };
-use crate::core::{
-    Actor, ActorAction, AttackOption, AttackType, AttackVector, Attr, Card, Direction, GameObject,
-    Item, Obstacle, SpriteConfig, Suite, TextureMap,
-};
+use crate::core::{Actor, Attr, Card, GameObject, Item, Obstacle, SpriteConfig, Suite, TextureMap};
 
 use super::{Hitbox, HoverAnimation, Text};
 
@@ -141,27 +138,6 @@ fn get_sprites_actor(a: &Actor, texture_map: &TextureMap) -> Sprites {
             .collect(),
     );
 
-    // if let Some(Act {
-    //     action: Action::Attack(_, attack, attack_vector, _),
-    //     charge,
-    //     ..
-    // }) = &a.pending_action
-    if let Some(ActorAction::Attack {
-        attack,
-        attack_vector,
-        ..
-    }) = &a.prepared_action
-    {
-        append_attack_indicator(
-            &mut sprites,
-            a.pos,
-            attack,
-            attack_vector,
-            // *charge,
-            texture_map,
-        );
-    }
-
     append_status_icons(&mut sprites, a, texture_map);
 
     Sprites::new(sprites)
@@ -178,49 +154,49 @@ fn get_sprites_items(item: &Item, texture_map: &TextureMap) -> Sprites {
     Sprites::new(sprites)
 }
 
-fn get_circle_pos(angle_radian: f64, radius: f64) -> (i32, i32) {
-    let (sin, cos) = angle_radian.sin_cos();
-    ((radius * cos).round() as i32, (radius * sin).round() as i32)
-}
+// fn get_circle_pos(angle_radian: f64, radius: f64) -> (i32, i32) {
+//     let (sin, cos) = angle_radian.sin_cos();
+//     ((radius * cos).round() as i32, (radius * sin).round() as i32)
+// }
 
-fn append_attack_indicator(
-    sprites: &mut Vec<SpriteConfig>,
-    actor_pos: WorldPos,
-    attack: &AttackOption,
-    attack_vector: &AttackVector,
-    // charge: u8,
-    texture_map: &TextureMap,
-) {
-    debug_assert!(!attack_vector.is_empty());
+// fn append_attack_indicator(
+//     sprites: &mut Vec<SpriteConfig>,
+//     actor_pos: WorldPos,
+//     attack: &AttackOption,
+//     attack_vector: &AttackVector,
+//     // charge: u8,
+//     texture_map: &TextureMap,
+// ) {
+//     debug_assert!(!attack_vector.is_empty());
 
-    let sprite_name = if let AttackType::Melee(..) = &attack.attack_type {
-        "action-indicator-MeleeAttack"
-    } else {
-        "action-indicator-RangedAttack"
-    };
+//     let sprite_name = if let AttackType::Melee(..) = &attack.attack_type {
+//         "action-indicator-MeleeAttack"
+//     } else {
+//         "action-indicator-RangedAttack"
+//     };
 
-    let p0 = actor_pos;
-    let p1 = attack_vector.last().unwrap().0.to_world_pos();
-    let dir = Direction::from_point(p0, p1);
-    let angle = dir.as_radian();
-    let mut s = texture_map.get(sprite_name).unwrap().clone();
-    s.rotate = Some(Direction::from_point(p0, p1));
-    s.offset = get_circle_pos(angle, 65.0);
+//     let p0 = actor_pos;
+//     let p1 = attack_vector.last().unwrap().0.to_world_pos();
+//     let dir = Direction::from_point(p0, p1);
+//     let angle = dir.as_radian();
+//     let mut s = texture_map.get(sprite_name).unwrap().clone();
+//     s.rotate = Some(Direction::from_point(p0, p1));
+//     s.offset = get_circle_pos(angle, 65.0);
 
-    sprites.push(s);
+//     sprites.push(s);
 
-    let num_icons = attack.allocated_effort;
-    // let num_icons = attack.required_effort;
-    let icon_space = std::f64::consts::FRAC_PI_8;
-    let icon_offset = 0.5 * (num_icons as f64 - 1.0) * icon_space;
+//     let num_icons = attack.allocated_effort;
+//     // let num_icons = attack.required_effort;
+//     let icon_space = std::f64::consts::FRAC_PI_8;
+//     let icon_offset = 0.5 * (num_icons as f64 - 1.0) * icon_space;
 
-    for i in 0..num_icons {
-        let mut icon = texture_map.get("icon-dot-red").unwrap().clone();
-        let icon_angle = angle - icon_offset + (i as f64) * icon_space;
-        icon.offset = get_circle_pos(icon_angle, 50.0);
-        sprites.push(icon)
-    }
-}
+//     for i in 0..num_icons {
+//         let mut icon = texture_map.get("icon-dot-red").unwrap().clone();
+//         let icon_angle = angle - icon_offset + (i as f64) * icon_space;
+//         icon.offset = get_circle_pos(icon_angle, 50.0);
+//         sprites.push(icon)
+//     }
+// }
 
 fn append_status_icons(sprites: &mut Vec<SpriteConfig>, a: &Actor, texture_map: &TextureMap) {
     let icons = (0..a.health.recieved_wounds)
@@ -247,14 +223,6 @@ fn get_visual_elements(a: &Actor) -> Vec<String> {
     if a.active {
         visual_elements.push("bg_active".to_string());
     }
-
-    // if let Some(Act {
-    //     action: Action::Ambush(..),
-    //     ..
-    // }) = &a.pending_action
-    // {
-    //     visual_elements.push("action-indicator-Ambush".to_string());
-    // }
 
     for l in a.visuals() {
         visual_elements.push(l.to_string());

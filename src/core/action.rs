@@ -1,31 +1,27 @@
 use crate::components::{FxEffect, FxSequence};
 use crate::core::ai::{attack_vector, AttackVector};
-use crate::core::{DisplayStr, MapPos, Path, ReadyState, WorldPos};
+use crate::core::{DisplayStr, MapPos, Path, WorldPos};
 
 use super::actors::{
     resolve_combat, Actor, AttackOption, AttackTarget, AttackType, GameObject, Hit, HitResult,
     Team, Wound, ID,
 };
 use super::ai::find_charge_path;
-use super::{Card, Change, CoreWorld, HitEffect, SuperLineIter, D6};
+use super::{Card, Change, CoreWorld, HitEffect, SuperLineIter};
 
 #[derive(Debug, Clone)]
 pub enum PlayerAction {
     StartTurn(ID),
     EndTurn(Team),
     AssigneActivation(ID, Card),
-    SaveEffort(ID),
-    CombineEffortDice(ID),
     ActivateActor(ID),
-    PrepareAction(ID, ActorAction),
     TriggerAction(ID, ActorAction),
-    // BoostPreparedAction(ID),
-    // InterferWithEnemy(ID),
-    ModifyCharge(ID, i8),
 }
 
 #[derive(Debug, Clone)]
 pub enum ActorAction {
+    DoNothing,
+
     MoveTo {
         path: Path,
         effort: u8,
@@ -37,225 +33,13 @@ pub enum ActorAction {
         attack_vector: AttackVector,
         msg: String,
     },
-    // Ambush(AttackOption),
+
     AddTrait {
         targets: Vec<ID>,
         trait_ref: String,
         msg: String,
     },
 }
-
-impl ActorAction {
-    pub fn charge_threshold(&self) -> D6 {
-        match self {
-            ActorAction::Attack { attack, .. } => D6(attack.to_hit_threshold),
-            _ => D6(1),
-        }
-    }
-
-    pub fn current_charge(&self) -> u8 {
-        match self {
-            ActorAction::Attack { attack, .. } => attack.allocated_effort,
-            _ => 0,
-        }
-    }
-
-    pub fn modifiy_charge(self, delta: i8) -> Self {
-        match self {
-            ActorAction::Attack {
-                target,
-                attack,
-                attack_vector,
-                msg,
-            } => ActorAction::Attack {
-                target,
-                attack: attack.allocate_effort(delta),
-                attack_vector,
-                msg,
-            },
-            _ => self,
-        }
-    }
-}
-
-// #[derive(Debug, Clone)]
-// pub enum Action {
-//     // StartTurn(),
-//     // StartPlanning(),
-//     // ResolvePendingActions(),
-//     // EndTurn(Team),
-//     // Done(String),
-//     // MoveTo(Path, u8),
-//     // Activate(ID),
-//     // Attack(ID, AttackOption, AttackVector, String),
-//     // Ambush(AttackOption),
-//     // UseAbility(ID, String, Trait),
-//     // CombineEffortDice(),
-
-//     // TriggerPlannedAct(),
-//     // BoostPlannedAct(),
-//     // InterferWithEnemyAct(ID),
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct Act {
-//     pub action: Action,
-//     pub run: bool,
-//     // pub delay: u8,
-//     pub charge: u8,
-//     // pub allocated_effort: Option<u8>,
-//     // pub is_empowerd: bool,
-//     // pub allow_hastening: bool,
-//     // pub allow_empowering: bool,
-// }
-
-// impl Act {
-//     // pub fn new(a: Action) -> Self {
-//     //     Self {
-//     //         action: a,
-//     //         run: false,
-//     //         // delay: 0,
-//     //         charge: 0,
-//     //         // allocated_effort: None,
-//     //         // is_empowerd: false,
-//     //         // allow_hastening: false,
-//     //         // allow_empowering: false,
-//     //     }
-//     // }
-
-//     // pub fn delay(mut self, d: u8) -> Self {
-//     //     self.delay = d;
-//     //     self
-//     // }
-
-//     // pub fn run(mut self) -> Self {
-//     //     self.run = true;
-//     //     self
-//     // }
-
-//     // pub fn charge_up(&self) -> Self {
-//     //     if self.charge >= 8 {
-//     //         return self.clone();
-//     //     }
-
-//     //     Self {
-//     //         charge: self.charge + 1,
-//     //         run: self.run,
-//     //         action: self.action.clone(),
-//     //     }
-//     // }
-
-//     // pub fn trigger_threshold(&self) -> u8 {
-//     //     3 // TODO
-//     // }
-
-//     // pub fn effort(mut self, e: u8) -> Self {
-//     //     self.allocated_effort = Some(e);
-//     //     self
-//     // }
-
-//     // pub fn allocate_effort(mut self, e: u8) -> Self {
-//     //     self.allocated_effort += e;
-//     //     self
-//     // }
-
-//     // pub fn empower(mut self) -> Self {
-//     //     if self.allow_empowering {
-//     //         match self.action {
-//     //             Action::Attack(id, attack, av, label) => {
-//     //                 let empored_attack = AttackOption {
-//     //                     required_effort: attack.required_effort + 1,
-//     //                     advantage: 1,
-//     //                     ..attack
-//     //                 };
-
-//     //                 self.action = Action::Attack(id, empored_attack, av, label);
-//     //             }
-//     //             _ => {}
-//     //         }
-
-//     //         self.is_empowerd = true;
-//     //         self.allocated_effort = self.allocated_effort.map(|e| e + 1);
-//     //     }
-
-//     //     self
-//     // }
-
-//     // pub fn quicken(mut self) -> Self {
-//     //     if self.allow_hastening && self.delay > 0 {
-//     //         self.delay -= 1;
-//     //         self.allocated_effort = self.allocated_effort.map(|e| e + 1);
-//     //     }
-
-//     //     self
-//     // }
-
-//     // pub fn allow_hastening(mut self) -> Self {
-//     //     self.allow_hastening = true;
-//     //     self
-//     // }
-
-//     // pub fn allow_empowering(mut self) -> Self {
-//     //     self.allow_empowering = true;
-//     //     self
-//     // }
-
-//     // pub fn start_planning() -> Self {
-//     //     Self::new(Action::StartPlanning())
-//     // }
-
-//     // pub fn end_turn(t: Team) -> Self {
-//     //     Self::new(Action::EndTurn(t))
-//     // }
-
-//     // pub fn done(msg: impl ToString) -> Self {
-//     //     Self::new(Action::Done(msg.to_string()))
-//     //     // Self::new(Action::Done(msg.to_string())).effort(0)
-//     // }
-
-//     // pub fn pass() -> Self {
-//     //     Self::new(Action::Done("Waiting for next turn...".to_string()))
-//     // }
-
-//     // pub fn rest() -> Self {
-//     //     Self::new(Action::Done("Gathering strength...".to_string()))
-//     // }
-
-//     // pub fn activate(actor_id: ID) -> Self {
-//     //     Self::new(Action::Activate(actor_id)).run()
-//     // }
-
-//     // pub fn boost_planned_act() -> Self {
-//     //     Self::new(Action::BoostPlannedAct()).run()
-//     // }
-
-//     // pub fn combine_effort_dice() -> Self {
-//     //     Self::new(Action::CombineEffortDice()).run()
-//     // }
-
-//     // pub fn move_to(effort: u8, p: Path) -> Self {
-//     //     Self::new(Action::MoveTo(p, effort)).run()
-//     // }
-
-//     // pub fn attack(target: ID, ao: AttackOption, av: AttackVector, n: String) -> Self {
-//     //     // let e = ao.required_effort;
-//     //     Self::new(Action::Attack(target, ao, av, n))
-//     //     // .delay(1)
-//     //     // .effort(e)
-//     //     // .allow_empowering()
-//     //     // .allow_hastening()
-//     // }
-
-//     // pub fn ambush(attack: AttackOption) -> Self {
-//     //     Self::new(Action::Ambush(attack))
-//     //     // let e = attack.required_effort;
-//     //     // Self::new(Action::Ambush(attack)).delay(1).effort(e)
-//     // }
-
-//     // pub fn use_ability(target: ID, key: impl ToString, t: Trait, delay: u8) -> Self {
-//     //     Self::new(Action::UseAbility(target, key.to_string(), t)).delay(delay)
-//     // }
-// }
 
 pub struct ActionResultBuilder<'a> {
     pub world: CoreWorld<'a>,
@@ -336,199 +120,25 @@ pub struct ActionResult {
     pub score: u64,
 }
 
-// pub fn act(actor_id: ID, a: Act, cw: CoreWorld) -> ActionResult {
-//     let mut result_builder = ActionResultBuilder::new(cw);
-
-//     // if a.allocated_effort > 0 {
-//     //     result_builder = result_builder.chain(|mut w| {
-//     //         w.modify_actor(actor_id, |actor| actor.use_effort(a.allocated_effort));
-//     //         ActionResultBuilder::new(w)
-//     //     })
-//     // }
-
-//     result_builder
-//         .chain(|w| perform_act(actor_id, a, w))
-//         .into_result()
-// }
-
-// fn perform_act(actor_id: ID, a: Act, mut cw: CoreWorld) -> ActionResultBuilder {
-//     if let Some(actor) = cw.get_actor(actor_id).cloned() {
-//         if a.run {
-//             run_action(actor, a, cw)
-//         } else {
-//             // act is delayed until next turn
-//             // => not this try to run it by reducing the count down
-//             cw.update_actor(actor.prepare(a));
-
-//             ActionResultBuilder::new(cw)
-//         }
-//     } else {
-//         ActionResultBuilder::new(cw)
-//     }
-// }
-
-// fn run_action<'a>(actor: Actor, a: Act, mut cw: CoreWorld) -> ActionResultBuilder {
-//     let actor_id = actor.id;
-
-//     match a.action {
-//         Action::StartTurn() => {
-//             cw.modify_actor(actor_id, |actor| actor.start_next_turn());
-//             return ActionResultBuilder::new(cw);
-
-//             // if let Some(actor) = cw.get_actor(actor.id).cloned() {
-//             //     // we need to get the most current actor since this action is executed immediatly
-//             //     // after resolving pending actions
-//             //     let mut actor = actor.start_next_turn();
-
-//             //     if !actor.is_concious() {
-//             //         actor = actor.prepare(Act::rest().delay(0));
-//             //     }
-
-//             //     cw.update_actor(actor);
-
-//             //     return ActionResultBuilder::new(cw);
-//             // }
-//         }
-
-//         Action::StartPlanning() => {
-//             // cw.modify_actor(actor.id, |mut actor| {
-//             //     actor.state = ReadyState::Plan;
-//             //     actor
-//             // });
-
-//             // return ActionResultBuilder::new(cw);
-//         }
-
-//         Action::ResolvePendingActions() => {
-//             if let Some(pending_action) = actor.pending_action.clone() {
-//                 return perform_act(actor_id, pending_action, cw).chain(|mut w| {
-//                     w.modify_actor(actor_id, |mut actor| {
-//                         actor.pending_action = None;
-//                         actor
-//                     });
-
-//                     ActionResultBuilder::new(w)
-//                 });
-//             }
-//         }
-
-//         Action::EndTurn(team) => {
-//             while let Some(a) = cw.find_actor(|a| a.team == team && a.pending_action.is_none()) {
-//                 cw.update_actor(a.prepare(Act::pass()));
-//             }
-
-//             return ActionResultBuilder::new(cw);
-//         }
-
-//         Action::Done(_) => {}
-
-//         Action::UseAbility(target_entity, ability_name, t) => {
-//             // TODO overhaul action
-
-//             // if let Some(target_actor) = cw.get_actor(target_entity).cloned() {
-//             //     let fx_pos = target_actor.pos.clone();
-//             //     let fx_str = t.name.to_string();
-//             //     let actor_name = target_actor.name.clone();
-//             //     let log = DisplayStr::new(format!("{} used ability: {}", actor_name, ability_name));
-
-//             //     cw.update_actor(target_actor.use_ability(ability_name, t));
-
-//             //     return ActionResultBuilder::new(cw)
-//             //         .add_fx(FxEffect::say(fx_str, fx_pos))
-//             //         .append_log(log.into());
-//             // }
-//         }
-
-//         Action::MoveTo(path, effort) => {
-//             if path.is_empty() {
-//                 return ActionResultBuilder::new(cw);
-//             }
-
-//             let mut result_builder = handle_aoo(actor_id, cw);
-
-//             for t in path {
-//                 result_builder = result_builder.chain(|w| take_step(actor_id, t.to_world_pos(), w));
-//             }
-
-//             return result_builder.chain(|mut w| {
-//                 // test if actor actually exists (it is possible that the moving actor has been killed by now; e.g. from some ambush)
-//                 if let Some(mut actor) = w.get_actor(actor_id).cloned() {
-//                     for _ in 0..effort {
-//                         actor = actor.use_effort(D6(1));
-//                     }
-
-//                     if actor.available_effort() == 0 {
-//                         w.update_actor(actor.prepare(Act::done("Did move...")));
-//                     }
-//                 }
-//                 ActionResultBuilder::new(w)
-//             });
-//         }
-
-//         Action::Activate(id) => {
-//             if let Some(target) = cw.get_actor(id).cloned() {
-//                 println!(
-//                     "[DEBUG] activate actor \"{} (id: {:?})\"",
-//                     target.name, target.id
-//                 );
-//                 cw.update_actor(actor.deactivate());
-//                 cw.update_actor(target.activate());
-
-//                 return ActionResultBuilder::new(cw);
-//             }
-//         }
-
-//         Action::TriggerPlannedAct() => {}
-
-//         Action::BoostPlannedAct() => {
-//             cw.modify_actor(actor_id, |mut a| {
-//                 if let Some(act) = a.pending_action.as_ref() {
-//                     let boosted_act = act.charge_up();
-//                     a = a.prepare(boosted_act);
-//                 }
-
-//                 a
-//             });
-
-//             return ActionResultBuilder::new(cw);
-//         }
-
-//         Action::InterferWithEnemyAct(enemy_id) => {}
-
-//         Action::CombineEffortDice() => {}
-
-//         Action::Attack(target_id, attack, _, _) => {
-//             return handle_attack(actor.id, target_id, attack, cw)
-//         }
-
-//         Action::Ambush(_attack) => {
-//             // an ambush is trigger when an enemy walks into the zone of danger
-//             // => if it has not been triggered yet, then ignore it
-//         }
-//     }
-
-//     ActionResultBuilder::new(cw)
-// }
-
 pub fn run_player_action<'a>(action: PlayerAction, mut cw: CoreWorld) -> ActionResult {
     let result_builder = match action {
         PlayerAction::StartTurn(actor_id) => {
             cw.modify_actor(actor_id, Actor::start_next_turn);
-            // cw.modify_actor(actor_id, |actor| actor.start_next_turn());
             ActionResultBuilder::new(cw)
         }
 
-        PlayerAction::EndTurn(team) => {
-            while let Some(a) = cw.find_actor(|a| a.team == team && a.state != ReadyState::Done) {
-                println!(" >> skip turn for actor {}", a.name);
-                cw.update_actor(a.save_effort());
-            }
+        PlayerAction::EndTurn(_team) => {
+            todo!("Requires design decision")
+            // while let Some(a) = cw.find_actor(|a| a.team == team) {
+            //     // println!(" >> skip turn for actor {}", a.name);
+            //     cw.update_actor(a.done());
+            // }
 
-            ActionResultBuilder::new(cw)
+            // ActionResultBuilder::new(cw)
         }
 
         PlayerAction::AssigneActivation(id, card) => {
-            println!("[ACTOR] assign activation {:?}", card);
+            // println!("[ACTOR] assign activation {:?}", card);
             cw.modify_actor(id, |a| a.assigne_activation(card));
             ActionResultBuilder::new(cw)
         }
@@ -543,73 +153,29 @@ pub fn run_player_action<'a>(action: PlayerAction, mut cw: CoreWorld) -> ActionR
             ActionResultBuilder::new(cw)
         }
 
-        PlayerAction::PrepareAction(id, action) => {
-            cw.modify_actor(id, |a| a.prepare(action.clone()));
-
-            ActionResultBuilder::new(cw)
-        }
-
         PlayerAction::TriggerAction(id, action) => {
             run_actor_action(id, action.clone(), cw).chain(|mut w| {
-                w.modify_actor(id, |mut actor| {
-                    let next_state = if actor.available_effort() > 0 {
-                        ReadyState::SelectAction
-                    } else {
-                        ReadyState::Done
-                    };
-
-                    actor.prepared_action = None;
-                    actor.state = next_state;
-                    actor.active = false;
-                    actor
-                });
+                w.modify_actor(id, Actor::done);
 
                 ActionResultBuilder::new(w)
             })
-        }
-
-        // PlayerAction::BoostPreparedAction(id) => {
-        //     // cw.modify_actor(id, |a| {
-        //     //     if let Some(action) = a.prepared_action.as_ref().cloned() {
-        //     //         a.prepare(action.charge(1))
-        //     //     } else {
-        //     //         a
-        //     //     }
-        //     // });
-
-        //     ActionResultBuilder::new(cw)
-        // }
-
-        // PlayerAction::InterferWithEnemy(enemy_id) => ActionResultBuilder::new(cw),
-        PlayerAction::ModifyCharge(id, delta) => {
-            cw.modify_actor(id, |mut a| {
-                if let Some(action) = a.prepared_action.as_ref().cloned() {
-                    let e = action.charge_threshold();
-                    a.prepared_action = Some(action.modifiy_charge(delta));
-                    a.use_effort(e)
-                } else {
-                    a
-                }
-            });
-            ActionResultBuilder::new(cw)
-        }
-
-        PlayerAction::SaveEffort(id) => {
-            cw.modify_actor(id, |a| a.save_effort());
-            ActionResultBuilder::new(cw)
-        }
-
-        PlayerAction::CombineEffortDice(id) => {
-            cw.modify_actor(id, |a| a.combine_lowest_effort_dice());
-            ActionResultBuilder::new(cw)
         }
     };
 
     result_builder.into_result()
 }
 
-fn run_actor_action<'a>(actor_id: ID, action: ActorAction, cw: CoreWorld) -> ActionResultBuilder {
+fn run_actor_action<'a>(
+    actor_id: ID,
+    action: ActorAction,
+    mut cw: CoreWorld,
+) -> ActionResultBuilder {
     match action {
+        ActorAction::DoNothing => {
+            cw.modify_actor(actor_id, Actor::done);
+            ActionResultBuilder::new(cw)
+        }
+
         ActorAction::MoveTo { path, effort } => handle_move_action(actor_id, path, effort, cw),
 
         ActorAction::Attack { target, attack, .. } => handle_attack(actor_id, target, attack, cw),
@@ -947,25 +513,13 @@ fn handle_move_action(actor_id: ID, path: Path, effort: u8, cw: CoreWorld) -> Ac
         return ActionResultBuilder::new(cw);
     }
 
-    let mut result_builder = handle_aoo(actor_id, cw);
+    let mut result_builder = ActionResultBuilder::new(cw);
 
     for t in path {
         result_builder = result_builder.chain(|w| take_step(actor_id, t.to_world_pos(), w));
     }
 
-    result_builder.chain(|mut w| {
-        // test if actor actually exists (it is possible that the moving actor has been killed by now; e.g. from some ambush)
-        w.modify_actor(actor_id, |mut actor| {
-            for _ in 0..effort {
-                actor = actor.use_effort(D6(1));
-            }
-
-            actor
-            // actor.save_effort()
-        });
-
-        ActionResultBuilder::new(w)
-    })
+    result_builder
 }
 
 fn take_step(actor_id: ID, target_pos: WorldPos, cw: CoreWorld) -> ActionResultBuilder {
@@ -1046,94 +600,95 @@ fn move_to(
         .wait(move_fx_dur.as_millis() as u64)
         .then(FxEffect::dust("fx-dust-1", target_pos, 400));
 
-    ActionResultBuilder::new(cw)
-        .append_fx_seq(fx_seq)
-        .chain(|w| handle_aoo(actor_id, w))
+    ActionResultBuilder::new(cw).append_fx_seq(fx_seq)
+    // .chain(|w| handle_aoo(actor_id, w))
 }
 
-/// Check for attacks of opportunities (aoo)
-fn handle_aoo(moving_actor_id: ID, mut world: CoreWorld) -> ActionResultBuilder {
-    if let Some((attacker, attack)) = world.find_map(|go| can_attack(go, moving_actor_id, &world)) {
-        // println!("[DEBUG] handle_aoo attacker={:?} target={:?}", attacker, moving_actor_id);
+// /// Check for attacks of opportunities (aoo)
+// fn handle_aoo(moving_actor_id: ID, mut world: CoreWorld) -> ActionResultBuilder {
+//     if let Some((attacker, attack)) = world.find_map(|go| can_attack(go, moving_actor_id, &world)) {
+//         // println!("[DEBUG] handle_aoo attacker={:?} target={:?}", attacker, moving_actor_id);
 
-        world.modify_actor(attacker, |mut a| {
-            a.prepared_action = None;
-            a
-        });
+//         world.modify_actor(attacker, |mut a| {
+//             a.prepared_action = None;
+//             a
+//         });
 
-        handle_attack(attacker, moving_actor_id, attack, world)
-            .chain(|w| handle_aoo(moving_actor_id, w))
-    } else {
-        ActionResultBuilder::new(world)
-    }
-}
+//         handle_attack(attacker, moving_actor_id, attack, world)
+//             .chain(|w| handle_aoo(moving_actor_id, w))
+//     } else {
+//         ActionResultBuilder::new(world)
+//     }
+// }
 
-fn can_attack(obj: &GameObject, target: ID, _world: &CoreWorld) -> Option<(ID, AttackOption)> {
-    if let GameObject::Actor(attacker) = obj {
-        match &attacker.prepared_action {
-            Some(ActorAction::Attack {
-                target: attacker_target,
-                attack,
-                ..
-            }) => {
-                if target == *attacker_target {
-                    return Some((attacker.id, attack.clone()));
-                }
-            }
+// fn can_attack(obj: &GameObject, target: ID, _world: &CoreWorld) -> Option<(ID, AttackOption)> {
+//     if let GameObject::Actor(attacker) = obj {
+//         match &attacker.prepared_action {
+//             Some(ActorAction::Attack {
+//                 target: attacker_target,
+//                 attack,
+//                 ..
+//             }) => {
+//                 if target == *attacker_target {
+//                     return Some((attacker.id, attack.clone()));
+//                 }
+//             }
 
-            // Some(Act {
-            //     action: Action::Ambush(attack),
-            //     ..
-            // }) => {
-            //     if let Some(target) = world.get_actor(target) {
-            //         if target.team == attacker.team {
-            //             // do not ambush teammates
-            //             return None;
-            //         }
+//             // Some(Act {
+//             //     action: Action::Ambush(attack),
+//             //     ..
+//             // }) => {
+//             //     if let Some(target) = world.get_actor(target) {
+//             //         if target.team == attacker.team {
+//             //             // do not ambush teammates
+//             //             return None;
+//             //         }
 
-            //         if can_attack_with(attacker, target, attack, world) {
-            //             return Some((attacker.id, attack.clone()));
-            //         }
-            //     }
-            // }
-            _ => {}
-        }
-    }
+//             //         if can_attack_with(attacker, target, attack, world) {
+//             //             return Some((attacker.id, attack.clone()));
+//             //         }
+//             //     }
+//             // }
+//             _ => {}
+//         }
+//     }
 
-    None
-}
+//     None
+// }
 
-fn post_attack_cleanup(attacked_target: ID, mut cw: CoreWorld) -> ActionResultBuilder {
-    if cw.get_actor(attacked_target).is_none() {
-        // the target has been eliminated
-        // remove the perpared action of every other attacker
+fn post_attack_cleanup(_attacked_target: ID, cw: CoreWorld) -> ActionResultBuilder {
+    // TODO: this may become neccessary again when adding features like overwath or ambush
 
-        let other_attackers = cw
-            .game_objects()
-            .filter_map(|go| {
-                if let GameObject::Actor(other_actor) = go {
-                    if let Some(ActorAction::Attack { target, .. }) =
-                        other_actor.prepared_action.as_ref()
-                    {
-                        if *target == attacked_target {
-                            return Some(other_actor.id);
-                        }
-                    }
-                }
+    //     if cw.get_actor(attacked_target).is_none() {
+    //         // the target has been eliminated
+    //         // remove the perpared action of every other attacker
 
-                None
-            })
-            .collect::<Vec<_>>();
+    //         let other_attackers = cw
+    //             .game_objects()
+    //             .filter_map(|go| {
+    //                 if let GameObject::Actor(other_actor) = go {
+    //                     if let Some(ActorAction::Attack { target, .. }) =
+    //                         other_actor.prepared_action.as_ref()
+    //                     {
+    //                         if *target == attacked_target {
+    //                             return Some(other_actor.id);
+    //                         }
+    //                     }
+    //                 }
 
-        for a_id in other_attackers {
-            cw.modify_actor(a_id, Actor::cancel_action);
-            // cw.modify_actor(a_id, |mut a| {
-            //     a.prepared_action = None;
-            //     a.state = ReadyState::SelectAction;
-            //     a
-            // });
-        }
-    }
+    //                 None
+    //             })
+    //             .collect::<Vec<_>>();
+
+    //         for a_id in other_attackers {
+    //             cw.modify_actor(a_id, Actor::cancel_action);
+    //             // cw.modify_actor(a_id, |mut a| {
+    //             //     a.prepared_action = None;
+    //             //     a.state = ReadyState::SelectAction;
+    //             //     a
+    //             // });
+    //         }
+    //     }
 
     ActionResultBuilder::new(cw)
 }

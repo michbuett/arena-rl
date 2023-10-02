@@ -1,6 +1,6 @@
 use crate::core::{
     Actor, ActorAction, Card, CombatData, CombatState, DisplayStr, GameObject, Health,
-    InputContext, MapPos, PlayerAction, SelectedPos, Trait, TraitSource, UserInput, D6,
+    InputContext, MapPos, PlayerAction, SelectedPos, Trait, TraitSource, UserInput,
 };
 use crate::ui::types::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenText};
 
@@ -33,37 +33,6 @@ pub fn render(
         {
             draw_cards(scene, click_areas, viewport, hand, selected_card_idx);
         }
-
-        // match ctxt {
-        //     // InputContext::SelectActionAt {
-        //     //     selected_pos,
-        //     //     objects_at_selected_pos,
-        //     //     options,
-        //     // } => {
-        //     //     let actions = options.get(&selected_pos);
-        //     //     draw_action_buttons(scene, click_areas, game, viewport, actions);
-        //     // }
-        //     InputContext::ActivateActor {
-        //         hand,
-        //         selected_card_idx,
-        //         ..
-        //     } => {
-        //         draw_cards(scene, click_areas, viewport, hand, selected_card_idx);
-        //     }
-
-        //     // Some(InputContext::SelectedArea(p, objects, actions)) => {
-        //     //     draw_area_details(scene, viewport.0, *p, objects);
-        //     //     draw_action_buttons(scene, click_areas, game, viewport, Some(actions));
-        //     // }
-
-        //     // Some(InputContext::TriggerPreparedAction(act)) => {
-        // //     //     draw_action_details(scene, viewport.0, act);
-        // //     //     draw_exec_phase_buttons(scene, click_areas, viewport, act);
-        //     // }
-        //     _ => {
-        //         draw_action_buttons(scene, click_areas, game, viewport, None);
-        //     }
-        // }
     };
 }
 
@@ -95,7 +64,6 @@ fn draw_area_details(
     let x = (viewport_width - DLG_WIDTH) as i32;
 
     scene.texts.push(
-        // scene.texts[FontFace::Normal as usize].push(
         ScreenText::new(DisplayStr::new(txt), ScreenPos(x, 0))
             .width(DLG_WIDTH)
             .padding(10)
@@ -178,18 +146,8 @@ fn draw_cards(
 
 fn button_text_for_player_actions(action: &PlayerAction, is_first: bool) -> DisplayStr {
     let str = match action {
-        PlayerAction::PrepareAction(_, a) => format!("Prepare {}", button_text_for_actor_action(a)),
         PlayerAction::TriggerAction(_, a) => format!("Execute {}", button_text_for_actor_action(a)),
-        PlayerAction::CombineEffortDice(..) => format!("Combine lowest effort dice"),
         PlayerAction::ActivateActor(..) => format!("Activate"),
-        PlayerAction::SaveEffort(..) => format!("Skip turn and save remaining effort"),
-        PlayerAction::ModifyCharge(_, delta) => {
-            if *delta > 0 {
-                format!("Boost own action")
-            } else {
-                format!("Interfere with enemy action")
-            }
-        }
         _ => format!("Unnamed action: {:?}", action),
     };
 
@@ -204,6 +162,7 @@ fn button_text_for_player_actions(action: &PlayerAction, is_first: bool) -> Disp
 
 fn button_text_for_actor_action(action: &ActorAction) -> DisplayStr {
     let str = match action {
+        ActorAction::DoNothing => format!("Do nothing"),
         ActorAction::MoveTo { .. } => format!("Move Here"),
         ActorAction::Attack { attack, .. } => format!("{}", attack.name),
         ActorAction::AddTrait { msg, .. } => msg.clone(),
@@ -211,27 +170,6 @@ fn button_text_for_actor_action(action: &ActorAction) -> DisplayStr {
 
     DisplayStr::new(str)
 }
-
-// fn display_text(action: &Action, is_first: bool) -> DisplayStr {
-//     let str = match action {
-//         Action::Done(_) => format!("Do nothing"),
-//         Action::MoveTo(..) => format!("Move Here"),
-//         Action::Attack(_, a, _, _) => format!("{}", a.name),
-//         Action::Ambush(a) => format!("Ambush ({})", a.name),
-//         // Action::Disengage(..) => "Disengage".to_string(),
-//         Action::UseAbility(_, _, t) => format!("Use ability: {}", t.name),
-//         Action::Activate(..) => format!("Activate"),
-//         _ => format!("Unnamed action: {:?}", action),
-//     };
-
-//     let str = if is_first {
-//         format!("> {} <", str)
-//     } else {
-//         str
-//     };
-
-//     DisplayStr::new(str)
-// }
 
 fn describe_actor(a: &Actor) -> String {
     let Health {
@@ -254,41 +192,10 @@ fn describe_actor(a: &Actor) -> String {
         }
     };
 
-    let action_str = match &a.prepared_action {
-        Some(ActorAction::Attack { msg, .. }) => msg.to_string(),
-
-        // Some(Act {
-        //     action: Action::Attack(_, attack, _, name),
-        //     ..
-        // }) => format!("{} at {}", attack.name, name),
-
-        // Some(Act {
-        //     action: Action::Ambush(attack),
-        //     ..
-        // }) => format!("Perpares an ambush ({})", attack.name),
-
-        // Some(Act {
-        //     action: Action::Done(msg),
-        //     ..
-        // }) => format!("{}", msg),
-
-        // None => "Waiting for instructions...".to_string(),
-
-        // for debugging
-        _ => format!("{:?}", &a.prepared_action),
-    };
-
     let activation_str = a
         .activations
         .iter()
         .map(|card| format!("[{} of {:?}]", card.value, card.suite))
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    let effort_str = a
-        .effort_dice()
-        .iter()
-        .map(|D6(v)| format!("[{}]", v))
         .collect::<Vec<_>>()
         .join(" ");
 
@@ -298,25 +205,11 @@ fn describe_actor(a: &Actor) -> String {
         .collect::<Vec<_>>()
         .join("\n  - ");
 
-    let debug_str = format!("[DEBUG state: {:?}]", a.state);
-
     format!(
-        "\n{} (condition: {})\n\nAction: {}\n\nEffort: {}\n\nActivations: {}\n\nTraits:\n - {}\n\n{}",
-        a.name, condition, action_str, effort_str, activation_str, traits_str, debug_str
+        "\n{} (condition: {})\n\nActivations: {}\n\nTraits:\n - {}",
+        a.name, condition, activation_str, traits_str
     )
 }
-
-// fn describe_effort(e: Option<u8>) -> String {
-//     (match e {
-//         None => "",
-//         Some(1) => "Weak ",
-//         Some(2) => "Mediocre ",
-//         Some(3) => "Strong ",
-//         Some(4) => "Very strong ",
-//         _ => "Incredible ",
-//     })
-//     .to_string()
-// }
 
 fn describe_trait(t: &Trait) -> String {
     let Trait { name, source, .. } = t;
@@ -350,55 +243,3 @@ fn create_action_buttons(
 
     result
 }
-
-// fn draw_action_details(scene: &mut Scene, viewport_width: u32, act: &Act) {
-//     let txt = format!("Prepared act: {:?}", act);
-//     let x = (viewport_width - DLG_WIDTH) as i32;
-
-//     scene.texts.push(
-//         // scene.texts[FontFace::Normal as usize].push(
-//         ScreenText::new(DisplayStr::new(txt), ScreenPos(x, 0))
-//             .width(DLG_WIDTH)
-//             .padding(10)
-//             .background((252, 251, 250, 255))
-//             .border(3, (23, 22, 21, 255)),
-//     );
-// }
-
-// fn draw_exec_phase_buttons(
-//     scene: &mut Scene,
-//     click_areas: &mut ClickAreas,
-//     (viewport_width, viewport_height): (u32, u32),
-//     act: &Act,
-// ) {
-//     let mut action_buttons = vec![
-//         (
-//             DisplayStr::new("Execute"),
-//             UserInput::RunPreparedAction(act.clone()),
-//         ),
-//         (
-//             DisplayStr::new("Delay"),
-//             UserInput::DelayPreparedAction(act.clone()),
-//         ),
-//     ];
-//     let x = (viewport_width - DLG_WIDTH) as i32;
-//     let mut y = (viewport_height - action_buttons.len() as u32 * BTN_HEIGHT) as i32;
-
-//     for (text, user_input) in action_buttons.drain(..) {
-//         scene.texts.push(
-//             // scene.texts[FontFace::Normal as usize].push(
-//             ScreenText::new(text, ScreenPos(x, y))
-//                 .padding(10)
-//                 .border(3, (23, 22, 21, 255))
-//                 .background((252, 251, 250, 255))
-//                 .width(DLG_WIDTH),
-//         );
-
-//         click_areas.push(ClickArea {
-//             clipping_area: (x, y, DLG_WIDTH, BTN_HEIGHT),
-//             action: Box::new(move |_| user_input.clone()),
-//         });
-
-//         y += BTN_HEIGHT as i32;
-//     }
-// }

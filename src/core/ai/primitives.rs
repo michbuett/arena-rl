@@ -8,20 +8,6 @@ use crate::core::*;
 
 pub type AttackVector = Vec<(MapPos, bool, Cover, Option<ID>)>;
 pub type PlayerActionOptions = HashMap<MapPos, Vec<PlayerAction>>;
-// pub type AttackVector = Vec<(MapPos, bool, Option<(ID, Cover)>)>;
-// pub type AttackVector = Vec<(MapPos, bool, Option<(Obstacle, Option<ID>)>)>;
-
-// pub fn find_path_for(a: &Actor, to: impl Into<MapPos>, world: &CoreWorld) -> Option<Path> {
-//     let from: MapPos = MapPos::from_world_pos(a.pos);
-//     let to: MapPos = to.into();
-//     let obstacles = world
-//         .collect_obstacles()
-//         .drain()
-//         .filter_map(|(p, (oc, _))| movement_obstacle(a, &oc).map(|o| (p, o)))
-//         .collect::<HashMap<_, _>>();
-
-//     world.map().find_path(from, to, &ObstacleSet(obstacles))
-// }
 
 pub fn find_path_towards(actor: &Actor, target: &Actor, world: &CoreWorld) -> Option<Path> {
     let obstacles = movment_obstacles(actor, world)
@@ -81,31 +67,6 @@ pub fn find_enemies(actor: &Actor, world: &CoreWorld) -> Vec<Actor> {
     enemies
 }
 
-// pub fn find_actor_at<I: Into<MapPos>>(w: &CoreWorld, at: I) -> Option<Actor> {
-//     let at: MapPos = at.into();
-//     w.find_actor(|a| at == a.pos.into())
-// }
-
-// pub fn can_activate_actor_at<I: Into<MapPos>>(
-//     active_actor: &Actor,
-//     other: &GameObject,
-//     at: I,
-// ) -> Option<ID> {
-//     let at: MapPos = at.into();
-
-//     if let GameObject::Actor(other_actor) = other {
-//         if active_actor.id != other_actor.id
-//             && active_actor.team == other_actor.team
-//             && other_actor.can_activate()
-//             && at == MapPos::from_world_pos(other_actor.pos)
-//         {
-//             return Some(other_actor.id);
-//         }
-//     }
-
-//     None
-// }
-
 pub fn possible_attacks(
     actor: &Actor,
     target: &Actor,
@@ -117,15 +78,6 @@ pub fn possible_attacks(
         .filter_map(|attack| attack_vector(actor, target, &attack, world).map(|av| (attack, av)))
         .collect()
 }
-
-// pub fn can_attack_with(
-//     attacker: &Actor,
-//     target: &Actor,
-//     attack: &AttackOption,
-//     world: &CoreWorld,
-// ) -> bool {
-//     attack_vector(attacker, target, attack, world).is_some()
-// }
 
 fn movement_obstacle(a: &Actor, oc: &ObstacleCmp) -> Option<Obstacle> {
     if a.is_flying() {
@@ -290,24 +242,6 @@ pub fn add_option<P: Into<MapPos>>(p: P, a: PlayerAction, result: &mut PlayerAct
     }
 }
 
-pub fn add_change_active_actor_options(
-    active_actor: &Actor,
-    w: &CoreWorld,
-    result: &mut PlayerActionOptions,
-) {
-    for go in w.game_objects() {
-        if let GameObject::Actor(other_actor) = go {
-            if active_actor.id != other_actor.id
-                && active_actor.team == other_actor.team
-                && other_actor.can_activate()
-            {
-                let p = MapPos::from_world_pos(other_actor.pos);
-                add_option(p, PlayerAction::ActivateActor(other_actor.id), result);
-            }
-        }
-    }
-}
-
 pub fn add_move_to_options(active_actor: &Actor, w: &CoreWorld, result: &mut PlayerActionOptions) {
     let p0 = MapPos::from_world_pos(active_actor.pos);
     let t0 = w.map().get_tile(p0).unwrap();
@@ -338,17 +272,16 @@ pub fn add_combat_options(active_actor: &Actor, w: &CoreWorld, result: &mut Play
                 for a in attacks.iter() {
                     if let Some(attack_vector) = attack_vector(active_actor, other, a, w) {
                         let msg = format!("{} at {}", a.name, other.name);
-                        let req_eff = D6(a.to_hit_threshold);
                         let action = ActorAction::Attack {
                             target: other.id,
                             attack: a.clone(),
                             attack_vector,
                             msg,
-                        }.modifiy_charge(active_actor.max_available_effort(req_eff) as i8);
+                        };
 
                         add_option(
                             other.pos,
-                            PlayerAction::PrepareAction(active_actor.id, action),
+                            PlayerAction::TriggerAction(active_actor.id, action),
                             result,
                         );
                     }
@@ -359,48 +292,22 @@ pub fn add_combat_options(active_actor: &Actor, w: &CoreWorld, result: &mut Play
 
     add_option(
         active_actor.pos,
-        PlayerAction::TriggerAction(active_actor.id, ActorAction::AddTrait {
-            targets: vec![active_actor.id],
-            trait_ref: "temp#Trait_Block".to_string(),
-            msg: "Block".to_string(),
-        }),
+        PlayerAction::TriggerAction(
+            active_actor.id,
+            ActorAction::AddTrait {
+                targets: vec![active_actor.id],
+                trait_ref: "temp#Trait_Block".to_string(),
+                msg: "Block".to_string(),
+            },
+        ),
         result,
     );
 }
 
-pub fn add_noop_option(active_actor: &Actor, result: &mut PlayerActionOptions) {
-    add_option(
-        active_actor.pos,
-        PlayerAction::SaveEffort(active_actor.id),
-        result,
-    );
-}
-
-pub fn add_combine_effort_option(active_actor: &Actor, result: &mut PlayerActionOptions) {
-    if active_actor.effort_dice().len() > 1 {
-        add_option(
-            active_actor.pos,
-            PlayerAction::CombineEffortDice(active_actor.id),
-            result,
-        );
-    }
-}
-
-
-pub fn add_options_to_allocate_effort_in_combat(active_actor: &Actor, w: &CoreWorld, result: &mut PlayerActionOptions) {
-    match &active_actor.prepared_action {
-        Some(action@ActorAction::Attack { target, ..}) => {
-            if let Some(target_actor) = w.get_actor(*target) {
-                if active_actor.can_afford_effort(action.charge_threshold()) {
-                    add_option(active_actor.pos, PlayerAction::ModifyCharge(active_actor.id, 1), result);
-                    add_option(target_actor.pos, PlayerAction::ModifyCharge(active_actor.id, 1), result);
-
-                    if let Some(ActorAction::Attack { .. }) = target_actor.prepared_action {
-                        add_option(target_actor.pos, PlayerAction::ModifyCharge(*target, -1), result);
-                    }
-                }
-            }
-        }
-        _ => {}
-    }
-}
+// pub fn add_noop_option(active_actor: &Actor, result: &mut PlayerActionOptions) {
+//     add_option(
+//         active_actor.pos,
+//         PlayerAction::SaveEffort(active_actor.id),
+//         result,
+//     );
+// }

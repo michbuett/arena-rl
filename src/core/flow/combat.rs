@@ -413,11 +413,8 @@ fn handle_select_player_action(id: ID, w: CoreWorld) -> StepResult {
         // the next ready actor is a player controlled entity
         // => let the AI compute an action and resolve it
         //    so far we have no reactions
-        if let Some(action) = determine_actor_action(&actor, w) {
-            StepResult::new().switch_state(CombatState::ResolveAction(vec![action]))
-        } else {
-            StepResult::new().switch_state(CombatState::FindActor())
-        }
+        let action = determine_actor_action(&actor, w);
+        StepResult::new().switch_state(CombatState::ResolveAction(vec![action]))
     }
 }
 
