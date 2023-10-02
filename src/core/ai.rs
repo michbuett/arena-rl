@@ -8,24 +8,24 @@ use primitives::*;
 
 pub use primitives::{attack_vector, find_charge_path, AttackVector, PlayerActionOptions};
 
-pub fn determine_actor_action(actor: &Actor, cw: CoreWorld) -> PlayerAction {
+pub fn determine_actor_action(actor: &Actor, cw: CoreWorld) -> Action {
     zombi_action(actor, cw)
 }
 
-fn zombi_action(actor: &Actor, cw: CoreWorld) -> PlayerAction {
+fn zombi_action(actor: &Actor, cw: CoreWorld) -> Action {
     for ta in find_enemies(&actor, &cw) {
         let attacks = possible_attacks(actor, &ta, &cw)
             .drain(..)
             .collect::<Vec<_>>();
 
         if let Some((attack, attack_vector)) = pick_one(attacks) {
-            let attack_action = ActorAction::Attack {
+            return Action::Attack {
+                attacker: actor.id,
                 target: ta.id,
                 attack,
                 attack_vector,
                 msg: ta.name,
             };
-            return PlayerAction::TriggerAction(actor.id, attack_action);
         }
 
         if let Some(path) = find_path_towards(actor, &ta, &cw) {
@@ -35,16 +35,15 @@ fn zombi_action(actor: &Actor, cw: CoreWorld) -> PlayerAction {
                 .cloned()
                 .collect();
 
-            let move_action = ActorAction::MoveTo {
+            return Action::MoveTo {
+                actor: actor.id,
                 effort: move_effort(actor, &p),
                 path: p,
             };
-
-            return PlayerAction::TriggerAction(actor.id, move_action);
         }
     }
 
-    PlayerAction::TriggerAction(actor.id, ActorAction::DoNothing)
+    Action::DoNothing(actor.id)
 }
 
 pub fn possible_player_actions(actor: &Actor, cw: &CoreWorld) -> PlayerActionOptions {

@@ -7,7 +7,7 @@ use crate::components::*;
 use crate::core::*;
 
 pub type AttackVector = Vec<(MapPos, bool, Cover, Option<ID>)>;
-pub type PlayerActionOptions = HashMap<MapPos, Vec<PlayerAction>>;
+pub type PlayerActionOptions = HashMap<MapPos, Vec<Action>>;
 
 pub fn find_path_towards(actor: &Actor, target: &Actor, world: &CoreWorld) -> Option<Path> {
     let obstacles = movment_obstacles(actor, world)
@@ -233,7 +233,7 @@ pub fn move_effort(a: &Actor, p: &Path) -> u8 {
     max(1, path_len - move_mod) as u8
 }
 
-pub fn add_option<P: Into<MapPos>>(p: P, a: PlayerAction, result: &mut PlayerActionOptions) {
+pub fn add_option<P: Into<MapPos>>(p: P, a: Action, result: &mut PlayerActionOptions) {
     let p = p.into();
     if result.contains_key(&p) {
         result.get_mut(&p).unwrap().push(a);
@@ -252,12 +252,12 @@ pub fn add_move_to_options(active_actor: &Actor, w: &CoreWorld, result: &mut Pla
         if let Some(path) = w.map().find_path(p0, t.to_map_pos(), &obstacles) {
             if path.len() <= d.get() as usize {
                 let effort = move_effort(active_actor, &path);
-                let action = ActorAction::MoveTo { path, effort };
-                add_option(
-                    t,
-                    PlayerAction::TriggerAction(active_actor.id, action),
-                    result,
-                );
+                let action = Action::MoveTo {
+                    actor: active_actor.id,
+                    path,
+                    effort,
+                };
+                add_option(t, action, result);
             }
         }
     }
@@ -272,18 +272,15 @@ pub fn add_combat_options(active_actor: &Actor, w: &CoreWorld, result: &mut Play
                 for a in attacks.iter() {
                     if let Some(attack_vector) = attack_vector(active_actor, other, a, w) {
                         let msg = format!("{} at {}", a.name, other.name);
-                        let action = ActorAction::Attack {
+                        let action = Action::Attack {
+                            attacker: active_actor.id,
                             target: other.id,
                             attack: a.clone(),
                             attack_vector,
                             msg,
                         };
 
-                        add_option(
-                            other.pos,
-                            PlayerAction::TriggerAction(active_actor.id, action),
-                            result,
-                        );
+                        add_option(other.pos, action, result);
                     }
                 }
             }
@@ -292,14 +289,11 @@ pub fn add_combat_options(active_actor: &Actor, w: &CoreWorld, result: &mut Play
 
     add_option(
         active_actor.pos,
-        PlayerAction::TriggerAction(
-            active_actor.id,
-            ActorAction::AddTrait {
-                targets: vec![active_actor.id],
-                trait_ref: "temp#Trait_Block".to_string(),
-                msg: "Block".to_string(),
-            },
-        ),
+        Action::AddTrait {
+            targets: vec![active_actor.id],
+            trait_ref: "temp#Trait_Block".to_string(),
+            msg: "Block".to_string(),
+        },
         result,
     );
 }

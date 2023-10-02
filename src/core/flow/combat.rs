@@ -135,7 +135,7 @@ fn find_actor_ready_for_activation(turn: &TurnState, world: &CoreWorld) -> Vec<(
         .collect::<Vec<_>>()
 }
 
-fn handle_wait_until(t: &Instant, remaining_actions: &Vec<PlayerAction>) -> StepResult {
+fn handle_wait_until(t: &Instant, remaining_actions: &Vec<Action>) -> StepResult {
     // fn handle_wait_until(t: &Instant, remaining_actions: &Vec<(ID, Act)>) -> StepResult {
     if *t > Instant::now() {
         // now is not the time!
@@ -194,7 +194,7 @@ fn handle_wait_for_user_input(
             let card = team_data.hand.remove(*card_idx);
 
             return StepResult::new().modify_team(team_data).switch_state(
-                CombatState::ResolveAction(vec![PlayerAction::AssigneActivation(*actor_id, card)]),
+                CombatState::ResolveAction(vec![Action::AssigneActivation(*actor_id, card)]),
             );
         }
 
@@ -266,7 +266,7 @@ fn handle_find_actor(turn: &TurnState, world: &CoreWorld) -> StepResult {
             // exactly one candidate
             // => just activate the actor
             let next_state =
-                CombatState::ResolveAction(vec![PlayerAction::ActivateActor(candidates[0].0)]);
+                CombatState::ResolveAction(vec![Action::ActivateActor(candidates[0].0)]);
             StepResult::new().switch_state(next_state)
         } else if candidates.len() > 1 {
             // more than one possible candidate
@@ -276,7 +276,7 @@ fn handle_find_actor(turn: &TurnState, world: &CoreWorld) -> StepResult {
                 let selected_pos = candidates[0].1;
                 let options = candidates
                     .iter()
-                    .map(|(actor_id, pos, _)| (*pos, vec![PlayerAction::ActivateActor(*actor_id)]))
+                    .map(|(actor_id, pos, _)| (*pos, vec![Action::ActivateActor(*actor_id)]))
                     .collect::<HashMap<_, _>>();
 
                 StepResult::new().switch_state(CombatState::WaitForUserInput(
@@ -289,7 +289,7 @@ fn handle_find_actor(turn: &TurnState, world: &CoreWorld) -> StepResult {
             } else {
                 // just activate the first one
                 StepResult::new().switch_state(CombatState::ResolveAction(vec![
-                    PlayerAction::ActivateActor(candidates[0].0),
+                    Action::ActivateActor(candidates[0].0),
                 ]))
             }
         } else {
@@ -314,13 +314,13 @@ fn handle_advance_game(turn: &TurnState) -> StepResult {
 }
 
 fn handle_start_turn(world: &CoreWorld, turn: &TurnState) -> StepResult {
-    let mut actions: Vec<PlayerAction> = Vec::new();
+    let mut actions: Vec<Action> = Vec::new();
     let mut actor_per_team: HashMap<TeamId, u8> = HashMap::new();
     let mut step_result = StepResult::new();
 
     for o in world.game_objects() {
         if let GameObject::Actor(a) = o {
-            actions.push(PlayerAction::StartTurn(a.id));
+            actions.push(Action::StartTurn(a.id));
 
             let curr_amout = actor_per_team.get(&a.team.id).copied().unwrap_or(0);
             actor_per_team.insert(a.team.id, curr_amout + 1);
@@ -363,14 +363,14 @@ fn handle_select_initiative(turn: &TurnState, world: &CoreWorld) -> StepResult {
         // distibute the activations randomly
         // TODO: figure out a need mechanic for ai activation (one that is
         //       more challenging and allows e.g. for multiple activations)
-        let mut actions: Vec<PlayerAction> = Vec::new();
+        let mut actions: Vec<Action> = Vec::new();
         let mut team_data = team_data.clone();
 
         for o in world.game_objects() {
             if let GameObject::Actor(a) = o {
                 if team_data.team.is_member(a) {
                     let card = team_data.deck.deal();
-                    actions.push(PlayerAction::AssigneActivation(a.id, card));
+                    actions.push(Action::AssigneActivation(a.id, card));
                 }
             }
         }
@@ -418,7 +418,7 @@ fn handle_select_player_action(id: ID, w: CoreWorld) -> StepResult {
     }
 }
 
-fn handle_resolve_action(turn: &TurnState, actions: &Vec<PlayerAction>, w: &World) -> StepResult {
+fn handle_resolve_action(turn: &TurnState, actions: &Vec<Action>, w: &World) -> StepResult {
     if actions.is_empty() {
         return match turn.phase {
             CombatPhase::Planning => {
@@ -491,7 +491,7 @@ fn spawn_obstacles(w: &World) {
     }
 }
 
-fn single_option(options: &HashMap<MapPos, Vec<PlayerAction>>) -> Option<PlayerAction> {
+fn single_option(options: &HashMap<MapPos, Vec<Action>>) -> Option<Action> {
     if options.len() != 1 {
         return None;
     }

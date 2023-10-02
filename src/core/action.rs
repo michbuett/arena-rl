@@ -10,24 +10,21 @@ use super::ai::find_charge_path;
 use super::{Card, Change, CoreWorld, HitEffect, SuperLineIter};
 
 #[derive(Debug, Clone)]
-pub enum PlayerAction {
+pub enum Action {
     StartTurn(ID),
     EndTurn(Team),
     AssigneActivation(ID, Card),
     ActivateActor(ID),
-    TriggerAction(ID, ActorAction),
-}
-
-#[derive(Debug, Clone)]
-pub enum ActorAction {
-    DoNothing,
+    DoNothing(ID),
 
     MoveTo {
+        actor: ID,
         path: Path,
         effort: u8,
     },
 
     Attack {
+        attacker: ID,
         target: ID,
         attack: AttackOption,
         attack_vector: AttackVector,
@@ -120,14 +117,14 @@ pub struct ActionResult {
     pub score: u64,
 }
 
-pub fn run_player_action<'a>(action: PlayerAction, mut cw: CoreWorld) -> ActionResult {
+pub fn run_player_action<'a>(action: Action, mut cw: CoreWorld) -> ActionResult {
     let result_builder = match action {
-        PlayerAction::StartTurn(actor_id) => {
+        Action::StartTurn(actor_id) => {
             cw.modify_actor(actor_id, Actor::start_next_turn);
             ActionResultBuilder::new(cw)
         }
 
-        PlayerAction::EndTurn(_team) => {
+        Action::EndTurn(_team) => {
             todo!("Requires design decision")
             // while let Some(a) = cw.find_actor(|a| a.team == team) {
             //     // println!(" >> skip turn for actor {}", a.name);
@@ -137,13 +134,13 @@ pub fn run_player_action<'a>(action: PlayerAction, mut cw: CoreWorld) -> ActionR
             // ActionResultBuilder::new(cw)
         }
 
-        PlayerAction::AssigneActivation(id, card) => {
+        Action::AssigneActivation(id, card) => {
             // println!("[ACTOR] assign activation {:?}", card);
             cw.modify_actor(id, |a| a.assigne_activation(card));
             ActionResultBuilder::new(cw)
         }
 
-        PlayerAction::ActivateActor(id) => {
+        Action::ActivateActor(id) => {
             if let Some(actor) = cw.find_actor(|a| a.active) {
                 cw.modify_actor(actor.id, |a| a.deactivate());
             }
@@ -153,37 +150,30 @@ pub fn run_player_action<'a>(action: PlayerAction, mut cw: CoreWorld) -> ActionR
             ActionResultBuilder::new(cw)
         }
 
-        PlayerAction::TriggerAction(id, action) => {
-            run_actor_action(id, action.clone(), cw).chain(|mut w| {
-                w.modify_actor(id, Actor::done);
-
-                ActionResultBuilder::new(w)
-            })
-        }
-    };
-
-    result_builder.into_result()
-}
-
-fn run_actor_action<'a>(
-    actor_id: ID,
-    action: ActorAction,
-    mut cw: CoreWorld,
-) -> ActionResultBuilder {
-    match action {
-        ActorAction::DoNothing => {
+        Action::DoNothing(actor_id) => {
             cw.modify_actor(actor_id, Actor::done);
             ActionResultBuilder::new(cw)
         }
 
-        ActorAction::MoveTo { path, effort } => handle_move_action(actor_id, path, effort, cw),
+        Action::MoveTo {
+            actor,
+            path,
+            effort,
+        } => handle_move_action(actor, path, effort, cw),
 
-        ActorAction::Attack { target, attack, .. } => handle_attack(actor_id, target, attack, cw),
+        Action::Attack {
+            attacker,
+            target,
+            attack,
+            ..
+        } => handle_attack(attacker, target, attack, cw),
 
-        ActorAction::AddTrait {
+        Action::AddTrait {
             targets, trait_ref, ..
         } => handle_add_trait(targets, trait_ref, cw),
-    }
+    };
+
+    result_builder.into_result()
 }
 
 /// filter items where there is no actual target
@@ -414,6 +404,10 @@ fn handle_attack<'a>(
     partial_result
         .chain(|cw| perform_attack(attacker_id, target_id, attack, cw))
         .chain(|cw| post_attack_cleanup(target_id, cw))
+        .chain(|mut cw| {
+            cw.modify_actor(attacker_id, Actor::done);
+            ActionResultBuilder::new(cw)
+        })
 }
 
 fn perform_attack(
@@ -519,7 +513,10 @@ fn handle_move_action(actor_id: ID, path: Path, effort: u8, cw: CoreWorld) -> Ac
         result_builder = result_builder.chain(|w| take_step(actor_id, t.to_world_pos(), w));
     }
 
-    result_builder
+    result_builder.chain(|mut w| {
+        w.modify_actor(actor_id, Actor::done);
+        ActionResultBuilder::new(w)
+    })
 }
 
 fn take_step(actor_id: ID, target_pos: WorldPos, cw: CoreWorld) -> ActionResultBuilder {

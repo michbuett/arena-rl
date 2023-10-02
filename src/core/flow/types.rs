@@ -4,8 +4,8 @@ use std::{cmp::Ordering, collections::HashMap, time::Instant};
 use specs::prelude::*;
 
 use crate::core::{
-    ai::PlayerActionOptions, Card, Deck, DisplayStr, GameObject, MapPos, ObjectGenerator,
-    PlayerAction, RndDeck, Team, TeamId, TextureMap, ID,
+    ai::PlayerActionOptions, Action, Card, Deck, DisplayStr, GameObject, MapPos, ObjectGenerator,
+    RndDeck, Team, TeamId, TextureMap, ID,
 };
 
 #[derive(Debug, Clone)]
@@ -13,7 +13,7 @@ pub enum UserInput {
     Exit(),
     NewGame,
     SelectTeam(Vec<GameObject>),
-    SelectPlayerAction(PlayerAction),
+    SelectPlayerAction(Action),
     SelectActivationCard(usize),
     AssigneActivation(ID, usize),
     SelectWorldPos(MapPos),
@@ -174,8 +174,8 @@ pub enum CombatState {
     SelectInitiative(),
     SelectPlayerAction(ID),
     WaitForUserInput(InputContext, Option<SelectedPos>),
-    WaitUntil(Instant, Vec<PlayerAction>),
-    ResolveAction(Vec<PlayerAction>),
+    WaitUntil(Instant, Vec<Action>),
+    ResolveAction(Vec<Action>),
 }
 
 #[derive(Debug, Clone)]

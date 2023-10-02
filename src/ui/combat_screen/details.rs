@@ -1,6 +1,6 @@
 use crate::core::{
-    Actor, ActorAction, Card, CombatData, CombatState, DisplayStr, GameObject, Health,
-    InputContext, MapPos, PlayerAction, SelectedPos, Trait, TraitSource, UserInput,
+    Action, Actor, Card, CombatData, CombatState, DisplayStr, GameObject, Health, InputContext,
+    MapPos, SelectedPos, Trait, TraitSource, UserInput,
 };
 use crate::ui::types::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenText};
 
@@ -77,7 +77,7 @@ fn draw_action_buttons(
     click_areas: &mut ClickAreas,
     game: &CombatData,
     (viewport_width, viewport_height): (u32, u32),
-    actions: Option<&Vec<PlayerAction>>,
+    actions: Option<&Vec<Action>>,
 ) {
     let mut action_buttons = create_action_buttons(game, actions);
     let x = (viewport_width - DLG_WIDTH) as i32;
@@ -144,10 +144,13 @@ fn draw_cards(
 // PRIVATE HELPER
 //
 
-fn button_text_for_player_actions(action: &PlayerAction, is_first: bool) -> DisplayStr {
+fn button_text_for_player_actions(action: &Action, is_first: bool) -> DisplayStr {
     let str = match action {
-        PlayerAction::TriggerAction(_, a) => format!("Execute {}", button_text_for_actor_action(a)),
-        PlayerAction::ActivateActor(..) => format!("Activate"),
+        Action::DoNothing(..) => format!("Do nothing"),
+        Action::MoveTo { .. } => format!("Move Here"),
+        Action::Attack { attack, .. } => format!("{}", attack.name),
+        Action::AddTrait { msg, .. } => msg.clone(),
+        Action::ActivateActor(..) => format!("Activate"),
         _ => format!("Unnamed action: {:?}", action),
     };
 
@@ -155,17 +158,6 @@ fn button_text_for_player_actions(action: &PlayerAction, is_first: bool) -> Disp
         format!("> {} <", str)
     } else {
         str
-    };
-
-    DisplayStr::new(str)
-}
-
-fn button_text_for_actor_action(action: &ActorAction) -> DisplayStr {
-    let str = match action {
-        ActorAction::DoNothing => format!("Do nothing"),
-        ActorAction::MoveTo { .. } => format!("Move Here"),
-        ActorAction::Attack { attack, .. } => format!("{}", attack.name),
-        ActorAction::AddTrait { msg, .. } => msg.clone(),
     };
 
     DisplayStr::new(str)
@@ -224,8 +216,8 @@ fn describe_trait(t: &Trait) -> String {
 
 fn create_action_buttons(
     game: &CombatData,
-    actions: Option<&Vec<PlayerAction>>,
-) -> Vec<(DisplayStr, PlayerAction)> {
+    actions: Option<&Vec<Action>>,
+) -> Vec<(DisplayStr, Action)> {
     let mut result = vec![];
     let mut is_first = true;
 
@@ -238,7 +230,7 @@ fn create_action_buttons(
 
     result.push((
         DisplayStr::new(format!("End Turn {}", game.turn.turn_number)),
-        PlayerAction::EndTurn(game.turn.get_active_team().team.clone()),
+        Action::EndTurn(game.turn.get_active_team().team.clone()),
     ));
 
     result
