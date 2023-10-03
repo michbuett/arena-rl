@@ -36,6 +36,10 @@ pub enum Action {
         trait_ref: String,
         msg: String,
     },
+
+    SpawnActor {
+        actor: Actor,
+    },
 }
 
 pub struct ActionResultBuilder<'a> {
@@ -171,6 +175,14 @@ pub fn run_player_action<'a>(action: Action, mut cw: CoreWorld) -> ActionResult 
         Action::AddTrait {
             targets, trait_ref, ..
         } => handle_add_trait(targets, trait_ref, cw),
+
+        Action::SpawnActor { actor } => {
+            let fx = FxSequence::new().then(FxEffect::dust("fx-dust-1", actor.pos, 400));
+
+            cw.update_actor(actor);
+
+            ActionResultBuilder::new(cw).append_fx_seq(fx)
+        }
     };
 
     result_builder.into_result()
@@ -422,7 +434,7 @@ fn perform_attack(
 
     // println!("\nATTACK VECTOR {:?}", v);
 
-    if v.is_none() {
+    if v.as_ref().map(|v| v.len()).unwrap_or(0) == 0 {
         // there are no targets or obstacles to hit
         // => cancel attack and do nothing
         return ActionResultBuilder::new(cw);

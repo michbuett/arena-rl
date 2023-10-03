@@ -32,9 +32,10 @@ fn render_screen_texts(
     scene.texts.push(
         ScreenText::new(
             DisplayStr::new(format!(
-                "Turn: {}, Score: {}",
+                "Turn: {}, Score: {}, {}",
                 render_turn_data(&game.turn),
                 game.score,
+                render_reinforcements_hint(&game.turn),
             )),
             ScreenPos(10, 10),
         )
@@ -42,41 +43,6 @@ fn render_screen_texts(
         .padding(10)
         .background((252, 251, 250, 255)),
     );
-
-    // let mut y = 75;
-    // for s in &game.log {
-    //     let msg = assets
-    //         .font("normal")?
-    //         .text(s.clone())
-    //         .max_width(500)
-    //         .padding(10)
-    //         .background(Color::RGBA(252, 251, 250, 100))
-    //         .prepare();
-
-    //     let txt_height = msg.dimension().1 as i32;
-
-    //     if y + txt_height > viewport.height() as i32 {
-    //         break;
-    //     }
-
-    //     msg.draw(cvs, (10, y))?;
-    //     y += txt_height;
-    // }
-
-    // if let CombatState::Win(Team(_, num, ..)) = game.state {
-    //     let text = assets
-    //         .font("very big")?
-    //         .text(format!("Team #{} wins!", num))
-    //         .padding(50)
-    //         .background(Color::RGBA(252, 251, 250, 150))
-    //         .prepare();
-
-    //     let (w, h) = text.dimension();
-    //     let x = (viewport.width() - w) / 2;
-    //     let y = (viewport.height() - h) / 2;
-
-    //     text.draw(cvs, (x as i32, y as i32))?;
-    // }
 }
 
 pub fn init_scroll_offset(
@@ -102,4 +68,12 @@ fn render_turn_data(td: &TurnState) -> String {
         CombatPhase::Action => "Time for action",
     };
     format!("{} ({})", td.turn_number, phase_str)
+}
+
+fn render_reinforcements_hint(td: &TurnState) -> String {
+    if let Some(num) = td.next_reinforcements {
+        format!("Reinforcements incomming (ETA: {})", num)
+    } else {
+        "Final wave!".to_string()
+    }
 }

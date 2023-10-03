@@ -7,18 +7,8 @@ use combat::init_combat_data;
 
 pub use types::*;
 
-// const TEAM_PLAYER: Team = Team("Player", 1, true);
-// const TEAM_CPU: Team = Team("Computer", 2, false);
-const TEAM_PLAYER: Team = Team {
-    name: "Player",
-    id: 1,
-    is_pc: true,
-};
-const TEAM_CPU: Team = Team {
-    name: "Computer",
-    id: 2,
-    is_pc: false,
-};
+const TEAM_PLAYER: TeamId = 1;
+const TEAM_CPU: TeamId = 2;
 
 pub fn step<'a, 'b>(g: Game<'a, 'b>, i: &Option<UserInput>) -> Game<'a, 'b> {
     match g {
@@ -70,13 +60,43 @@ fn teams_step<'a, 'b>(
     i: &Option<UserInput>,
 ) -> Game<'a, 'b> {
     match i {
-        Some(UserInput::SelectTeam(..)) => {
-            Game::Combat(init_combat_data(t, vec![TEAM_PLAYER, TEAM_CPU], g, tm))
-            // Game::Combat(init_combat_data(game_objects.clone(), world, dispatcher))
-        }
+        Some(UserInput::SelectTeam(..)) => Game::Combat(init_combat_data(
+            t,
+            vec![create_team_player(), create_team_cpu()],
+            g,
+            tm,
+        )),
 
         _ => Game::TeamSelection(g, tm, t),
     }
 }
 
-// fn create_sprite_sheets() -> CombatAssets {}
+fn create_team_player() -> Team {
+    Team {
+        name: "Player",
+        id: TEAM_PLAYER,
+        is_pc: true,
+        reinforcements: None,
+    }
+}
+
+fn create_team_cpu() -> Team {
+    Team {
+        name: "Computer",
+        id: TEAM_CPU,
+        is_pc: false,
+        reinforcements: Some(vec![
+            // initial (1st) wave
+            (1, MapPos(1, 6), ActorType::MonsterSucker),
+            (1, MapPos(1, 7), ActorType::MonsterSucker),
+            (1, MapPos(6, 0), ActorType::MonsterSucker),
+            (1, MapPos(7, 0), ActorType::MonsterSucker),
+            // 2nd wave
+            (5, MapPos(1, 6), ActorType::MonsterWorm),
+            (5, MapPos(1, 7), ActorType::MonsterWorm),
+            // 3rd wave
+            (10, MapPos(6, 0), ActorType::MonsterZombi),
+            (10, MapPos(7, 0), ActorType::MonsterZombi),
+        ]),
+    }
+}

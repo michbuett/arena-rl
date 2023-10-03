@@ -9,21 +9,6 @@ use crate::core::ai::determine_actor_action;
 use crate::core::ai::possible_player_actions;
 use crate::core::*;
 
-const ENEMY_SPAWN_POS: [(u8, u8); 12] = [
-    (1, 5),
-    (1, 6),
-    (1, 7),
-    (6, 0),
-    (7, 0),
-    (8, 0),
-    (6, 12),
-    (7, 12),
-    (8, 12),
-    (13, 5),
-    (13, 6),
-    (13, 7),
-];
-
 pub fn init_combat_data<'a, 'b>(
     game_objects: Vec<GameObject>,
     teams: Vec<Team>,
@@ -65,9 +50,9 @@ fn perform_step<'a, 'b>(
     user_input: &Option<UserInput>,
 ) -> StepResult {
     match current_state {
-        CombatState::Init(game_objects) => handle_init(game_objects, w, turn),
+        CombatState::Init(game_objects) => handle_init(game_objects, w),
 
-        CombatState::StartTurn() => handle_start_turn(&CoreWorld::new(w), turn),
+        CombatState::StartTurn() => handle_start_turn(CoreWorld::new(w), turn),
 
         CombatState::FindActor() => handle_find_actor(turn, &CoreWorld::new(w)),
 
@@ -97,7 +82,7 @@ fn find_actor_ready_for_activation(turn: &TurnState, world: &CoreWorld) -> Vec<(
         .filter_map(|go| {
             if let GameObject::Actor(a) = go {
                 if !a.activations.is_empty() {
-                    return Some((a.id, a.pos, a.is_pc(), a.team.id, a.activations[0].value));
+                    return Some((a.id, a.pos, a.is_pc(), a.team, a.activations[0].value));
                 }
             }
             None
@@ -225,33 +210,14 @@ fn find_objects_at(mpos: MapPos, world: &CoreWorld) -> Vec<GameObject> {
     result
 }
 
-fn handle_init(game_objects: &Vec<GameObject>, w: &World, turn: &TurnState) -> StepResult {
+fn handle_init(game_objects: &Vec<GameObject>, w: &World) -> StepResult {
     for o in game_objects {
         insert_game_object_components(o.clone(), w);
     }
 
-    if let Some(TeamData {
-        team: enemy_team, ..
-    }) = turn.teams.iter().find(|td| !td.team.is_pc)
-    {
-        spawn_obstacles(w);
-        spawn_enemies(0, w, enemy_team.clone());
-    }
+    spawn_obstacles(w);
 
     StepResult::new().switch_state(CombatState::StartTurn())
-}
-
-fn spawn_enemies(wave: u64, w: &World, team: Team) {
-    let generator: Read<ObjectGenerator> = w.system_data();
-    let wave = generator.generate_enemy_wave(wave);
-
-    for (pos_idx, actor_type) in wave {
-        let (x, y) = ENEMY_SPAWN_POS[pos_idx as usize];
-        let pos = WorldPos::new(x as f32, y as f32, 0.0);
-        let enemy = generator.generate_enemy_by_type(pos, team.clone(), actor_type);
-
-        insert_game_object_components(GameObject::Actor(enemy), w);
-    }
 }
 
 fn handle_find_actor(turn: &TurnState, world: &CoreWorld) -> StepResult {
@@ -313,17 +279,29 @@ fn handle_advance_game(turn: &TurnState) -> StepResult {
     }
 }
 
-fn handle_start_turn(world: &CoreWorld, turn: &TurnState) -> StepResult {
+fn handle_start_turn(world: CoreWorld, turn: &TurnState) -> StepResult {
     let mut actions: Vec<Action> = Vec::new();
     let mut actor_per_team: HashMap<TeamId, u8> = HashMap::new();
     let mut step_result = StepResult::new();
+    let mut new_actors = vec![];
+
+    for (team, pos, actor_type) in turn.reinforcements() {
+        print!("Reinforcements incomming: {:?} at {:?}", actor_type, pos);
+
+        let actor = world.generate_enemy(pos, team, actor_type);
+        let curr_amout = actor_per_team.get(&actor.team).copied().unwrap_or(0);
+
+        new_actors.push(actor.id);
+        actor_per_team.insert(actor.team, curr_amout + 1);
+        actions.push(Action::SpawnActor { actor });
+    }
 
     for o in world.game_objects() {
         if let GameObject::Actor(a) = o {
             actions.push(Action::StartTurn(a.id));
 
-            let curr_amout = actor_per_team.get(&a.team.id).copied().unwrap_or(0);
-            actor_per_team.insert(a.team.id, curr_amout + 1);
+            let curr_amout = actor_per_team.get(&a.team).copied().unwrap_or(0);
+            actor_per_team.insert(a.team, curr_amout + 1);
         }
     }
 

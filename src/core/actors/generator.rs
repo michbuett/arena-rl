@@ -3,22 +3,11 @@ use std::path::Path;
 use crate::core::WorldPos;
 
 use super::{
-    actor::{Actor, ActorBuilder, AiBehaviour, Team, Trait},
-    Visual, VisualElements,
+    actor::{Actor, ActorBuilder, ActorType, AiBehaviour, TeamId, Trait},
+    TraitStorage, Visual, VisualElements,
     VisualState::Hidden,
-    VisualState::Prone, TraitStorage,
+    VisualState::Prone,
 };
-
-pub enum ActorType {
-    Tank,
-    Saw,
-    Spear,
-    Healer,
-    Gunner,
-    MonsterSucker,
-    MonsterWorm,
-    MonsterZombi,
-}
 
 fn generate_name() -> String {
     one_of(&vec![
@@ -90,7 +79,7 @@ impl ObjectGenerator {
     pub fn generate_actor_by_type(
         &self,
         pos: WorldPos,
-        t: Team,
+        t: TeamId,
         actor_type: ActorType,
     ) -> ActorBuilder {
         match actor_type {
@@ -105,59 +94,22 @@ impl ObjectGenerator {
         }
     }
 
-    pub fn generate_player_by_type(&self, pos: WorldPos, t: Team, actor_type: ActorType) -> Actor {
+    pub fn generate_player_by_type(
+        &self,
+        pos: WorldPos,
+        t: TeamId,
+        actor_type: ActorType,
+    ) -> Actor {
         self.generate_actor_by_type(pos, t, actor_type).build()
     }
 
-    pub fn generate_enemy_by_type(&self, pos: WorldPos, t: Team, actor_type: ActorType) -> Actor {
+    pub fn generate_enemy_by_type(&self, pos: WorldPos, t: TeamId, actor_type: ActorType) -> Actor {
         self.generate_actor_by_type(pos, t, actor_type)
             .behaviour(AiBehaviour::Default)
             .build()
     }
 
-    pub fn generate_enemy_wave(&self, wave: u64) -> Vec<(u8, ActorType)> {
-        match wave {
-            0 => vec![(1, ActorType::MonsterSucker), (4, ActorType::MonsterSucker)],
-
-            1 => vec![
-                (0, ActorType::MonsterSucker),
-                (3, ActorType::MonsterSucker),
-                (1, ActorType::MonsterSucker),
-                (4, ActorType::MonsterSucker),
-            ],
-
-            2 => vec![(1, ActorType::MonsterWorm), (4, ActorType::MonsterWorm)],
-
-            3 => vec![(1, ActorType::MonsterZombi), (4, ActorType::MonsterZombi)],
-
-            4 => vec![
-                (0, ActorType::MonsterZombi),
-                (1, ActorType::MonsterZombi),
-                (2, ActorType::MonsterZombi),
-                (3, ActorType::MonsterZombi),
-                (4, ActorType::MonsterZombi),
-                (5, ActorType::MonsterZombi),
-            ],
-
-            5 => vec![
-                (0, ActorType::MonsterZombi),
-                (1, ActorType::MonsterZombi),
-                (2, ActorType::MonsterZombi),
-                (3, ActorType::MonsterZombi),
-                (4, ActorType::MonsterZombi),
-                (5, ActorType::MonsterZombi),
-                (6, ActorType::MonsterZombi),
-                (7, ActorType::MonsterZombi),
-                (8, ActorType::MonsterZombi),
-                (9, ActorType::MonsterZombi),
-                (10, ActorType::Healer),
-                (11, ActorType::MonsterZombi),
-            ],
-            _ => vec![],
-        }
-    }
-
-    fn generate_actor_heavy(&self, pos: WorldPos, t: Team) -> ActorBuilder {
+    fn generate_actor_heavy(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
             .visual(Visual::new(
                 VisualElements::new()
@@ -171,7 +123,7 @@ impl ObjectGenerator {
             ])
     }
 
-    fn generate_actor_saw(&self, pos: WorldPos, t: Team) -> ActorBuilder {
+    fn generate_actor_saw(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
             .visual(Visual::new(
                 VisualElements::new()
@@ -184,7 +136,7 @@ impl ObjectGenerator {
             ])
     }
 
-    fn generate_actor_spear(&self, pos: WorldPos, t: Team) -> ActorBuilder {
+    fn generate_actor_spear(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
             .visual(Visual::new(
                 VisualElements::new()
@@ -197,7 +149,7 @@ impl ObjectGenerator {
             ])
     }
 
-    fn generate_actor_healer(&self, pos: WorldPos, t: Team) -> ActorBuilder {
+    fn generate_actor_healer(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
             .visual(Visual::new(
                 VisualElements::new().body("body-light_1").head("head_5"),
@@ -208,7 +160,7 @@ impl ObjectGenerator {
             ])
     }
 
-    fn generate_actor_gunner(&self, pos: WorldPos, t: Team) -> ActorBuilder {
+    fn generate_actor_gunner(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
             .visual(Visual::new(
                 VisualElements::new().body("body-light_4").head("head_6"),
@@ -219,7 +171,7 @@ impl ObjectGenerator {
             ])
     }
 
-    fn generate_monster_sucker(&self, pos: WorldPos, t: Team) -> ActorBuilder {
+    fn generate_monster_sucker(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
             .visual(
                 Visual::new(VisualElements::new().body("monster-sucker_1"))
@@ -233,7 +185,7 @@ impl ObjectGenerator {
             ])
     }
 
-    fn generate_monster_worm(&self, pos: WorldPos, t: Team) -> ActorBuilder {
+    fn generate_monster_worm(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
             .visual(
                 Visual::new(
@@ -249,7 +201,7 @@ impl ObjectGenerator {
             ])
     }
 
-    fn generate_monster_zombi(&self, pos: WorldPos, t: Team) -> ActorBuilder {
+    fn generate_monster_zombi(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
         ActorBuilder::new(generate_name(), pos, t)
             .visual(Visual::new(
                 VisualElements::new()
@@ -271,4 +223,3 @@ fn one_of<'a, T>(v: &'a Vec<T>) -> &'a T {
     use rand::seq::SliceRandom;
     v.choose(&mut rand::thread_rng()).unwrap()
 }
-

@@ -16,6 +16,7 @@ fn zombi_action(actor: &Actor, cw: CoreWorld) -> Action {
     for ta in find_enemies(&actor, &cw) {
         let attacks = possible_attacks(actor, &ta, &cw)
             .drain(..)
+            .filter(|(_, attack_vector)| !attack_vector.is_empty())
             .collect::<Vec<_>>();
 
         if let Some((attack, attack_vector)) = pick_one(attacks) {

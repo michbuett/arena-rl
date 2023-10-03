@@ -1,11 +1,15 @@
 use core::panic;
-use std::{cmp::Ordering, collections::HashMap, time::Instant};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, HashMap},
+    time::Instant,
+};
 
 use specs::prelude::*;
 
 use crate::core::{
-    ai::PlayerActionOptions, Action, Card, Deck, DisplayStr, GameObject, MapPos, ObjectGenerator,
-    RndDeck, Team, TeamId, TextureMap, ID,
+    ai::PlayerActionOptions, Action, ActorType, Card, Deck, DisplayStr, GameObject, MapPos,
+    ObjectGenerator, RndDeck, Team, TeamId, TextureMap, ID,
 };
 
 #[derive(Debug, Clone)]
@@ -184,7 +188,6 @@ pub struct SelectedPos {
     pub objects: Vec<GameObject>,
 }
 
-// pub type EntityAction = (ID, Act);
 #[derive(Clone, Debug)]
 pub struct TeamData {
     pub team: Team,
@@ -215,22 +218,91 @@ impl TeamData {
 }
 
 #[derive(Clone, Debug)]
+pub struct TeamSet(BTreeMap<TeamId, TeamData>, Vec<TeamId>);
+
+impl TeamSet {
+    fn new(mut teams: Vec<Team>) -> Self {
+        let mut btree_map = BTreeMap::new();
+        let mut team_ids = vec![];
+
+        for t in teams.drain(..) {
+            team_ids.push(t.id);
+            btree_map.insert(t.id, TeamData::new(t));
+        }
+
+        Self(btree_map, team_ids)
+    }
+
+    pub fn get(&self, team_id: &TeamId) -> &TeamData {
+        self.0.get(team_id).unwrap()
+    }
+
+    fn set(&mut self, td: TeamData) {
+        self.0.insert(td.team.id, td);
+    }
+
+    fn at(&self, idx: usize) -> &TeamData {
+        self.1.get(idx).map(|team_id| self.get(team_id)).unwrap()
+    }
+
+    fn next_idx(&self, idx: usize) -> usize {
+        (idx + 1) % self.1.len()
+    }
+
+    fn reinforcements(&self, turn_number: u64) -> Vec<(TeamId, MapPos, ActorType)> {
+        let mut result = vec![];
+        for (team_id, data) in self.0.iter() {
+            if let Some(reinforcements) = &data.team.reinforcements {
+                for (turn, mpos, actor_type) in reinforcements.iter() {
+                    if *turn == turn_number {
+                        result.push((*team_id, *mpos, *actor_type));
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    fn next_reinforcements(&self, turn_number: u64) -> Option<u64> {
+        self.0
+            .values()
+            .filter_map(|td| td.team.reinforcements.as_ref())
+            .flat_map(|l| l)
+            .filter_map(|(turn, ..)| {
+                if *turn >= turn_number {
+                    Some(*turn - turn_number)
+                } else {
+                    None
+                }
+            })
+            .min()
+    }
+
+    fn len(&self) -> usize {
+        self.1.len()
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct TurnState {
     pub turn_number: u64,
     pub phase: CombatPhase,
-    pub teams: Vec<TeamData>,
+    pub next_reinforcements: Option<u64>,
 
+    teams: TeamSet,
     active_team_idx: usize,
     priority_team_idx: usize,
     teams_left: usize,
 }
 
 impl TurnState {
-    pub fn new(mut teams: Vec<Team>) -> Self {
+    pub fn new(teams: Vec<Team>) -> Self {
         let teams_left = teams.len();
-        let teams = teams.drain(..).map(|t| TeamData::new(t)).collect();
+        let teams = TeamSet::new(teams);
 
         Self {
+            next_reinforcements: teams.next_reinforcements(1),
             teams,
             turn_number: 1,
             active_team_idx: 0,
@@ -241,29 +313,15 @@ impl TurnState {
     }
 
     pub fn get_active_team(&self) -> &TeamData {
-        &self.teams.get(self.active_team_idx).unwrap()
+        self.teams.at(self.active_team_idx)
     }
 
     pub fn get_team(&self, team_id: TeamId) -> &TeamData {
-        let idx = self.teams.iter().position(|t| t.team.id == team_id);
-
-        if let Some(idx) = idx {
-            &self.teams[idx]
-        } else {
-            panic!("Unknown team: '{:?}'", team_id)
-        }
+        self.teams.get(&team_id)
     }
 
     fn set_team(&mut self, td: TeamData) {
-        // let mut result = self.clone();
-        let id = td.team.id;
-        let idx = self.teams.iter().position(|t| t.team.id == id);
-
-        if let Some(idx) = idx {
-            self.teams[idx] = td;
-        } else {
-            panic!("Modifying unknown team: '{:?}'", id);
-        }
+        self.teams.set(td);
     }
 
     pub fn step(mut self) -> Self {
@@ -271,18 +329,19 @@ impl TurnState {
         if let CombatPhase::Planning = self.phase {
             if self.teams_left == 0 {
                 self.phase = CombatPhase::Action;
-                // return None;
             } else {
                 self.teams_left -= 1;
-                self.active_team_idx = (self.active_team_idx + 1) % self.teams.len();
+                self.active_team_idx = self.teams.next_idx(self.active_team_idx);
             }
         } else {
-            self.priority_team_idx = (self.priority_team_idx + 1) % self.teams.len();
+            self.priority_team_idx = self.teams.next_idx(self.priority_team_idx + 1);
             self.active_team_idx = self.priority_team_idx;
             self.teams_left = self.teams.len();
             self.phase = CombatPhase::Planning;
             self.turn_number += 1;
         }
+
+        self.next_reinforcements = self.teams.next_reinforcements(self.turn_number);
 
         println!("[DEBUG] TurnData::step - current turn {}, phase: {:?}, active team index: {}, priority team index: {}", self.turn_number, self.phase, self.active_team_idx, self.priority_team_idx);
         self
@@ -296,15 +355,15 @@ impl TurnState {
             let mut steps = 1;
 
             while steps <= self.teams.len() {
-                if self.teams[idx].team.id == ta {
+                if self.teams.at(idx).team.id == ta {
                     return Ordering::Greater;
                 }
-                if self.teams[idx].team.id == tb {
+                if self.teams.at(idx).team.id == tb {
                     return Ordering::Less;
                 }
 
                 steps += 1;
-                idx = (idx + 1) % self.teams.len();
+                idx = self.teams.next_idx(idx);
             }
 
             panic!(
@@ -312,6 +371,10 @@ impl TurnState {
                 ta, tb
             );
         }
+    }
+
+    pub fn reinforcements(&self) -> Vec<(TeamId, MapPos, ActorType)> {
+        self.teams.reinforcements(self.turn_number)
     }
 }
 

@@ -4,7 +4,7 @@ use std::time::Instant;
 
 pub use super::traits::*;
 
-use crate::core::{Card, DisplayStr, WorldPos};
+use crate::core::{Card, DisplayStr, MapPos, WorldPos};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct ID(Instant, u64, u64);
@@ -35,18 +35,31 @@ pub struct Team {
     pub name: &'static str,
     pub id: TeamId,
     pub is_pc: bool,
+    pub reinforcements: Option<Vec<(u64, MapPos, ActorType)>>,
 }
 
 impl Team {
     pub fn is_member(&self, a: &Actor) -> bool {
-        self.id == a.team.id
+        self.id == a.team
     }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ActorType {
+    Tank,
+    Saw,
+    Spear,
+    Healer,
+    Gunner,
+    MonsterSucker,
+    MonsterWorm,
+    MonsterZombi,
 }
 
 pub struct ActorBuilder {
     behaviour: Option<AiBehaviour>,
     pos: WorldPos,
-    team: Team,
+    team: TeamId,
     visual: Visual,
     name: String,
     keywords: Vec<Keyword>,
@@ -54,7 +67,7 @@ pub struct ActorBuilder {
 }
 
 impl ActorBuilder {
-    pub fn new(name: String, pos: WorldPos, team: Team) -> Self {
+    pub fn new(name: String, pos: WorldPos, team: TeamId) -> Self {
         Self {
             pos,
             team,
@@ -216,7 +229,7 @@ pub struct Actor {
     pub effects: Vec<(DisplayStr, Effect)>,
     pub name: String,
     pub active: bool,
-    pub team: Team,
+    pub team: TeamId,
     pub pos: WorldPos,
     pub activations: Vec<Card>,
     pub behaviour: Option<AiBehaviour>,

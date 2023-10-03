@@ -6,7 +6,9 @@ use specs::World as SpecsWorld;
 
 use crate::components::{GameObjectCmp, ObstacleCmp, Position};
 
+use super::ActorType;
 use super::ObjectGenerator;
+use super::TeamId;
 use super::TraitStorage;
 use super::{Actor, GameObject, Map, MapPos, ID};
 
@@ -177,6 +179,11 @@ impl<'a> CoreWorld<'a> {
         }
     }
 
+    pub fn generate_enemy(&self, pos: MapPos, team: TeamId, actor_type: ActorType) -> Actor {
+        self.generator
+            .generate_enemy_by_type(pos.to_world_pos(), team, actor_type)
+    }
+
     pub fn into_changes(self) -> Vec<Change> {
         let mut result = vec![];
         let mut updates = self.updates;
@@ -227,7 +234,7 @@ impl<'a> Iterator for GameObjectIterator<'a> {
                     continue;
                 }
             } else {
-                return Some(&go)
+                return Some(&go);
             }
         }
 
