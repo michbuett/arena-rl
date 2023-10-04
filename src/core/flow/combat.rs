@@ -49,6 +49,15 @@ fn perform_step<'a, 'b>(
     w: &World,
     user_input: &Option<UserInput>,
 ) -> StepResult {
+    // match current_state {
+    //     CombatState::WaitUntil(..) => {}
+    //     CombatState::WaitForUserInput(..) => {}
+    //     _ => {
+    //         println!("[DEBUG perform_step - IN]");
+    //         println!("  - current state: {:?}", current_state);
+    //     }
+    // }
+
     match current_state {
         CombatState::Init(game_objects) => handle_init(game_objects, w),
 
@@ -58,7 +67,7 @@ fn perform_step<'a, 'b>(
 
         CombatState::AdvanceGame() => handle_advance_game(turn),
 
-        CombatState::ResolveAction(actions) => handle_resolve_action(turn, actions, w),
+        CombatState::ResolveAction(actions) => handle_resolve_action(actions, w),
 
         CombatState::SelectInitiative() => handle_select_initiative(turn, &CoreWorld::new(w)),
 
@@ -138,9 +147,9 @@ fn handle_wait_for_user_input(
     td: &TurnState,
     w: &CoreWorld,
 ) -> StepResult {
-    if let Some(i) = i {
-        println!("\n[DEBUG] handle user input {:?}", i);
-    }
+    // if let Some(i) = i {
+    //     println!("\n[DEBUG] handle user input {:?}", i);
+    // }
     match i {
         Some(UserInput::SelectWorldPos(pos)) => {
             // User did just select another map position
@@ -158,6 +167,7 @@ fn handle_wait_for_user_input(
 
         Some(UserInput::SelectActivationCard(idx)) => {
             if let InputContext::ActivateActor {
+                team,
                 hand,
                 possible_actors,
                 ..
@@ -165,6 +175,7 @@ fn handle_wait_for_user_input(
             {
                 return StepResult::new().switch_state(CombatState::WaitForUserInput(
                     InputContext::ActivateActor {
+                        team: *team,
                         hand: hand.clone(),
                         possible_actors: possible_actors.clone(),
                         selected_card_idx: Some(*idx),
@@ -174,8 +185,8 @@ fn handle_wait_for_user_input(
             }
         }
 
-        Some(UserInput::AssigneActivation(actor_id, card_idx)) => {
-            let mut team_data = td.get_active_team().clone();
+        Some(UserInput::AssigneActivation(actor_id, team_id, card_idx)) => {
+            let mut team_data = td.get_team(*team_id).clone();
             let card = team_data.hand.remove(*card_idx);
 
             return StepResult::new().modify_team(team_data).switch_state(
@@ -221,6 +232,11 @@ fn handle_init(game_objects: &Vec<GameObject>, w: &World) -> StepResult {
 }
 
 fn handle_find_actor(turn: &TurnState, world: &CoreWorld) -> StepResult {
+    if let CombatPhase::Planning = turn.phase {
+        // this can happen after advancing the game or resolving an action
+        return StepResult::new().switch_state(CombatState::SelectInitiative());
+    }
+
     if let Some(id) = find_active_actor(world) {
         // there already is an active (activated) actor
         // -> let it select and perform its action
@@ -286,8 +302,6 @@ fn handle_start_turn(world: CoreWorld, turn: &TurnState) -> StepResult {
     let mut new_actors = vec![];
 
     for (team, pos, actor_type) in turn.reinforcements() {
-        print!("Reinforcements incomming: {:?} at {:?}", actor_type, pos);
-
         let actor = world.generate_enemy(pos, team, actor_type);
         let curr_amout = actor_per_team.get(&actor.team).copied().unwrap_or(0);
 
@@ -314,8 +328,9 @@ fn handle_start_turn(world: CoreWorld, turn: &TurnState) -> StepResult {
 }
 
 fn handle_select_initiative(turn: &TurnState, world: &CoreWorld) -> StepResult {
-    // let mut turn = turn.clone();
-    let team_data = turn.get_active_team();
+    let team_data = turn.get_active_team().unwrap();
+    // unwrap is save since we are only selecting initiativ in planning phase
+    // and there is always an activ team in the planning phase
 
     if team_data.ready || (team_data.team.is_pc && team_data.hand.is_empty()) {
         // there are no more activations for this team
@@ -330,6 +345,7 @@ fn handle_select_initiative(turn: &TurnState, world: &CoreWorld) -> StepResult {
         // => wait for the user's input
         StepResult::new().switch_state(CombatState::WaitForUserInput(
             InputContext::ActivateActor {
+                team: team_data.team.id,
                 hand: team_data.hand.clone(),
                 possible_actors: activ_team_members(&team_data.team, world),
                 selected_card_idx: None,
@@ -396,14 +412,9 @@ fn handle_select_player_action(id: ID, w: CoreWorld) -> StepResult {
     }
 }
 
-fn handle_resolve_action(turn: &TurnState, actions: &Vec<Action>, w: &World) -> StepResult {
+fn handle_resolve_action(actions: &Vec<Action>, w: &World) -> StepResult {
     if actions.is_empty() {
-        return match turn.phase {
-            CombatPhase::Planning => {
-                StepResult::new().switch_state(CombatState::SelectInitiative())
-            }
-            CombatPhase::Action => StepResult::new().switch_state(CombatState::FindActor()),
-        };
+        return StepResult::new().switch_state(CombatState::FindActor());
     }
 
     let mut remaining_actions = actions.to_vec();

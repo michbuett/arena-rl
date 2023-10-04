@@ -230,16 +230,17 @@ fn get_default_action(game: &CombatData) -> DefaultAction {
 
         match ctxt {
             InputContext::ActivateActor {
+                team,
                 possible_actors,
                 selected_card_idx: Some(idx),
                 ..
             } => {
-                let card = game.turn.get_active_team().hand[*idx];
+                let card = game.turn.get_team(*team).hand[*idx];
                 let activations = possible_actors
                     .iter()
                     .filter_map(|(pos, (id, max))| {
                         if card.value <= *max {
-                            Some((*pos, UserInput::AssigneActivation(*id, *idx)))
+                            Some((*pos, UserInput::AssigneActivation(*id, *team, *idx)))
                         } else {
                             None
                         }

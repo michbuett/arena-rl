@@ -215,7 +215,7 @@ fn describe_trait(t: &Trait) -> String {
 }
 
 fn create_action_buttons(
-    game: &CombatData,
+    _game: &CombatData,
     actions: Option<&Vec<Action>>,
 ) -> Vec<(DisplayStr, Action)> {
     let mut result = vec![];
@@ -228,10 +228,11 @@ fn create_action_buttons(
         }
     }
 
-    result.push((
-        DisplayStr::new(format!("End Turn {}", game.turn.turn_number)),
-        Action::EndTurn(game.turn.get_active_team().team.clone()),
-    ));
+    // TODO clarify what should happen when clicking "End Turn"
+    // result.push((
+    //     DisplayStr::new(format!("End Turn {}", game.turn.turn_number)),
+    //     Action::EndTurn(game.turn.get_active_team().team.clone()),
+    // ));
 
     result
 }
