@@ -76,7 +76,7 @@ fn perform_step<'a, 'b>(
         CombatState::WaitUntil(time, actions) => handle_wait_until(time, actions),
 
         CombatState::WaitForUserInput(ctxt, selected_pos) => {
-            handle_wait_for_user_input(ctxt, selected_pos, user_input, turn, &CoreWorld::new(w))
+            handle_wait_for_user_input(ctxt, selected_pos, user_input, &CoreWorld::new(w))
         }
     }
 }
@@ -144,7 +144,6 @@ fn handle_wait_for_user_input(
     ctxt: &InputContext,
     selected_pos: &Option<SelectedPos>,
     i: &Option<UserInput>,
-    td: &TurnState,
     w: &CoreWorld,
 ) -> StepResult {
     // if let Some(i) = i {
@@ -186,7 +185,7 @@ fn handle_wait_for_user_input(
         }
 
         Some(UserInput::AssigneActivation(actor_id, team_id, card_idx)) => {
-            let mut team_data = td.get_team(*team_id).clone();
+            let mut team_data = w.teams().get(team_id).clone();
             let card = team_data.hand.remove(*card_idx);
 
             return StepResult::new().modify_team(team_data).switch_state(
@@ -302,6 +301,7 @@ fn handle_start_turn(world: CoreWorld, turn: &TurnState) -> StepResult {
     let mut new_actors = vec![];
 
     for (team, pos, actor_type) in turn.reinforcements() {
+        // for (team, pos, actor_type) in world.teams().reinforcements(turn.turn_number) {
         let actor = world.generate_enemy(pos, team, actor_type);
         let curr_amout = actor_per_team.get(&actor.team).copied().unwrap_or(0);
 
@@ -320,19 +320,25 @@ fn handle_start_turn(world: CoreWorld, turn: &TurnState) -> StepResult {
     }
 
     for (team_id, num_actors) in actor_per_team.iter() {
-        step_result =
-            step_result.modify_team(turn.get_team(*team_id).clone().start_new_turn(*num_actors))
+        step_result = step_result.modify_team(
+            world
+                .teams()
+                .get(team_id)
+                .clone()
+                .start_new_turn(*num_actors),
+        )
     }
 
     step_result.switch_state(CombatState::ResolveAction(actions))
 }
 
 fn handle_select_initiative(turn: &TurnState, world: &CoreWorld) -> StepResult {
-    let team_data = turn.get_active_team().unwrap();
+    let teams = world.teams();
+    let active_team = teams.get(&turn.get_active_team().unwrap());
     // unwrap is save since we are only selecting initiativ in planning phase
     // and there is always an activ team in the planning phase
 
-    if team_data.ready || (team_data.team.is_pc && team_data.hand.is_empty()) {
+    if active_team.ready || (active_team.team.is_pc && active_team.hand.is_empty()) {
         // there are no more activations for this team
         // (eithere by choise or because of lack of resources)
         // => progress to next game state (either next activate next team or
@@ -340,14 +346,14 @@ fn handle_select_initiative(turn: &TurnState, world: &CoreWorld) -> StepResult {
         return StepResult::new().switch_state(CombatState::AdvanceGame());
     }
 
-    if team_data.team.is_pc {
+    if active_team.team.is_pc {
         // The team is controlled by the a human player
         // => wait for the user's input
         StepResult::new().switch_state(CombatState::WaitForUserInput(
             InputContext::ActivateActor {
-                team: team_data.team.id,
-                hand: team_data.hand.clone(),
-                possible_actors: activ_team_members(&team_data.team, world),
+                team: active_team.team.id,
+                hand: active_team.hand.clone(),
+                possible_actors: activ_team_members(&active_team.team, world),
                 selected_card_idx: None,
             },
             None,
@@ -358,7 +364,7 @@ fn handle_select_initiative(turn: &TurnState, world: &CoreWorld) -> StepResult {
         // TODO: figure out a need mechanic for ai activation (one that is
         //       more challenging and allows e.g. for multiple activations)
         let mut actions: Vec<Action> = Vec::new();
-        let mut team_data = team_data.clone();
+        let mut team_data = active_team.clone();
 
         for o in world.game_objects() {
             if let GameObject::Actor(a) = o {

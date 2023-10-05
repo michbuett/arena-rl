@@ -58,17 +58,22 @@ pub struct CombatData<'a, 'b> {
 impl<'a, 'b> CombatData<'a, 'b> {
     pub fn new(
         state: CombatState,
-        world: World,
+        mut world: World,
         dispatcher: Dispatcher<'a, 'b>,
         teams: Vec<Team>,
     ) -> Self {
+        let turn = TurnState::new(&teams);
+        let teams = TeamSet::new(teams);
+
+        world.insert(teams);
+
         Self {
             state,
             world,
             dispatcher,
             log: vec![],
             score: 0,
-            turn: TurnState::new(teams),
+            turn,
         }
     }
 
@@ -154,7 +159,8 @@ impl StepResult {
                     }
 
                     StepChange::ModifyTeam(team) => {
-                        combat_data.turn.set_team(team);
+                        let mut teams_mut = combat_data.world.fetch_mut::<TeamSet>();
+                        teams_mut.set(team);
                     }
 
                     StepChange::AppendLog(l) => {
@@ -218,7 +224,7 @@ impl TeamData {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct TeamSet(BTreeMap<TeamId, TeamData>, Vec<TeamId>);
 
 impl TeamSet {
@@ -241,48 +247,6 @@ impl TeamSet {
     fn set(&mut self, td: TeamData) {
         self.0.insert(td.team.id, td);
     }
-
-    fn at(&self, idx: usize) -> &TeamData {
-        self.1.get(idx).map(|team_id| self.get(team_id)).unwrap()
-    }
-
-    fn next_idx(&self, idx: usize) -> usize {
-        (idx + 1) % self.1.len()
-    }
-
-    fn reinforcements(&self, turn_number: u64) -> Vec<(TeamId, MapPos, ActorType)> {
-        let mut result = vec![];
-        for (team_id, data) in self.0.iter() {
-            if let Some(reinforcements) = &data.team.reinforcements {
-                for (turn, mpos, actor_type) in reinforcements.iter() {
-                    if *turn == turn_number {
-                        result.push((*team_id, *mpos, *actor_type));
-                    }
-                }
-            }
-        }
-
-        result
-    }
-
-    fn next_reinforcements(&self, turn_number: u64) -> Option<u64> {
-        self.0
-            .values()
-            .filter_map(|td| td.team.reinforcements.as_ref())
-            .flat_map(|l| l)
-            .filter_map(|(turn, ..)| {
-                if *turn >= turn_number {
-                    Some(*turn - turn_number)
-                } else {
-                    None
-                }
-            })
-            .min()
-    }
-
-    fn len(&self) -> usize {
-        self.1.len()
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -291,42 +255,59 @@ pub struct TurnState {
     pub phase: CombatPhase,
     pub next_reinforcements: Option<u64>,
 
-    teams: TeamSet,
+    teams: Vec<TeamId>,
     active_team_idx: usize,
     priority_team_idx: usize,
     teams_left: usize,
+    reinforcements: Vec<(u64, TeamId, MapPos, ActorType)>,
 }
 
 impl TurnState {
-    pub fn new(teams: Vec<Team>) -> Self {
-        let teams_left = teams.len();
-        let teams = TeamSet::new(teams);
+    pub fn new(teams: &Vec<Team>) -> Self {
+        let mut reinforcements = vec![];
+        let mut team_ids = vec![];
+        let mut next_reinforcements = None;
+
+        for team in teams.iter() {
+            team_ids.push(team.id);
+
+            if let Some(team_reinforcements) = &team.reinforcements {
+                for (turn, mpos, actor_type) in team_reinforcements.iter() {
+                    reinforcements.push((*turn, team.id, *mpos, *actor_type));
+
+                    if let Some(v) = next_reinforcements {
+                        if (turn - 1) < v {
+                            next_reinforcements = Some(turn - 1);
+                        }
+                    } else {
+                        next_reinforcements = Some(turn - 1)
+                    }
+                }
+            }
+        }
 
         Self {
-            next_reinforcements: teams.next_reinforcements(1),
-            teams,
+            next_reinforcements,
+            teams: team_ids,
             turn_number: 1,
             active_team_idx: 0,
             priority_team_idx: 0,
-            teams_left,
+            teams_left: teams.len(),
             phase: CombatPhase::Planning,
+            reinforcements,
         }
     }
 
-    pub fn get_active_team(&self) -> Option<&TeamData> {
+    pub fn get_active_team(&self) -> Option<TeamId> {
         if let CombatPhase::Planning = self.phase {
-            Some(self.teams.at(self.active_team_idx))
+            self.teams.get(self.active_team_idx).copied()
         } else {
             None
         }
     }
 
-    pub fn get_team(&self, team_id: TeamId) -> &TeamData {
-        self.teams.get(&team_id)
-    }
-
-    fn set_team(&mut self, td: TeamData) {
-        self.teams.set(td);
+    fn next_team_idx(&self, idx: usize) -> usize {
+        (idx + 1) % self.teams.len()
     }
 
     pub fn step(mut self) -> Self {
@@ -337,17 +318,17 @@ impl TurnState {
                 self.phase = CombatPhase::Action;
                 self.active_team_idx = self.priority_team_idx;
             } else {
-                self.active_team_idx = self.teams.next_idx(self.active_team_idx);
+                self.active_team_idx = self.next_team_idx(self.active_team_idx);
             }
         } else {
-            self.priority_team_idx = self.teams.next_idx(self.priority_team_idx);
+            self.priority_team_idx = self.next_team_idx(self.priority_team_idx);
             self.active_team_idx = self.priority_team_idx;
             self.teams_left = self.teams.len();
             self.phase = CombatPhase::Planning;
             self.turn_number += 1;
+            self.next_reinforcements = self.next_reinforcements();
         }
 
-        self.next_reinforcements = self.teams.next_reinforcements(self.turn_number);
         self
     }
 
@@ -359,15 +340,15 @@ impl TurnState {
             let mut steps = 1;
 
             while steps <= self.teams.len() {
-                if self.teams.at(idx).team.id == ta {
+                if self.teams[idx] == ta {
                     return Ordering::Greater;
                 }
-                if self.teams.at(idx).team.id == tb {
+                if self.teams[idx] == tb {
                     return Ordering::Less;
                 }
 
                 steps += 1;
-                idx = self.teams.next_idx(idx);
+                idx = self.next_team_idx(idx);
             }
 
             panic!(
@@ -378,7 +359,29 @@ impl TurnState {
     }
 
     pub fn reinforcements(&self) -> Vec<(TeamId, MapPos, ActorType)> {
-        self.teams.reinforcements(self.turn_number)
+        self.reinforcements
+            .iter()
+            .filter_map(|(turn, team_id, mpos, actor_type)| {
+                if *turn == self.turn_number {
+                    Some((*team_id, *mpos, *actor_type))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    fn next_reinforcements(&self) -> Option<u64> {
+        self.reinforcements
+            .iter()
+            .filter_map(|(turn, ..)| {
+                if *turn >= self.turn_number {
+                    Some(*turn - self.turn_number)
+                } else {
+                    None
+                }
+            })
+            .min()
     }
 }
 
@@ -412,23 +415,23 @@ fn test_stepping_turn_state_activates_teams_correctly() {
     ];
 
     // 1st turn
-    let turn_state = TurnState::new(teams);
+    let turn_state = TurnState::new(&teams);
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 0);
-    assert_eq!(turn_state.get_active_team().unwrap().team.name, "Team #1");
+    assert_eq!(turn_state.get_active_team().unwrap(), 1);
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 0);
-    assert_eq!(turn_state.get_active_team().unwrap().team.name, "Team #2");
+    assert_eq!(turn_state.get_active_team().unwrap(), 2);
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 0);
-    assert_eq!(turn_state.get_active_team().unwrap().team.name, "Team #3");
+    assert_eq!(turn_state.get_active_team().unwrap(), 3);
 
     let turn_state = turn_state.step();
 
@@ -441,19 +444,19 @@ fn test_stepping_turn_state_activates_teams_correctly() {
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 1);
-    assert_eq!(turn_state.get_active_team().unwrap().team.name, "Team #2");
+    assert_eq!(turn_state.get_active_team().unwrap(), 2);
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 1);
-    assert_eq!(turn_state.get_active_team().unwrap().team.name, "Team #3");
+    assert_eq!(turn_state.get_active_team().unwrap(), 3);
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 1);
-    assert_eq!(turn_state.get_active_team().unwrap().team.name, "Team #1");
+    assert_eq!(turn_state.get_active_team().unwrap(), 1);
 
     let turn_state = turn_state.step();
 
@@ -466,19 +469,19 @@ fn test_stepping_turn_state_activates_teams_correctly() {
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 2);
-    assert_eq!(turn_state.get_active_team().unwrap().team.name, "Team #3");
+    assert_eq!(turn_state.get_active_team().unwrap(), 3);
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 2);
-    assert_eq!(turn_state.get_active_team().unwrap().team.name, "Team #1");
+    assert_eq!(turn_state.get_active_team().unwrap(), 1);
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 2);
-    assert_eq!(turn_state.get_active_team().unwrap().team.name, "Team #2");
+    assert_eq!(turn_state.get_active_team().unwrap(), 2);
 
     let turn_state = turn_state.step();
 
@@ -491,19 +494,19 @@ fn test_stepping_turn_state_activates_teams_correctly() {
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 0);
-    assert_eq!(turn_state.get_active_team().unwrap().team.name, "Team #1");
+    assert_eq!(turn_state.get_active_team().unwrap(), 1);
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 0);
-    assert_eq!(turn_state.get_active_team().unwrap().team.name, "Team #2");
+    assert_eq!(turn_state.get_active_team().unwrap(), 2);
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 0);
-    assert_eq!(turn_state.get_active_team().unwrap().team.name, "Team #3");
+    assert_eq!(turn_state.get_active_team().unwrap(), 3);
 
     let turn_state = turn_state.step();
 

@@ -139,7 +139,6 @@ pub fn run_player_action<'a>(action: Action, mut cw: CoreWorld) -> ActionResult 
         }
 
         Action::AssigneActivation(id, card) => {
-            // println!("[ACTOR] assign activation {:?}", card);
             cw.modify_actor(id, |a| a.assigne_activation(card));
             ActionResultBuilder::new(cw)
         }

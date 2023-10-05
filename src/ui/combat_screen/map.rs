@@ -233,9 +233,10 @@ fn get_default_action(game: &CombatData) -> DefaultAction {
                 team,
                 possible_actors,
                 selected_card_idx: Some(idx),
+                hand,
                 ..
             } => {
-                let card = game.turn.get_team(*team).hand[*idx];
+                let card = hand[*idx];
                 let activations = possible_actors
                     .iter()
                     .filter_map(|(pos, (id, max))| {

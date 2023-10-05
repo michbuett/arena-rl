@@ -6,6 +6,7 @@ use specs::World as SpecsWorld;
 
 use crate::components::{GameObjectCmp, ObstacleCmp, Position};
 
+use super::flow::TeamSet;
 use super::ActorType;
 use super::ObjectGenerator;
 use super::TeamId;
@@ -19,8 +20,9 @@ pub enum Change {
 }
 
 pub struct CoreWorld<'a> {
+    world: &'a SpecsWorld,
+
     // world resources
-    map: Read<'a, Map>,
     generator: Read<'a, ObjectGenerator>,
 
     // component storages
@@ -36,8 +38,7 @@ pub struct CoreWorld<'a> {
 impl<'a> CoreWorld<'a> {
     pub fn new(w: &'a SpecsWorld) -> Self {
         let mut entity_map = HashMap::new();
-        let (map, generator, entities, game_objects, obstacles, positions): (
-            Read<Map>,
+        let (generator, entities, game_objects, obstacles, positions): (
             Read<ObjectGenerator>,
             Entities,
             ReadStorage<GameObjectCmp>,
@@ -50,7 +51,7 @@ impl<'a> CoreWorld<'a> {
         }
 
         Self {
-            map,
+            world: w,
             generator,
             entities,
             game_objects,
@@ -61,8 +62,12 @@ impl<'a> CoreWorld<'a> {
         }
     }
 
-    pub fn map(&self) -> &Map {
-        &self.map
+    pub fn map(&self) -> Read<Map> {
+        self.world.read_resource::<Map>().into()
+    }
+
+    pub fn teams(&self) -> Read<TeamSet> {
+        self.world.read_resource::<TeamSet>().into()
     }
 
     pub fn traits(&self) -> &TraitStorage {

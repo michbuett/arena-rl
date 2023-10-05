@@ -62,7 +62,11 @@ fn lazy_insert_component_for_actor<'a>(entity: Entity, a: Actor, data: SysData) 
     updater.insert(
         entity,
         ObstacleCmp {
-            movement: (Some(Obstacle::Blocker), None, None),
+            movement: (
+                Some(Obstacle::Blocker),
+                Some(Obstacle::Blocker),
+                Some(Obstacle::Blocker),
+            ),
             reach: Some(Hitbox::new_normal_actor()),
         },
     );
