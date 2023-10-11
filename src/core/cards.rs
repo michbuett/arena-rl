@@ -2,7 +2,7 @@ extern crate rand;
 
 use rand::prelude::*;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Suite {
     Clubs,
     Spades,
@@ -10,59 +10,59 @@ pub enum Suite {
     Diamonds,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Card {
     pub value: u8,
     pub suite: Suite,
 }
 
-pub trait Deck {
-    fn deal(&mut self) -> Card;
+impl Card {
+    /// Creates a card with a given value and a given suite (for tests)
+    #[allow(dead_code)]
+    pub fn new(value: u8, suite: Suite) -> Self {
+        Self { value, suite }
+    }
 }
 
-#[derive(Debug, Clone)]
-pub struct FixDeck {
-    current_idx: usize,
+#[derive(Clone)]
+pub struct Deck {
     cards: Vec<Card>,
+    shuffle: &'static (dyn Fn() -> Vec<Card> + Send + Sync),
 }
 
-impl FixDeck {
-    pub fn new(cards: Vec<Card>) -> Self {
-        assert!(!cards.is_empty(), "Initial set of cards must not be empty!");
+use std::fmt;
+impl fmt::Debug for Deck {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Deck").field("cards", &self.cards).finish()
+    }
+}
 
+impl Deck {
+    pub fn new<F>(shuffle: &'static F) -> Self
+    where
+        F: Fn() -> Vec<Card> + Sync + Send,
+    {
         Self {
-            current_idx: 0,
-            cards,
-        }
-    }
-}
-
-impl Deck for FixDeck {
-    fn deal(&mut self) -> Card {
-        let result = self.cards[self.current_idx].clone();
-        if self.current_idx < self.cards.len() {
-            self.current_idx += 1;
-        } else {
-            self.current_idx = 0;
-        }
-        result
-    }
-}
-
-/// A randomly generated standard poker deck with 52 cards
-#[derive(Debug, Clone)]
-pub struct RndDeck {
-    cards: Vec<Card>,
-}
-
-impl RndDeck {
-    pub fn new() -> Self {
-        Self {
-            cards: Self::shuffel(),
+            cards: vec![],
+            shuffle,
         }
     }
 
-    fn shuffel() -> Vec<Card> {
+    pub fn new_rnd() -> Self {
+        Self::new(&Self::rnd_shuffle)
+    }
+
+    pub fn deal(&mut self) -> Card {
+        if self.cards.is_empty() {
+            let mut cards: Vec<Card> = (*(self.shuffle)()).to_vec();
+            cards.reverse();
+            self.cards = cards;
+        }
+
+        self.cards.pop().unwrap() // unwrapping is safe because the deck is shuffelled when empty
+    }
+
+    fn rnd_shuffle() -> Vec<Card> {
         let suites = vec![Suite::Clubs, Suite::Spades, Suite::Hearts, Suite::Diamonds];
         let mut cards = Vec::new();
 
@@ -78,12 +78,25 @@ impl RndDeck {
     }
 }
 
-impl Deck for RndDeck {
-    fn deal(&mut self) -> Card {
-        if self.cards.is_empty() {
-            self.cards = Self::shuffel();
-        }
+#[allow(dead_code)]
+fn fixed_deck() -> Vec<Card> {
+    vec![Card::new(1, Suite::Spades), Card::new(2, Suite::Hearts)]
+}
 
-        self.cards.pop().unwrap() // unwrapping is safe because the deck is shuffelled when empty
-    }
+#[test]
+fn test_allow_deterministic_cards() {
+    use Suite::*;
+
+    // let mut deck = Deck::new(|| vec![Card::spades(1), Card::hearts(2)]);
+    let mut deck = Deck::new(&fixed_deck);
+
+    // draw all cards from deck
+    // should be in the same order we put them in
+    assert_eq!(deck.deal(), Card::new(1, Spades));
+    assert_eq!(deck.deal(), Card::new(2, Hearts));
+
+    // draw again all cards
+    // should still be the same order
+    assert_eq!(deck.deal(), Card::new(1, Spades));
+    assert_eq!(deck.deal(), Card::new(2, Hearts));
 }

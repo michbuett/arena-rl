@@ -9,7 +9,7 @@ use specs::prelude::*;
 
 use crate::core::{
     ai::PlayerActionOptions, Action, ActorType, Card, Deck, DisplayStr, GameObject, MapPos,
-    ObjectGenerator, RndDeck, Team, TeamId, TextureMap, ID,
+    ObjectGenerator, Team, TeamId, TextureMap, ID,
 };
 
 #[derive(Debug, Clone)]
@@ -198,7 +198,7 @@ pub struct SelectedPos {
 #[derive(Clone, Debug)]
 pub struct TeamData {
     pub team: Team,
-    pub deck: RndDeck,
+    pub deck: Deck,
     pub hand: Vec<Card>,
     pub ready: bool,
 }
@@ -207,7 +207,7 @@ impl TeamData {
     fn new(t: Team) -> Self {
         TeamData {
             team: t,
-            deck: RndDeck::new(),
+            deck: Deck::new_rnd(),
             hand: vec![],
             ready: false,
         }
