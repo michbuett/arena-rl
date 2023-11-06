@@ -1,4 +1,4 @@
-use std::cmp::{max, Ordering};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::num::NonZeroU8;
 
@@ -226,13 +226,6 @@ pub fn find_charge_path(
     None
 }
 
-pub fn move_effort(a: &Actor, p: &Path) -> u8 {
-    let move_mod = a.attr(Attr::Movement).val() as i32;
-    let path_len = p.len() as i32;
-
-    max(1, path_len - move_mod) as u8
-}
-
 pub fn add_option<P: Into<MapPos>>(p: P, a: Action, result: &mut PlayerActionOptions) {
     let p = p.into();
     if result.contains_key(&p) {
@@ -251,11 +244,9 @@ pub fn add_move_to_options(active_actor: &Actor, w: &CoreWorld, result: &mut Pla
     for t in w.map().neighbors(t0, d, &obstacles) {
         if let Some(path) = w.map().find_path(p0, t.to_map_pos(), &obstacles) {
             if path.len() <= d.get() as usize {
-                let effort = move_effort(active_actor, &path);
                 let action = Action::MoveTo {
                     actor: active_actor.id,
                     path,
-                    effort,
                 };
                 add_option(t, action, result);
             }

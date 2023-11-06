@@ -38,7 +38,6 @@ fn zombi_action(actor: &Actor, cw: CoreWorld) -> Action {
 
             return Action::MoveTo {
                 actor: actor.id,
-                effort: move_effort(actor, &p),
                 path: p,
             };
         }

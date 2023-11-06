@@ -4,7 +4,7 @@ use crate::core::{DisplayStr, MapPos, Path, WorldPos};
 
 use super::actors::{
     resolve_combat, Actor, AttackOption, AttackTarget, AttackType, GameObject, Hit, HitResult,
-    Team, Wound, ID,
+    Wound, ID,
 };
 use super::ai::find_charge_path;
 use super::{Card, Change, CoreWorld, HitEffect, SuperLineIter};
@@ -12,7 +12,7 @@ use super::{Card, Change, CoreWorld, HitEffect, SuperLineIter};
 #[derive(Debug, Clone)]
 pub enum Action {
     StartTurn(ID),
-    EndTurn(Team),
+    // EndTurn(Team),
     AssigneActivation(ID, Card),
     ActivateActor(ID),
     DoNothing(ID),
@@ -20,7 +20,6 @@ pub enum Action {
     MoveTo {
         actor: ID,
         path: Path,
-        effort: u8,
     },
 
     Attack {
@@ -128,16 +127,15 @@ pub fn run_player_action<'a>(action: Action, mut cw: CoreWorld) -> ActionResult 
             ActionResultBuilder::new(cw)
         }
 
-        Action::EndTurn(_team) => {
-            todo!("Requires design decision")
-            // while let Some(a) = cw.find_actor(|a| a.team == team) {
-            //     // println!(" >> skip turn for actor {}", a.name);
-            //     cw.update_actor(a.done());
-            // }
+        // Action::EndTurn(_team) => {
+        //     todo!("Requires design decision")
+        //     while let Some(a) = cw.find_actor(|a| a.team == team) {
+        //         // println!(" >> skip turn for actor {}", a.name);
+        //         cw.update_actor(a.done());
+        //     }
 
-            // ActionResultBuilder::new(cw)
-        }
-
+        //     ActionResultBuilder::new(cw)
+        // }
         Action::AssigneActivation(id, card) => {
             cw.modify_actor(id, |a| a.assigne_activation(card));
             ActionResultBuilder::new(cw)
@@ -158,11 +156,7 @@ pub fn run_player_action<'a>(action: Action, mut cw: CoreWorld) -> ActionResult 
             ActionResultBuilder::new(cw)
         }
 
-        Action::MoveTo {
-            actor,
-            path,
-            effort,
-        } => handle_move_action(actor, path, effort, cw),
+        Action::MoveTo { actor, path } => handle_move_action(actor, path, cw),
 
         Action::Attack {
             attacker,
@@ -513,7 +507,7 @@ fn apply_hit_effect(eff: HitEffect, mut cw: CoreWorld) -> ActionResultBuilder {
     }
 }
 
-fn handle_move_action(actor_id: ID, path: Path, effort: u8, cw: CoreWorld) -> ActionResultBuilder {
+fn handle_move_action(actor_id: ID, path: Path, cw: CoreWorld) -> ActionResultBuilder {
     if path.is_empty() {
         return ActionResultBuilder::new(cw);
     }
@@ -709,7 +703,7 @@ fn handle_add_trait(
     let t = world.traits().get(&trait_ref).clone();
 
     for id in targets.iter() {
-        world.modify_actor(*id, |a| a.add_trait(trait_ref.clone(), t.clone()));
+        world.modify_actor(*id, |a| a.add_trait(trait_ref.clone(), t.clone()).done());
     }
 
     ActionResultBuilder::new(world)
