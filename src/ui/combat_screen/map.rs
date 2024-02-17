@@ -241,7 +241,7 @@ fn get_default_action(game: &CombatData) -> DefaultAction {
                     .iter()
                     .filter_map(|(pos, (id, max))| {
                         if card.value <= *max {
-                            Some((*pos, UserInput::AssigneActivation(*id, *team, *idx)))
+                            Some((*pos, UserInput::AssigneActivation(*id, *team, card)))
                         } else {
                             None
                         }

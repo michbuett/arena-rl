@@ -19,7 +19,7 @@ pub enum UserInput {
     SelectTeam(Vec<GameObject>),
     SelectPlayerAction(Action),
     SelectActivationCard(usize),
-    AssigneActivation(ID, TeamId, usize),
+    AssigneActivation(ID, TeamId, Card),
     SelectWorldPos(MapPos),
     StartScrolling(),
     EndScrolling(),
@@ -104,6 +104,9 @@ enum StepChange {
     AppendLog(DisplayStr),
     AdvanceGame(TurnState),
     ModifyTeam(TeamData),
+    UpdateDeck(TeamId, Deck),
+    StartTurn(TeamId, u8),
+    RemoveCardFromHand(TeamId, Card),
 }
 
 pub struct StepResult(Option<Vec<StepChange>>);
@@ -138,6 +141,18 @@ impl StepResult {
         self.add_change(StepChange::ModifyTeam(td))
     }
 
+    pub fn start_new_turn(self, team_id: TeamId, num_of_actors: u8) -> Self {
+        self.add_change(StepChange::StartTurn(team_id, num_of_actors))
+    }
+
+    pub fn remove_card_from_hand(self, team_id: TeamId, card: Card) -> Self {
+        self.add_change(StepChange::RemoveCardFromHand(team_id, card))
+    }
+
+    pub fn update_deck(self, team_id: TeamId, deck: Deck) -> Self {
+        self.add_change(StepChange::UpdateDeck(team_id, deck))
+    }
+
     pub fn advance_game(self, td: TurnState) -> Self {
         self.add_change(StepChange::AdvanceGame(td))
     }
@@ -161,6 +176,24 @@ impl StepResult {
                     StepChange::ModifyTeam(team) => {
                         let mut teams_mut = combat_data.world.fetch_mut::<TeamSet>();
                         teams_mut.set(team);
+                    }
+
+                    StepChange::StartTurn(team_id, num_actors) => {
+                        let mut teams_mut = combat_data.world.fetch_mut::<TeamSet>();
+                        let td = teams_mut.get_mut(&team_id);
+                        td.start_new_turn(num_actors);
+                    }
+
+                    StepChange::RemoveCardFromHand(team_id, card) => {
+                        let mut teams_mut = combat_data.world.fetch_mut::<TeamSet>();
+                        let td = teams_mut.get_mut(&team_id);
+                        td.hand.retain(|c| *c != card);
+                    }
+
+                    StepChange::UpdateDeck(team_id, deck) => {
+                        let mut teams_mut = combat_data.world.fetch_mut::<TeamSet>();
+                        let td = teams_mut.get_mut(&team_id);
+                        td.deck = deck;
                     }
 
                     StepChange::AppendLog(l) => {
@@ -213,14 +246,15 @@ impl TeamData {
         }
     }
 
-    pub fn start_new_turn(mut self, num_actor: u8) -> Self {
+    pub fn start_new_turn(&mut self, num_actor: u8) {
+        // pub fn start_new_turn(&mut self, num_actor: u8) -> Self {
         let mut new_cards = (1..=num_actor)
             .map(|_| self.deck.deal())
             .collect::<Vec<_>>();
 
         self.hand.append(&mut new_cards);
         self.ready = false;
-        self
+        // self
     }
 }
 
@@ -244,9 +278,30 @@ impl TeamSet {
         self.0.get(team_id).unwrap()
     }
 
+    pub fn get_mut(&mut self, team_id: &TeamId) -> &mut TeamData {
+        self.0.get_mut(team_id).unwrap()
+    }
+
+    pub fn decks(&self) -> HashMap<TeamId, Deck> {
+        let mut ret = HashMap::new();
+        for td in self.0.values() {
+            ret.insert(td.team.id, td.deck.clone());
+        }
+        ret
+    }
+
     fn set(&mut self, td: TeamData) {
         self.0.insert(td.team.id, td);
     }
+
+    // fn modify<F>(&mut self, t_id: TeamId, modify_fn: F)
+    // where
+    //     F: FnOnce(TeamData) -> TeamData,
+    // {
+    //     if let Some(td) = self.0.take(t_id) {
+    //         self.0.insert(modify_fn(td));
+    //     }
+    // }
 }
 
 #[derive(Clone, Debug)]

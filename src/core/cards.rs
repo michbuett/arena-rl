@@ -1,6 +1,7 @@
 extern crate rand;
 
 use rand::prelude::*;
+use std::cmp::max;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Suite {
@@ -8,6 +9,34 @@ pub enum Suite {
     Spades,
     Hearts,
     Diamonds,
+}
+
+impl Suite {
+    pub fn affinity(&self) -> SuiteAffinity {
+        match self {
+            Suite::Clubs | Suite::Hearts => SuiteAffinity::Strength,
+            Suite::Spades | Suite::Diamonds => SuiteAffinity::Agilty,
+        }
+    }
+
+    pub fn substantiality(&self) -> SuiteSubstantiality {
+        match self {
+            Suite::Clubs | Suite::Spades => SuiteSubstantiality::Physical,
+            Suite::Hearts | Suite::Diamonds => SuiteSubstantiality::Mental,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SuiteAffinity {
+    Strength,
+    Agilty,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SuiteSubstantiality {
+    Physical,
+    Mental,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -21,6 +50,18 @@ impl Card {
     #[allow(dead_code)]
     pub fn new(value: u8, suite: Suite) -> Self {
         Self { value, suite }
+    }
+
+    pub fn value(&self, target_suite: Suite) -> u8 {
+        if self.suite == target_suite {
+            self.value
+        } else if self.suite.affinity() == target_suite.affinity()
+            || self.suite.substantiality() == target_suite.substantiality()
+        {
+            (self.value + 1) / 2
+        } else {
+            0
+        }
     }
 }
 
@@ -80,7 +121,13 @@ impl Deck {
 
 #[allow(dead_code)]
 fn fixed_deck() -> Vec<Card> {
-    vec![Card::new(1, Suite::Spades), Card::new(2, Suite::Hearts)]
+    use Suite::*;
+    vec![
+        Card::new(10, Clubs),
+        Card::new(9, Spades),
+        Card::new(8, Hearts),
+        Card::new(7, Diamonds),
+    ]
 }
 
 #[test]
@@ -92,11 +139,168 @@ fn test_allow_deterministic_cards() {
 
     // draw all cards from deck
     // should be in the same order we put them in
-    assert_eq!(deck.deal(), Card::new(1, Spades));
-    assert_eq!(deck.deal(), Card::new(2, Hearts));
+    assert_eq!(deck.deal(), Card::new(10, Clubs));
+    assert_eq!(deck.deal(), Card::new(9, Spades));
+    assert_eq!(deck.deal(), Card::new(8, Hearts));
+    assert_eq!(deck.deal(), Card::new(7, Diamonds));
 
     // draw again all cards
     // should still be the same order
-    assert_eq!(deck.deal(), Card::new(1, Spades));
-    assert_eq!(deck.deal(), Card::new(2, Hearts));
+    assert_eq!(deck.deal(), Card::new(10, Clubs));
+    assert_eq!(deck.deal(), Card::new(9, Spades));
+    assert_eq!(deck.deal(), Card::new(8, Hearts));
+    assert_eq!(deck.deal(), Card::new(7, Diamonds));
+}
+#[derive(Debug)]
+pub struct Challenge {
+    pub advantage: i8,
+    pub challenge_type: Suite,
+    pub skill_val: u8,
+    pub target_num: u8,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChallengeResult {
+    pub draw: (Card, Vec<Card>),
+    pub success_lvl: i8,
+}
+
+pub fn resolve_challenge(c: Challenge, deck: &mut Deck) -> ChallengeResult {
+    let draw = draw(deck, c.advantage, c.challenge_type);
+    let val = c.skill_val + &draw.0.value(c.challenge_type);
+    let success_lvl = if val >= c.target_num {
+        (val / c.target_num) as i8
+    } else {
+        -1 * (c.target_num / max(1, val)) as i8
+    };
+
+    ChallengeResult { draw, success_lvl }
+}
+
+#[test]
+fn test_can_resolve_simple_challenge() {
+    use Suite::*;
+
+    let mut deck = Deck::new(&fixed_deck);
+    let challenge = Challenge {
+        advantage: 0,
+        challenge_type: Suite::Spades,
+        skill_val: 5,
+        target_num: 10,
+    };
+
+    let result = resolve_challenge(challenge, &mut deck);
+
+    assert_eq!(
+        result.draw,
+        (Card::new(10, Clubs), vec![Card::new(10, Clubs)])
+    );
+    assert_eq!(result.success_lvl, 1); // 5 (skill) + 5 (half value for 10oC) VS 10 (TN)
+
+    let mut deck = Deck::new(&fixed_deck);
+    let challenge = Challenge {
+        advantage: 0,
+        challenge_type: Suite::Diamonds,
+        skill_val: 5,
+        target_num: 10,
+    };
+
+    let result = resolve_challenge(challenge, &mut deck);
+
+    assert_eq!(result.success_lvl, -2); // 5 (skill) + 0 (zero for 10oC) VS 10
+}
+
+fn draw(deck: &mut Deck, advantage: i8, s: Suite) -> (Card, Vec<Card>) {
+    if advantage == 0 {
+        let card = deck.deal();
+        (card, vec![card])
+    } else {
+        let draw: Vec<Card> = (0..advantage.abs() + 1).map(|_| deck.deal()).collect();
+        let sign = i8::signum(advantage) as i32;
+        let card = draw
+            .iter()
+            .max_by_key(|c| (100 * c.value(s) as i32 + c.value as i32) * sign)
+            .unwrap()
+            .to_owned();
+
+        (card, draw)
+    }
+}
+
+#[test]
+fn test_draw_without_advantage() {
+    use Suite::*;
+
+    let mut deck = Deck::new(&fixed_deck);
+    let (c, d) = draw(&mut deck, 0, Suite::Spades);
+    assert_eq!(c, Card::new(10, Clubs));
+    assert_eq!(d, vec![Card::new(10, Clubs)]);
+}
+
+#[test]
+fn test_draw_with_advantage() {
+    use Suite::*;
+
+    let mut deck = Deck::new(&fixed_deck);
+    let (c, d) = draw(&mut deck, 1, Suite::Spades);
+    assert_eq!(c, Card::new(9, Spades));
+    assert_eq!(d, vec![Card::new(10, Clubs), Card::new(9, Spades)]);
+
+    let mut deck = Deck::new(&fixed_deck);
+    let (c, d) = draw(&mut deck, 2, Suite::Diamonds);
+    assert_eq!(c, Card::new(9, Spades));
+    assert_eq!(
+        d,
+        vec![
+            Card::new(10, Clubs),
+            Card::new(9, Spades),
+            Card::new(8, Hearts)
+        ]
+    );
+
+    let mut deck = Deck::new(&fixed_deck);
+    let (c, d) = draw(&mut deck, 2, Suite::Hearts);
+    assert_eq!(c, Card::new(8, Hearts));
+    assert_eq!(
+        d,
+        vec![
+            Card::new(10, Clubs),
+            Card::new(9, Spades),
+            Card::new(8, Hearts)
+        ]
+    );
+}
+
+#[test]
+fn test_draw_with_disadvantage() {
+    use Suite::*;
+
+    let mut deck = Deck::new(&fixed_deck);
+    let (c, d) = draw(&mut deck, -1, Suite::Spades);
+    assert_eq!(c, Card::new(10, Clubs));
+    assert_eq!(d, vec![Card::new(10, Clubs), Card::new(9, Spades)]);
+
+    let mut deck = Deck::new(&fixed_deck);
+    let (c, d) = draw(&mut deck, -2, Suite::Diamonds);
+    assert_eq!(c, Card::new(10, Clubs));
+    assert_eq!(
+        d,
+        vec![
+            Card::new(10, Clubs),
+            Card::new(9, Spades),
+            Card::new(8, Hearts)
+        ]
+    );
+
+    let mut deck = Deck::new(&fixed_deck);
+    let (c, d) = draw(&mut deck, -2, Suite::Clubs);
+    assert_eq!(c, Card::new(8, Hearts));
+    assert_eq!(
+        d,
+        vec![
+            Card::new(10, Clubs),
+            Card::new(9, Spades),
+            Card::new(8, Hearts)
+        ]
+    );
 }

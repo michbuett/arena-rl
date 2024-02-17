@@ -15,8 +15,8 @@ pub use ai::AttackVector;
 pub use cards::*;
 pub use dice::D6;
 pub use flow::{
-    step, CombatData, CombatPhase, CombatState, Game, InputContext, SelectedPos, TurnState,
-    UserInput,
+    step, CombatData, CombatPhase, CombatState, Game, InputContext, SelectedPos, TeamSet,
+    TurnState, UserInput,
 };
 pub use map::*;
 pub use model::*;

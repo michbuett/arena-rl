@@ -8,12 +8,14 @@ use crate::components::{GameObjectCmp, ObstacleCmp, Position};
 
 use super::flow::TeamSet;
 use super::ActorType;
+use super::Deck;
 use super::ObjectGenerator;
 use super::TeamId;
 use super::TraitStorage;
 use super::{Actor, GameObject, Map, MapPos, ID};
 
 pub enum Change {
+    Draws(HashMap<TeamId, Deck>),
     Update(Entity, GameObject),
     Insert(GameObject),
     Remove(Entity),
@@ -24,6 +26,7 @@ pub struct CoreWorld<'a> {
 
     // world resources
     generator: Read<'a, ObjectGenerator>,
+    decks: HashMap<TeamId, Deck>,
 
     // component storages
     game_objects: ReadStorage<'a, GameObjectCmp>,
@@ -50,8 +53,11 @@ impl<'a> CoreWorld<'a> {
             entity_map.insert(go.id(), e);
         }
 
+        let teams: Read<TeamSet> = w.read_resource::<TeamSet>().into();
+
         Self {
             world: w,
+            decks: teams.decks(),
             generator,
             entities,
             game_objects,
@@ -68,6 +74,10 @@ impl<'a> CoreWorld<'a> {
 
     pub fn teams(&self) -> Read<TeamSet> {
         self.world.read_resource::<TeamSet>().into()
+    }
+
+    pub fn decks_mut(&mut self) -> &mut HashMap<TeamId, Deck> {
+        &mut self.decks
     }
 
     pub fn traits(&self) -> &TraitStorage {
@@ -190,7 +200,7 @@ impl<'a> CoreWorld<'a> {
     }
 
     pub fn into_changes(self) -> Vec<Change> {
-        let mut result = vec![];
+        let mut result = vec![Change::Draws(self.decks)];
         let mut updates = self.updates;
 
         for (id, go) in updates.drain() {

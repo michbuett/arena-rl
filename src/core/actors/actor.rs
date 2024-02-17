@@ -4,7 +4,7 @@ use std::time::Instant;
 
 pub use super::traits::*;
 
-use crate::core::{Card, DisplayStr, MapPos, WorldPos};
+use crate::core::{Card, DisplayStr, MapPos, Suite, WorldPos};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct ID(Instant, u64, u64);
@@ -93,6 +93,7 @@ impl ActorBuilder {
             team: self.team,
             visual: self.visual,
             activations: vec![],
+            active_activation: None,
         }
         .process_traits();
 
@@ -232,6 +233,7 @@ pub struct Actor {
     pub team: TeamId,
     pub pos: WorldPos,
     pub activations: Vec<Card>,
+    pub active_activation: Option<Card>,
     pub behaviour: Option<AiBehaviour>,
 }
 
@@ -289,7 +291,7 @@ impl Actor {
             .min_by_key(|(_, c)| c.value)
             .unwrap();
 
-        self.activations.swap_remove(min_activation_idx);
+        self.active_activation = Some(self.activations.swap_remove(min_activation_idx));
         self
     }
 
@@ -518,6 +520,14 @@ impl Actor {
         AttrVal::new(s, &self.effects)
     }
 
+    pub fn skill(&self, s: Suite) -> u8 {
+        5 // TODO make configurable
+    }
+
+    pub fn soak(&self) -> u8 {
+        5 // TODO make configurable
+    }
+
     pub fn active_traits(&self) -> ActiveTraitIter {
         ActiveTraitIter(self.traits.values())
     }
@@ -596,6 +606,11 @@ impl AttackOption {
         //     0
         // };
 
+        let challenge_suite = match self.attack_type {
+            AttackType::Melee(..) => Suite::Clubs,
+            AttackType::Ranged(..) => Suite::Spades,
+        };
+
         Attack {
             origin_pos: a.pos,
             to_hit,
@@ -606,6 +621,10 @@ impl AttackOption {
             num_dice,
             advantage: 0,
             effects: self.effects,
+            challenge_suite,
+            effort_card: a.active_activation.unwrap(),
+            challenge_value: 10, // TODO make configurable
+            damage: 5,           // TODO make configurable
         }
     }
 }
@@ -621,6 +640,11 @@ pub struct Attack {
     pub attack_type: AttackType,
     pub advantage: i8,
     pub effects: Option<Vec<(HitEffectCondition, HitEffect)>>,
+
+    pub effort_card: Card,
+    pub challenge_value: u8,
+    pub challenge_suite: Suite,
+    pub damage: u8,
 }
 
 #[derive(Debug, Clone)]

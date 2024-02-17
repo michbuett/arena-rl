@@ -184,13 +184,16 @@ fn handle_wait_for_user_input(
             }
         }
 
-        Some(UserInput::AssigneActivation(actor_id, team_id, card_idx)) => {
-            let mut team_data = w.teams().get(team_id).clone();
-            let card = team_data.hand.remove(*card_idx);
+        Some(UserInput::AssigneActivation(actor_id, team_id, card)) => {
+            // let mut team_data = w.teams().get(team_id).clone();
+            //     let card = team_data.hand.remove(*card_idx);
 
-            return StepResult::new().modify_team(team_data).switch_state(
-                CombatState::ResolveAction(vec![Action::AssigneActivation(*actor_id, card)]),
-            );
+            return StepResult::new()
+                // .modify_team(team_data)
+                .remove_card_from_hand(*team_id, *card)
+                .switch_state(CombatState::ResolveAction(vec![Action::AssigneActivation(
+                    *actor_id, *card,
+                )]));
         }
 
         Some(UserInput::SelectPlayerAction(action)) => {
@@ -320,13 +323,14 @@ fn handle_start_turn(world: CoreWorld, turn: &TurnState) -> StepResult {
     }
 
     for (team_id, num_actors) in actor_per_team.iter() {
-        step_result = step_result.modify_team(
-            world
-                .teams()
-                .get(team_id)
-                .clone()
-                .start_new_turn(*num_actors),
-        )
+        step_result = step_result.start_new_turn(*team_id, *num_actors);
+        // step_result = step_result.modify_team(
+        //     world
+        //         .teams()
+        //         .get(team_id)
+        //         .clone()
+        //         .start_new_turn(*num_actors),
+        // )
     }
 
     step_result.switch_state(CombatState::ResolveAction(actions))
@@ -363,6 +367,7 @@ fn handle_select_initiative(turn: &TurnState, world: &CoreWorld) -> StepResult {
         // distibute the activations randomly
         // TODO: figure out a need mechanic for ai activation (one that is
         //       more challenging and allows e.g. for multiple activations)
+        // TODO: Refactoring of modify_team method to avoid cloning
         let mut actions: Vec<Action> = Vec::new();
         let mut team_data = active_team.clone();
 
@@ -433,11 +438,18 @@ fn handle_resolve_action(actions: &Vec<Action>, w: &World) -> StepResult {
         score,
     } = run_player_action(action, CoreWorld::new(w));
 
+    let mut result = StepResult::new().add_score(score).append_log(log);
+
     for c in changes {
         match c {
             Change::Update(e, o) => update_components(e, o, w),
             Change::Insert(o) => insert_game_object_components(o, w),
             Change::Remove(e) => remove_components(e, w),
+            Change::Draws(mut draws) => {
+                for (team_id, deck) in draws.drain() {
+                    result = result.update_deck(team_id, deck);
+                }
+            }
         }
     }
 
@@ -449,10 +461,7 @@ fn handle_resolve_action(actions: &Vec<Action>, w: &World) -> StepResult {
         fx.run(w);
     }
 
-    StepResult::new()
-        .add_score(score)
-        .append_log(log)
-        .switch_state(CombatState::WaitUntil(wait_until, remaining_actions))
+    result.switch_state(CombatState::WaitUntil(wait_until, remaining_actions))
 }
 
 fn spawn_obstacles(w: &World) {

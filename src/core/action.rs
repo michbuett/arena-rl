@@ -3,11 +3,10 @@ use crate::core::ai::{attack_vector, AttackVector};
 use crate::core::{DisplayStr, MapPos, Path, WorldPos};
 
 use super::actors::{
-    resolve_combat, Actor, AttackOption, AttackTarget, AttackType, GameObject, Hit, HitResult,
-    Wound, ID,
+    Actor, AttackOption, AttackTarget, AttackType, GameObject, Hit, HitResult, Wound, ID,
 };
 use super::ai::find_charge_path;
-use super::{Card, Change, CoreWorld, HitEffect, SuperLineIter};
+use super::{resolve_combat_new, Card, Change, CoreWorld, HitEffect, SuperLineIter};
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -419,7 +418,7 @@ fn perform_attack(
     attacker: ID,
     target: ID,
     attack_option: AttackOption,
-    cw: CoreWorld,
+    mut cw: CoreWorld,
 ) -> ActionResultBuilder {
     let attacker = cw.get_actor(attacker).cloned().unwrap();
     let target = cw.get_actor(target).cloned().unwrap();
@@ -439,8 +438,11 @@ fn perform_attack(
     let attack_targets = filter_attack_vector(&v, &cw);
 
     // println!("Targets {:?}", attack_targets);
+    // let mut attacker_deck = cw.deck(attacker.team);
+    // let mut target_deck = cw.deck(target.team);
+    let combat_result = resolve_combat_new(&attack, &attacker, attack_targets, cw.decks_mut());
 
-    let combat_result = resolve_combat(&attack, attack_targets);
+    // let combat_result = resolve_combat(&attack, attack_targets);
     let combat_fx_seq = create_combat_fx(&attacker, attack_end_pos, &combat_result);
 
     let mut result = ActionResultBuilder::new(cw)
