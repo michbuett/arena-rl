@@ -1,6 +1,6 @@
 use crate::core::{
     Action, Actor, Card, CombatData, CombatState, DisplayStr, GameObject, Health, InputContext,
-    MapPos, SelectedPos, Trait, TraitSource, UserInput,
+    MapPos, SelectedPos, SuiteSubstantiality, Trait, TraitSource, UserInput,
 };
 use crate::ui::types::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenText};
 
@@ -109,11 +109,9 @@ fn draw_cards(
     hand: &Vec<Card>,
     selected_card_idx: &Option<usize>,
 ) {
-    for (idx, Card { value, suite }) in hand.iter().enumerate() {
+    for (idx, card) in hand.iter().enumerate() {
         let x = 50 + idx as i32 * (CARD_WIDTH as i32 + 15);
         let mut y = viewport_height as i32 - CARD_HEIGHT as i32 - 10;
-        let txt = format!("{} of {:?}", value, suite);
-        let border_color = (23, 22, 21, 255);
 
         if let Some(selected_card_idx) = selected_card_idx {
             if *selected_card_idx == idx {
@@ -124,14 +122,7 @@ fn draw_cards(
             }
         }
 
-        scene.texts.push(
-            ScreenText::new(DisplayStr::new(txt), ScreenPos(x, y))
-                .width(CARD_WIDTH)
-                .height(CARD_HEIGHT)
-                .padding(5)
-                .background((252, 251, 250, 255))
-                .border(5, border_color),
-        );
+        draw_card(scene, card, ScreenPos(x, y));
 
         click_areas.push(ClickArea {
             clipping_area: (x, y, CARD_WIDTH, CARD_HEIGHT),
@@ -143,6 +134,26 @@ fn draw_cards(
 //////////////////////////////////////////////////
 // PRIVATE HELPER
 //
+
+fn draw_card(scene: &mut Scene, card: &Card, pos: ScreenPos) {
+    let Card { value, suite } = card;
+    let txt = format!("{} of {:?}", value, suite);
+    let color = if let SuiteSubstantiality::Physical = suite.substantiality() {
+        (23, 22, 21, 255)
+    } else {
+        (253, 22, 21, 255)
+    };
+
+    scene.texts.push(
+        ScreenText::new(DisplayStr::new(txt), pos)
+            .width(CARD_WIDTH)
+            .height(CARD_HEIGHT)
+            .padding(5)
+            .background((253, 252, 251, 255))
+            .color(color)
+            .border(5, color),
+    );
+}
 
 fn button_text_for_player_actions(action: &Action, is_first: bool) -> DisplayStr {
     let str = match action {
@@ -184,10 +195,15 @@ fn describe_actor(a: &Actor) -> String {
         }
     };
 
+    let active_activation_str = a
+        .active_activation
+        .as_ref()
+        .map(format_card)
+        .unwrap_or(" - ".to_string());
     let activation_str = a
         .activations
         .iter()
-        .map(|card| format!("[{} of {:?}]", card.value, card.suite))
+        .map(format_card)
         .collect::<Vec<_>>()
         .join(" ");
 
@@ -198,8 +214,8 @@ fn describe_actor(a: &Actor) -> String {
         .join("\n  - ");
 
     format!(
-        "\n{} (condition: {})\n\nActivations: {}\n\nTraits:\n - {}",
-        a.name, condition, activation_str, traits_str
+        "\n{} (condition: {})\n\nActivations: <{}><{}>\n\nTraits:\n - {}",
+        a.name, condition, active_activation_str, activation_str, traits_str
     )
 }
 
@@ -212,6 +228,10 @@ fn describe_trait(t: &Trait) -> String {
     };
 
     format!("{} ({})", name.clone().into_string(), source_str)
+}
+
+fn format_card(card: &Card) -> String {
+    format!("[{} of {:?}]", card.value, card.suite)
 }
 
 fn create_action_buttons(

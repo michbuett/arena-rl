@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use super::actor::*;
 use super::traits::HitEffect as AttackHitEffect;
 
+use crate::core::cards::SuiteSubstantiality::*;
 use crate::core::{dice::*, resolve_challenge, Challenge, Deck, MapPos, Obstacle, Suite, WorldPos};
 
 #[derive(Debug, Clone)]
@@ -75,20 +76,6 @@ pub enum HitEffect {
     },
 }
 
-// #[derive(Debug)]
-// pub struct AttackTargetNew {
-//     pub pos: MapPos,
-//     pub is_target: bool,
-//     pub actor: Option<Actor>,
-//     pub cover: Cover,
-// }
-
-// #[derive(Debug)]
-// pub struct CombatResult {
-//     attack: Attack,
-//     teams: TeamData,
-// }
-
 pub fn resolve_combat_new(
     attack: &Attack,
     attacker: &Actor, // required for team id => maybe adde to Attack?
@@ -122,7 +109,6 @@ pub fn resolve_combat_new(
 pub fn resolve_attack(
     attack: &Attack,
     attacker: &Actor,
-    // attacker: (&Actor, &mut Deck),
     target: &Actor,
     decks: &mut HashMap<TeamId, Deck>,
     pos: MapPos,
@@ -135,8 +121,7 @@ pub fn resolve_attack(
         Challenge {
             target_num: quality,
             advantage: 0,
-            challenge_type: Suite::Spades, // always defend with agility
-            // challenge_type: attack.challenge_suite,
+            challenge_type: defence_suite(attack),
             skill_val: target.skill(Suite::Spades),
         },
         decks.get_mut(&target.team).unwrap(),
@@ -159,7 +144,7 @@ pub fn resolve_attack(
         let dmg_result = resolve_challenge(
             Challenge {
                 advantage: -1 * defence_result.success_lvl,
-                challenge_type: Suite::Clubs,
+                challenge_type: damage_suite(attack),
                 skill_val: attack.damage,
                 target_num: target.soak(),
             },
@@ -187,6 +172,22 @@ pub fn resolve_attack(
 
     let roll = Roll::new(0, 0); // deprecated
     Hit { pos, roll, effects }
+}
+
+fn defence_suite(attack: &Attack) -> Suite {
+    if let Physical = attack.challenge_suite.substantiality() {
+        Suite::Spades
+    } else {
+        Suite::Diamonds
+    }
+}
+
+fn damage_suite(attack: &Attack) -> Suite {
+    if let Physical = attack.challenge_suite.substantiality() {
+        Suite::Clubs
+    } else {
+        Suite::Hearts
+    }
 }
 
 // pub fn resolve_combat(attack: &Attack, vector: Vec<AttackTarget>) -> HitResult {
