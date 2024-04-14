@@ -1,6 +1,6 @@
 use crate::core::{
     Action, Actor, Card, CombatData, CombatState, DisplayStr, GameObject, Health, InputContext,
-    MapPos, SelectedPos, SuiteSubstantiality, Trait, TraitSource, UserInput,
+    MapPos, SelectedPos, SuiteSubstantiality, TeamId, Trait, TraitSource, UserInput, ID,
 };
 use crate::ui::types::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenText};
 
@@ -28,12 +28,32 @@ pub fn render(
         if let InputContext::ActivateActor {
             hand,
             selected_card_idx,
+            team,
             ..
         } = ctxt
         {
-            draw_cards(scene, click_areas, viewport, hand, selected_card_idx);
+            draw_cards(
+                scene,
+                click_areas,
+                viewport,
+                hand,
+                selected_card_idx,
+                selected_actor_at(&selected_pos),
+                *team,
+            );
         }
     };
+}
+
+fn selected_actor_at(selected_pos: &Option<SelectedPos>) -> Option<ID> {
+    if let Some(SelectedPos { objects, .. }) = selected_pos {
+        for go in objects.iter() {
+            if let GameObject::Actor(a) = go {
+                return Some(a.id);
+            }
+        }
+    }
+    None
 }
 
 fn draw_area_details(
@@ -108,26 +128,37 @@ fn draw_cards(
     (_viewport_width, viewport_height): (u32, u32),
     hand: &Vec<Card>,
     selected_card_idx: &Option<usize>,
+    selected_actor: Option<ID>,
+    team: TeamId,
 ) {
     for (idx, card) in hand.iter().enumerate() {
-        let x = 50 + idx as i32 * (CARD_WIDTH as i32 + 15);
-        let mut y = viewport_height as i32 - CARD_HEIGHT as i32 - 10;
+        let is_selected = selected_card_idx
+            .map(|sel_idx| sel_idx == idx)
+            .unwrap_or(false);
 
-        if let Some(selected_card_idx) = selected_card_idx {
-            if *selected_card_idx == idx {
-                // TODO: overiding border color does not work at the moment because of the
-                //       caching mechanic of text boxes
-                // border_color = (230, 172, 21, 255);
-                y -= 20;
-            }
-        }
+        let offset_y = if is_selected { -30 } else { -10 };
+        let x = 50 + idx as i32 * (CARD_WIDTH as i32 + 15);
+        let y = viewport_height as i32 - CARD_HEIGHT as i32 + offset_y;
 
         draw_card(scene, card, ScreenPos(x, y));
 
-        click_areas.push(ClickArea {
-            clipping_area: (x, y, CARD_WIDTH, CARD_HEIGHT),
-            action: Box::new(move |_| UserInput::SelectActivationCard(idx)),
-        });
+        if is_selected {
+            if let Some(selected_actor_id) = selected_actor {
+                let card = *card;
+
+                click_areas.push(ClickArea {
+                    clipping_area: (x, y, CARD_WIDTH, CARD_HEIGHT),
+                    action: Box::new(move |_| {
+                        UserInput::AssigneActivation(selected_actor_id, team, card)
+                    }),
+                });
+            }
+        } else {
+            click_areas.push(ClickArea {
+                clipping_area: (x, y, CARD_WIDTH, CARD_HEIGHT),
+                action: Box::new(move |_| UserInput::SelectActivationCard(idx)),
+            });
+        }
     }
 }
 

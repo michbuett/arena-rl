@@ -509,16 +509,17 @@ fn single_option(options: &HashMap<MapPos, Vec<Action>>) -> Option<Action> {
 }
 
 fn activ_team_members(active_team: &Team, w: &CoreWorld) -> HashMap<MapPos, (ID, u8)> {
-    let mut result = HashMap::new();
+    let mut team_members = HashMap::new();
+
     for go in w.game_objects() {
         if let GameObject::Actor(a) = go {
             if active_team.is_member(a) {
-                result.insert(
+                team_members.insert(
                     MapPos::from_world_pos(a.pos),
                     (a.id, a.max_available_activation_val()),
                 );
             }
         }
     }
-    result
+    team_members
 }
