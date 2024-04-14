@@ -407,7 +407,7 @@ impl TurnState {
             }
 
             panic!(
-                "Fn should have returned a value by now. Maybe comparing unknown teams ({}, {})",
+                "Fn should have returned a value by now. Maybe comparing unknown teams ({:?}, {:?})",
                 ta, tb
             );
         }
@@ -450,19 +450,19 @@ pub enum CombatPhase {
 fn test_stepping_turn_state_activates_teams_correctly() {
     let teams = vec![
         Team {
-            id: 1,
+            id: TeamId::new(1),
             name: "Team #1",
             is_pc: true,
             reinforcements: None,
         },
         Team {
-            id: 2,
+            id: TeamId::new(2),
             name: "Team #2",
             is_pc: true,
             reinforcements: None,
         },
         Team {
-            id: 3,
+            id: TeamId::new(3),
             name: "Team #3",
             is_pc: true,
             reinforcements: None,
@@ -474,19 +474,19 @@ fn test_stepping_turn_state_activates_teams_correctly() {
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 0);
-    assert_eq!(turn_state.get_active_team().unwrap(), 1);
+    assert_eq!(turn_state.get_active_team().unwrap(), TeamId::new(1));
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 0);
-    assert_eq!(turn_state.get_active_team().unwrap(), 2);
+    assert_eq!(turn_state.get_active_team().unwrap(), TeamId::new(2));
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 0);
-    assert_eq!(turn_state.get_active_team().unwrap(), 3);
+    assert_eq!(turn_state.get_active_team().unwrap(), TeamId::new(3));
 
     let turn_state = turn_state.step();
 
@@ -499,19 +499,19 @@ fn test_stepping_turn_state_activates_teams_correctly() {
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 1);
-    assert_eq!(turn_state.get_active_team().unwrap(), 2);
+    assert_eq!(turn_state.get_active_team().unwrap(), TeamId::new(2));
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 1);
-    assert_eq!(turn_state.get_active_team().unwrap(), 3);
+    assert_eq!(turn_state.get_active_team().unwrap(), TeamId::new(3));
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 1);
-    assert_eq!(turn_state.get_active_team().unwrap(), 1);
+    assert_eq!(turn_state.get_active_team().unwrap(), TeamId::new(1));
 
     let turn_state = turn_state.step();
 
@@ -524,19 +524,19 @@ fn test_stepping_turn_state_activates_teams_correctly() {
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 2);
-    assert_eq!(turn_state.get_active_team().unwrap(), 3);
+    assert_eq!(turn_state.get_active_team().unwrap(), TeamId::new(3));
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 2);
-    assert_eq!(turn_state.get_active_team().unwrap(), 1);
+    assert_eq!(turn_state.get_active_team().unwrap(), TeamId::new(1));
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 2);
-    assert_eq!(turn_state.get_active_team().unwrap(), 2);
+    assert_eq!(turn_state.get_active_team().unwrap(), TeamId::new(2));
 
     let turn_state = turn_state.step();
 
@@ -549,19 +549,19 @@ fn test_stepping_turn_state_activates_teams_correctly() {
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 0);
-    assert_eq!(turn_state.get_active_team().unwrap(), 1);
+    assert_eq!(turn_state.get_active_team().unwrap(), TeamId::new(1));
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 0);
-    assert_eq!(turn_state.get_active_team().unwrap(), 2);
+    assert_eq!(turn_state.get_active_team().unwrap(), TeamId::new(2));
 
     let turn_state = turn_state.step();
 
     assert_eq!(turn_state.phase, CombatPhase::Planning);
     assert_eq!(turn_state.priority_team_idx, 0);
-    assert_eq!(turn_state.get_active_team().unwrap(), 3);
+    assert_eq!(turn_state.get_active_team().unwrap(), TeamId::new(3));
 
     let turn_state = turn_state.step();
 

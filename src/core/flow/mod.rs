@@ -7,8 +7,8 @@ use combat::init_combat_data;
 
 pub use types::*;
 
-const TEAM_PLAYER: TeamId = 1;
-const TEAM_CPU: TeamId = 2;
+const TEAM_PLAYER: u8 = 1;
+const TEAM_CPU: u8 = 2;
 
 pub fn step<'a, 'b>(g: Game<'a, 'b>, i: &Option<UserInput>) -> Game<'a, 'b> {
     match g {
@@ -21,27 +21,29 @@ pub fn step<'a, 'b>(g: Game<'a, 'b>, i: &Option<UserInput>) -> Game<'a, 'b> {
 }
 
 fn start_step<'a, 'b>(g: ObjectGenerator, tm: TextureMap, i: &Option<UserInput>) -> Game<'a, 'b> {
+    let team_id_player = TeamId::new(TEAM_PLAYER);
+
     match i {
         Some(UserInput::NewGame) => {
             let player_chars = vec![
                 GameObject::Actor(g.generate_player_by_type(
                     WorldPos::new(7.0, 6.0, 0.0),
-                    TEAM_PLAYER,
+                    team_id_player,
                     ActorType::Tank,
                 )),
                 GameObject::Actor(g.generate_player_by_type(
                     WorldPos::new(8.0, 6.0, 0.0),
-                    TEAM_PLAYER,
+                    team_id_player,
                     ActorType::Saw,
                 )),
                 GameObject::Actor(g.generate_player_by_type(
                     WorldPos::new(7.0, 7.0, 0.0),
-                    TEAM_PLAYER,
+                    team_id_player,
                     ActorType::Spear,
                 )),
                 GameObject::Actor(g.generate_player_by_type(
                     WorldPos::new(8.0, 7.0, 0.0),
-                    TEAM_PLAYER,
+                    team_id_player,
                     ActorType::Gunner,
                 )),
             ];
@@ -74,7 +76,7 @@ fn teams_step<'a, 'b>(
 fn create_team_player() -> Team {
     Team {
         name: "Player",
-        id: TEAM_PLAYER,
+        id: TeamId::new(TEAM_PLAYER),
         is_pc: true,
         reinforcements: None,
     }
@@ -83,7 +85,7 @@ fn create_team_player() -> Team {
 fn create_team_cpu() -> Team {
     Team {
         name: "Computer",
-        id: TEAM_CPU,
+        id: TeamId::new(TEAM_CPU),
         is_pc: false,
         reinforcements: Some(vec![
             // initial (1st) wave

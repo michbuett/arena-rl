@@ -28,7 +28,14 @@ pub enum AiBehaviour {
     Default,
 }
 
-pub type TeamId = u8; // TODO use opaque type
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, PartialOrd, Ord)]
+pub struct TeamId(u8);
+
+impl TeamId {
+    pub fn new(raw_id: u8) -> Self {
+        Self(raw_id)
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Team {
