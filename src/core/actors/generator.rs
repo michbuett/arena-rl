@@ -1,13 +1,14 @@
-use std::path::Path;
+use std::{collections::HashMap, fs::File, iter::FromIterator, path::Path};
 
 use crate::core::WorldPos;
 
 use super::{
-    actor::{Actor, ActorBuilder, ActorType, AiBehaviour, TeamId, Trait},
-    TraitStorage, Visual, VisualElements,
-    VisualState::Hidden,
-    VisualState::Prone,
+    actor::{Actor, ActorBuilder, AiBehaviour, TeamId, Trait},
+    TraitStorage, VLayers, Visual, VisualElements, VisualState,
 };
+
+use ron::de::from_reader;
+use serde::Deserialize;
 
 fn generate_name() -> String {
     one_of(&vec![
@@ -58,12 +59,14 @@ fn generate_name() -> String {
 #[derive(Default)]
 pub struct ObjectGenerator {
     traits: TraitStorage,
+    actors: ActorTemplateStorage,
 }
 
 impl ObjectGenerator {
     pub fn new(path: &Path) -> Self {
         Self {
             traits: TraitStorage::new(path),
+            actors: ActorTemplateStorage::new(path),
         }
     }
 
@@ -76,144 +79,100 @@ impl ObjectGenerator {
         (key.to_string(), t.clone())
     }
 
-    pub fn generate_actor_by_type(
+    pub fn generate_actor(
         &self,
         pos: WorldPos,
         t: TeamId,
-        actor_type: ActorType,
+        template: ActorTemplateName,
     ) -> ActorBuilder {
-        match actor_type {
-            ActorType::Tank => self.generate_actor_heavy(pos, t),
-            ActorType::Saw => self.generate_actor_saw(pos, t),
-            ActorType::Spear => self.generate_actor_spear(pos, t),
-            ActorType::Healer => self.generate_actor_healer(pos, t),
-            ActorType::Gunner => self.generate_actor_gunner(pos, t),
-            ActorType::MonsterSucker => self.generate_monster_sucker(pos, t),
-            ActorType::MonsterWorm => self.generate_monster_worm(pos, t),
-            ActorType::MonsterZombi => self.generate_monster_zombi(pos, t),
+        let template = self.actors.get(&template);
+        let mut visual = Visual::new(VisualElements::new(
+            template.visuals.0.iter().map(map_visual_config).collect(),
+        ));
+
+        for (state, el) in template.visuals.1.iter() {
+            let el = VisualElements::new(el.iter().map(map_visual_config).collect());
+            visual = visual.add_state(*state, el);
         }
+
+        let traits = template
+            .traits
+            .iter()
+            .map(|trait_name| self.get_trait(trait_name))
+            .collect();
+
+        ActorBuilder::new(generate_name(), pos, t)
+            .traits(traits)
+            .visual(visual)
     }
 
-    pub fn generate_player_by_type(
-        &self,
-        pos: WorldPos,
-        t: TeamId,
-        actor_type: ActorType,
-    ) -> Actor {
-        self.generate_actor_by_type(pos, t, actor_type).build()
+    pub fn generate_player(&self, pos: WorldPos, t: TeamId, template: ActorTemplateName) -> Actor {
+        self.generate_actor(pos, t, template).build()
     }
 
-    pub fn generate_enemy_by_type(&self, pos: WorldPos, t: TeamId, actor_type: ActorType) -> Actor {
-        self.generate_actor_by_type(pos, t, actor_type)
+    pub fn generate_enemy(&self, pos: WorldPos, t: TeamId, template: ActorTemplateName) -> Actor {
+        self.generate_actor(pos, t, template)
             .behaviour(AiBehaviour::Default)
             .build()
     }
+}
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct ActorTemplateName(String);
 
-    fn generate_actor_heavy(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
-        ActorBuilder::new(generate_name(), pos, t)
-            .visual(Visual::new(
-                VisualElements::new()
-                    .body("body-heavy_1")
-                    .head("head-heavy_1"),
-            ))
-            .traits(vec![
-                self.get_trait("item#Armor_PlateMail"),
-                self.get_trait("item#Shield_TowerShield"),
-                self.get_trait("item#Weapon_Flail"),
-            ])
-    }
-
-    fn generate_actor_saw(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
-        ActorBuilder::new(generate_name(), pos, t)
-            .visual(Visual::new(
-                VisualElements::new()
-                    .body("body-heavy_1")
-                    .head("head-heavy_2"),
-            ))
-            .traits(vec![
-                self.get_trait("item#Armor_PlateMail"),
-                self.get_trait("item#Weapon_PowerSaw"),
-            ])
-    }
-
-    fn generate_actor_spear(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
-        ActorBuilder::new(generate_name(), pos, t)
-            .visual(Visual::new(
-                VisualElements::new()
-                    .body("body-light_2")
-                    .head(format!("head_{}", between(1, 4))),
-            ))
-            .traits(vec![
-                self.get_trait("item#Armor_ChainMail"),
-                self.get_trait("item#Weapon_Spear"),
-            ])
-    }
-
-    fn generate_actor_healer(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
-        ActorBuilder::new(generate_name(), pos, t)
-            .visual(Visual::new(
-                VisualElements::new().body("body-light_1").head("head_5"),
-            ))
-            .traits(vec![
-                self.get_trait("item#Armor_ChainMail"),
-                self.get_trait("item#Weapon_Injector"),
-            ])
-    }
-
-    fn generate_actor_gunner(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
-        ActorBuilder::new(generate_name(), pos, t)
-            .visual(Visual::new(
-                VisualElements::new().body("body-light_4").head("head_6"),
-            ))
-            .traits(vec![
-                self.get_trait("item#Armor_ChainMail"),
-                self.get_trait("item#Weapon_IonGun"),
-            ])
-    }
-
-    fn generate_monster_sucker(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
-        ActorBuilder::new(generate_name(), pos, t)
-            .visual(
-                Visual::new(VisualElements::new().body("monster-sucker_1"))
-                    .add_state(Prone, VisualElements::new().body("monster-sucker-prone_1")),
-            )
-            .traits(vec![
-                self.get_trait("intrinsic#Weapon_SharpTeeth"),
-                self.get_trait("intrinsic#Trait_Weak"),
-                self.get_trait("intrinsic#Trait_Quick"),
-                self.get_trait("intrinsic#Trait_Flyer"),
-            ])
-    }
-
-    fn generate_monster_worm(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
-        ActorBuilder::new(generate_name(), pos, t)
-            .visual(
-                Visual::new(
-                    VisualElements::new()
-                        .body("monster-worm_1")
-                        .head("monster-worm-dust_1"),
-                )
-                .add_state(Hidden, VisualElements::new().body("monster-worm-hidden_1")),
-            )
-            .traits(vec![
-                self.get_trait("intrinsic#Trait_Underground"),
-                self.get_trait("intrinsic#Weapon_CrushingJaw"),
-            ])
-    }
-
-    fn generate_monster_zombi(&self, pos: WorldPos, t: TeamId) -> ActorBuilder {
-        ActorBuilder::new(generate_name(), pos, t)
-            .visual(Visual::new(
-                VisualElements::new()
-                    .body(format!("body-zombi_{}", between(1, 2)))
-                    .head(format!("head-zombi_{}", between(1, 7))),
-            ))
-            .traits(vec![
-                self.get_trait("intrinsic#Weapon_Claws"),
-                self.get_trait("intrinsic#Trait_Slow"),
-            ])
+impl ActorTemplateName {
+    pub fn new(n: impl ToString) -> Self {
+        Self(n.to_string())
     }
 }
+
+type VisualConfig = (VLayers, String, Option<(u16, u16)>);
+
+#[derive(Debug, Clone, Deserialize)]
+struct ActorTemplate {
+    /// The list of trait names
+    traits: Vec<String>,
+    visuals: (Vec<VisualConfig>, Vec<(VisualState, Vec<VisualConfig>)>),
+}
+
+#[derive(Default)]
+pub struct ActorTemplateStorage {
+    templates: HashMap<String, ActorTemplate>,
+}
+
+impl ActorTemplateStorage {
+    pub fn new(path: &Path) -> Self {
+        let p = path.join("actors.ron");
+        let f = match File::open(p) {
+            Ok(result) => result,
+            Err(e) => {
+                panic!("Error opening proto sprite config file: {:?}", e);
+            }
+        };
+
+        let traits: Vec<(String, ActorTemplate)> = match from_reader(f) {
+            Ok(result) => result,
+            Err(e) => {
+                panic!("Error parsing proto sprite config: {:?}", e);
+            }
+        };
+
+        Self {
+            templates: HashMap::from_iter(traits),
+        }
+    }
+
+    fn get(&self, template_name: &ActorTemplateName) -> &ActorTemplate {
+        let ActorTemplateName(key) = template_name;
+        if !self.templates.contains_key(key) {
+            panic!("Unknown trait: {}", key);
+        }
+
+        self.templates.get(key).unwrap()
+    }
+}
+
+/////////////////////////////////////////////////////////////////////
+// little helper
 
 fn between(a: u16, b: u16) -> u16 {
     *one_of(&(a..=b).collect())
@@ -222,4 +181,13 @@ fn between(a: u16, b: u16) -> u16 {
 fn one_of<'a, T>(v: &'a Vec<T>) -> &'a T {
     use rand::seq::SliceRandom;
     v.choose(&mut rand::thread_rng()).unwrap()
+}
+
+fn map_visual_config(vcfg: &VisualConfig) -> (VLayers, String) {
+    let (vl, name, range) = vcfg;
+    if let Some((a, b)) = range {
+        (*vl, name.replace("{}", &format!("{}", between(*a, *b))))
+    } else {
+        (*vl, name.clone())
+    }
 }

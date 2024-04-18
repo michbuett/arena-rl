@@ -1,0 +1,113 @@
+[
+    // === SECTION ===========================================
+    // section#enemies
+
+    // EXAMPLE
+    // ("actor_name", (
+    //     traits: [
+    //         "name_trait_a",
+    //         "name_trait_b",
+    //     ],
+    //     visuals: ( [
+    //         (Body, "sprite_name_a_{}", Some((1, 5)))
+    //         (Head, "sprite_name_b", None)
+    //     ], [ 
+    //         (Prone, [
+    //             (Body, "sprite_name_b", None),
+    //             (Head, "sprite_name_b", None),
+    //         ])
+    //     ]),
+    // )),
+    
+    // === BEGIN SECTION armor ================================
+    ("actor#gunner", (
+        traits: [
+            "item#Armor_ChainMail",
+            "item#Weapon_IonGun",
+        ],
+        visuals: ([
+            (Body, "body-light_4", None),
+            (Head, "head_6", None),
+        ], []),
+    )),
+
+    ("actor#spear", (
+        traits: [
+            "item#Armor_ChainMail",
+            "item#Weapon_Spear",
+        ],
+        visuals: ([
+            (Body, "body-light_2", None),
+            (Head, "head_{}", Some((1, 4))),
+        ], []),
+    )),
+
+    ("actor#saw", (
+        traits: [
+            "item#Armor_PlateMail",
+            "item#Weapon_PowerSaw",
+        ],
+        visuals: ([
+            (Body, "body-heavy_1", None),
+            (Head, "head-heavy_2", None),
+        ], []),
+    )),
+
+    ("actor#tank", (
+        traits: [
+            "item#Armor_PlateMail",
+            "item#Shield_TowerShield",
+            "item#Weapon_Flail",
+        ],
+        visuals: ([
+            (Body, "body-heavy_1", None),
+            (Head, "head-heavy_1", None),
+        ], []),
+    )),
+
+
+    ///////////////////////////////////////////////////////////////////////////
+    // section#enemies
+
+    ("enemy#worm", (
+        traits: [
+            "intrinsic#Trait_Underground",
+            "intrinsic#Weapon_CrushingJaw",
+        ],
+        visuals: ([
+            (Body, "monster-worm_1", None),
+            (Head, "monster-worm_dust_1", None),
+        ], [
+            (Hidden, [
+                (Body, "monster-worm-hidden_1", None),
+            ])
+        ]),
+    )),
+
+    ("enemy#sucker", (
+        traits: [
+            "intrinsic#Weapon_SharpTeeth",
+            "intrinsic#Trait_Weak",
+            "intrinsic#Trait_Quick",
+            "intrinsic#Trait_Flyer",
+        ],
+        visuals: ([
+            (Body, "monster-sucker_1", None)
+        ], [ 
+            (Prone, [
+                (Body, "monster-sucker-prone_1", None),
+            ])
+        ]),
+    )),
+
+    ("enemy#zombi", (
+        traits: [
+            "intrinsic#Weapon_Claws",
+            "intrinsic#Trait_Slow",
+        ],
+        visuals: ([
+            (Body, "body-zombi_{}", Some((1, 1))), 
+            (Head, "head-zombi_{}", Some((1, 7))),
+        ], []),
+    )),
+]

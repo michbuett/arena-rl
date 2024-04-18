@@ -8,7 +8,7 @@ use std::{
 use specs::prelude::*;
 
 use crate::core::{
-    ai::PlayerActionOptions, Action, ActorType, Card, Deck, DisplayStr, GameObject, MapPos,
+    ai::PlayerActionOptions, Action, ActorTemplateName, Card, Deck, DisplayStr, GameObject, MapPos,
     ObjectGenerator, Team, TeamId, TextureMap, ID,
 };
 
@@ -314,7 +314,7 @@ pub struct TurnState {
     active_team_idx: usize,
     priority_team_idx: usize,
     teams_left: usize,
-    reinforcements: Vec<(u64, TeamId, MapPos, ActorType)>,
+    reinforcements: Vec<(u64, TeamId, MapPos, ActorTemplateName)>,
 }
 
 impl TurnState {
@@ -327,8 +327,8 @@ impl TurnState {
             team_ids.push(team.id);
 
             if let Some(team_reinforcements) = &team.reinforcements {
-                for (turn, mpos, actor_type) in team_reinforcements.iter() {
-                    reinforcements.push((*turn, team.id, *mpos, *actor_type));
+                for (turn, mpos, template) in team_reinforcements.iter() {
+                    reinforcements.push((*turn, team.id, *mpos, template.clone()));
 
                     if let Some(v) = next_reinforcements {
                         if (turn - 1) < v {
@@ -413,12 +413,12 @@ impl TurnState {
         }
     }
 
-    pub fn reinforcements(&self) -> Vec<(TeamId, MapPos, ActorType)> {
+    pub fn reinforcements(&self) -> Vec<(TeamId, MapPos, ActorTemplateName)> {
         self.reinforcements
             .iter()
-            .filter_map(|(turn, team_id, mpos, actor_type)| {
+            .filter_map(|(turn, team_id, mpos, template)| {
                 if *turn == self.turn_number {
-                    Some((*team_id, *mpos, *actor_type))
+                    Some((*team_id, *mpos, template.clone()))
                 } else {
                     None
                 }

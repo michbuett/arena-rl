@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 pub use super::traits::*;
+use super::ActorTemplateName;
 
 use crate::core::{Card, DisplayStr, MapPos, Suite, WorldPos};
 
@@ -42,7 +43,7 @@ pub struct Team {
     pub name: &'static str,
     pub id: TeamId,
     pub is_pc: bool,
-    pub reinforcements: Option<Vec<(u64, MapPos, ActorType)>>,
+    pub reinforcements: Option<Vec<(u64, MapPos, ActorTemplateName)>>,
 }
 
 impl Team {
@@ -51,17 +52,17 @@ impl Team {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum ActorType {
-    Tank,
-    Saw,
-    Spear,
-    Healer,
-    Gunner,
-    MonsterSucker,
-    MonsterWorm,
-    MonsterZombi,
-}
+// #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+// pub enum ActorType {
+//     Tank,
+//     Saw,
+//     Spear,
+//     Healer,
+//     Gunner,
+//     MonsterSucker,
+//     MonsterWorm,
+//     MonsterZombi,
+// }
 
 pub struct ActorBuilder {
     behaviour: Option<AiBehaviour>,
@@ -80,7 +81,7 @@ impl ActorBuilder {
             team,
             name,
             behaviour: None,
-            visual: Visual::new(VisualElements::new()),
+            visual: Visual::new(VisualElements::empty()),
             keywords: vec![],
             traits: HashMap::new(),
         }
@@ -135,22 +136,20 @@ pub type Look = Vec<(u8, String)>;
 pub struct VisualElements([Option<String>; NUM_VISUAL_LAYERS]);
 
 impl VisualElements {
-    pub fn new() -> Self {
+    pub fn new(elements: Vec<(VLayers, String)>) -> Self {
+        let mut result = Self::empty();
+        for (layer, name) in elements {
+            result.set(layer, name);
+        }
+        result
+    }
+
+    pub fn empty() -> Self {
         Self(Default::default())
     }
 
     fn set(&mut self, layer: VLayers, name: impl ToString) {
         self.0[layer as usize] = Some(name.to_string());
-    }
-
-    pub fn body(mut self, name: impl ToString) -> Self {
-        self.set(VLayers::Body, name);
-        self
-    }
-
-    pub fn head(mut self, name: impl ToString) -> Self {
-        self.set(VLayers::Head, name);
-        self
     }
 
     fn iter(&self) -> VisElIter {
@@ -204,7 +203,7 @@ impl Visual {
 
     fn add_elements(mut self, state: VisualState, layer: VLayers, name: String) -> Self {
         if self.states[state as usize].is_none() {
-            self.states[state as usize] = Some(VisualElements::new());
+            self.states[state as usize] = Some(VisualElements::empty());
         }
 
         self.states[state as usize]
@@ -527,7 +526,7 @@ impl Actor {
         AttrVal::new(s, &self.effects)
     }
 
-    pub fn skill(&self, s: Suite) -> u8 {
+    pub fn skill(&self, _s: Suite) -> u8 {
         5 // TODO make configurable
     }
 

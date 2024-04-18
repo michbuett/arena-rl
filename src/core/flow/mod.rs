@@ -26,25 +26,25 @@ fn start_step<'a, 'b>(g: ObjectGenerator, tm: TextureMap, i: &Option<UserInput>)
     match i {
         Some(UserInput::NewGame) => {
             let player_chars = vec![
-                GameObject::Actor(g.generate_player_by_type(
+                GameObject::Actor(g.generate_player(
                     WorldPos::new(7.0, 6.0, 0.0),
                     team_id_player,
-                    ActorType::Tank,
+                    ActorTemplateName::new("actor#tank"),
                 )),
-                GameObject::Actor(g.generate_player_by_type(
+                GameObject::Actor(g.generate_player(
                     WorldPos::new(8.0, 6.0, 0.0),
                     team_id_player,
-                    ActorType::Saw,
+                    ActorTemplateName::new("actor#saw"),
                 )),
-                GameObject::Actor(g.generate_player_by_type(
+                GameObject::Actor(g.generate_player(
                     WorldPos::new(7.0, 7.0, 0.0),
                     team_id_player,
-                    ActorType::Spear,
+                    ActorTemplateName::new("actor#spear"),
                 )),
-                GameObject::Actor(g.generate_player_by_type(
+                GameObject::Actor(g.generate_player(
                     WorldPos::new(8.0, 7.0, 0.0),
                     team_id_player,
-                    ActorType::Gunner,
+                    ActorTemplateName::new("actor#gunner"),
                 )),
             ];
 
@@ -89,16 +89,16 @@ fn create_team_cpu() -> Team {
         is_pc: false,
         reinforcements: Some(vec![
             // initial (1st) wave
-            (1, MapPos(1, 6), ActorType::MonsterSucker),
-            (1, MapPos(1, 7), ActorType::MonsterSucker),
-            (1, MapPos(6, 0), ActorType::MonsterSucker),
-            (1, MapPos(7, 0), ActorType::MonsterSucker),
+            (1, MapPos(1, 6), ActorTemplateName::new("enemy#sucker")),
+            (1, MapPos(1, 7), ActorTemplateName::new("enemy#sucker")),
+            (1, MapPos(6, 0), ActorTemplateName::new("enemy#sucker")),
+            (1, MapPos(7, 0), ActorTemplateName::new("enemy#sucker")),
             // 2nd wave
-            (5, MapPos(1, 6), ActorType::MonsterWorm),
-            (5, MapPos(1, 7), ActorType::MonsterWorm),
+            (5, MapPos(1, 6), ActorTemplateName::new("enemy#worm")),
+            (5, MapPos(1, 7), ActorTemplateName::new("enemy#worm")),
             // 3rd wave
-            (10, MapPos(6, 0), ActorType::MonsterZombi),
-            (10, MapPos(7, 0), ActorType::MonsterZombi),
+            (10, MapPos(6, 0), ActorTemplateName::new("enemy#zombi")),
+            (10, MapPos(7, 0), ActorTemplateName::new("enemy#zombi")),
         ]),
     }
 }

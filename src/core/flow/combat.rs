@@ -303,9 +303,9 @@ fn handle_start_turn(world: CoreWorld, turn: &TurnState) -> StepResult {
     let mut step_result = StepResult::new();
     let mut new_actors = vec![];
 
-    for (team, pos, actor_type) in turn.reinforcements() {
+    for (team, pos, template) in turn.reinforcements() {
         // for (team, pos, actor_type) in world.teams().reinforcements(turn.turn_number) {
-        let actor = world.generate_enemy(pos, team, actor_type);
+        let actor = world.generate_enemy(pos, team, template);
         let curr_amout = actor_per_team.get(&actor.team).copied().unwrap_or(0);
 
         new_actors.push(actor.id);

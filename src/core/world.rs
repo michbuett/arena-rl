@@ -6,13 +6,10 @@ use specs::World as SpecsWorld;
 
 use crate::components::{GameObjectCmp, ObstacleCmp, Position};
 
-use super::flow::TeamSet;
-use super::ActorType;
-use super::Deck;
-use super::ObjectGenerator;
-use super::TeamId;
-use super::TraitStorage;
-use super::{Actor, GameObject, Map, MapPos, ID};
+use super::{
+    flow::TeamSet, Actor, ActorTemplateName, Deck, GameObject, Map, MapPos, ObjectGenerator,
+    TeamId, TraitStorage, ID,
+};
 
 pub enum Change {
     Draws(HashMap<TeamId, Deck>),
@@ -194,9 +191,9 @@ impl<'a> CoreWorld<'a> {
         }
     }
 
-    pub fn generate_enemy(&self, pos: MapPos, team: TeamId, actor_type: ActorType) -> Actor {
+    pub fn generate_enemy(&self, pos: MapPos, team: TeamId, template: ActorTemplateName) -> Actor {
         self.generator
-            .generate_enemy_by_type(pos.to_world_pos(), team, actor_type)
+            .generate_enemy(pos.to_world_pos(), team, template)
     }
 
     pub fn into_changes(self) -> Vec<Change> {
