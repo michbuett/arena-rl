@@ -212,18 +212,22 @@ fn describe_actor(a: &Actor) -> String {
         max_wounds,
         ..
     } = a.health;
-    let condition = if recieved_wounds == 0 {
-        if pain > 0 {
-            "unharmed but in some pain"
+    let condition = if a.is_alive() {
+        if recieved_wounds == 0 {
+            if pain > 0 {
+                "in pain"
+            } else {
+                "unharmed"
+            }
         } else {
-            "unharmed"
+            if recieved_wounds as f32 / max_wounds as f32 > 0.5 {
+                "seriously wounded"
+            } else {
+                "wounded"
+            }
         }
     } else {
-        if recieved_wounds as f32 / max_wounds as f32 > 0.5 {
-            "seriously wounded"
-        } else {
-            "wounded"
-        }
+        "dead"
     };
 
     let active_activation_str = a

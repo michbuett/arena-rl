@@ -1,10 +1,10 @@
 use std::time::Instant;
 
-use specs::prelude::*;
+use specs::prelude::{Component, VecStorage};
 use specs_derive::Component;
 
-use crate::ui::{ScreenPos, ScreenSprite, Align};
 use crate::core::SpriteConfig;
+use crate::ui::{Align, ScreenPos, ScreenSprite};
 
 pub enum ZLayer {
     Floor,
@@ -32,7 +32,7 @@ impl Sprites {
     pub fn new(sprites: Vec<SpriteConfig>) -> Self {
         Self(Instant::now(), Align::MidCenter, sprites)
     }
-    
+
     pub fn sample(&self, pos: ScreenPos) -> SpriteIter {
         let runtime = (Instant::now() - self.0).as_millis();
 

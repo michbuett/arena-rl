@@ -16,6 +16,7 @@ pub fn init_combat_data<'a, 'b>(
     texture_map: TextureMap,
 ) -> CombatData<'a, 'b> {
     let dispatcher = DispatcherBuilder::new()
+        // .with(SpriteSystem, "SpriteSystem", &[])
         .with(FxSystem, "FxSystem", &[])
         .with(MovementAnimationSystem, "MovementAnimationSystem", &[])
         .with(FadeAnimationSystem, "FadeAnimatonSystem", &[])
@@ -224,8 +225,13 @@ fn find_objects_at(mpos: MapPos, world: &CoreWorld) -> Vec<GameObject> {
 }
 
 fn handle_init(game_objects: &Vec<GameObject>, w: &World) -> StepResult {
+    let (texture_map, updater, entities): (Read<TextureMap>, Read<LazyUpdate>, Entities) =
+        w.system_data();
+
     for o in game_objects {
-        insert_game_object_components(o.clone(), w);
+        let e = insert_game_object(o, &entities, &updater);
+        update_game_object(e, o, &texture_map, &updater);
+        // insert_game_object_components(o.clone(), w);
     }
 
     spawn_obstacles(w);
@@ -303,9 +309,9 @@ fn handle_start_turn(world: CoreWorld, turn: &TurnState) -> StepResult {
     let mut step_result = StepResult::new();
     let mut new_actors = vec![];
 
-    for (team, pos, template) in turn.reinforcements() {
+    for (team, pos, actor_type) in turn.reinforcements() {
         // for (team, pos, actor_type) in world.teams().reinforcements(turn.turn_number) {
-        let actor = world.generate_enemy(pos, team, template);
+        let actor = world.generate_enemy(pos, team, actor_type);
         let curr_amout = actor_per_team.get(&actor.team).copied().unwrap_or(0);
 
         new_actors.push(actor.id);
@@ -373,7 +379,7 @@ fn handle_select_initiative(turn: &TurnState, world: &CoreWorld) -> StepResult {
 
         for o in world.game_objects() {
             if let GameObject::Actor(a) = o {
-                if team_data.team.is_member(a) {
+                if a.can_activate() && team_data.team.is_member(a) {
                     let card = team_data.deck.deal();
                     actions.push(Action::AssigneActivation(a.id, card));
                 }
@@ -405,7 +411,6 @@ fn handle_select_player_action(id: ID, w: CoreWorld) -> StepResult {
 
             StepResult::new().switch_state(CombatState::WaitForUserInput(
                 InputContext::SelectAction {
-                    // active_actor: actor.clone(),
                     options: possible_player_actions(&actor, &w),
                 },
                 Some(SelectedPos {
@@ -432,7 +437,7 @@ fn handle_resolve_action(actions: &Vec<Action>, w: &World) -> StepResult {
     let mut wait_until = Instant::now();
     let action = remaining_actions.pop().unwrap();
     let ActionResult {
-        changes,
+        decks,
         fx_seq,
         log,
         score,
@@ -440,18 +445,25 @@ fn handle_resolve_action(actions: &Vec<Action>, w: &World) -> StepResult {
 
     let mut result = StepResult::new().add_score(score).append_log(log);
 
-    for c in changes {
-        match c {
-            Change::Update(e, o) => update_components(e, o, w),
-            Change::Insert(o) => insert_game_object_components(o, w),
-            Change::Remove(e) => remove_components(e, w),
-            Change::Draws(mut draws) => {
-                for (team_id, deck) in draws.drain() {
-                    result = result.update_deck(team_id, deck);
-                }
-            }
+    if let Some(mut draws) = decks {
+        for (team_id, deck) in draws.drain() {
+            result = result.update_deck(team_id, deck);
         }
     }
+
+    // for c in changes {
+    //     match c {
+    //         // Change::Update(e, o) => update_components(e, o, w),
+    //         // Change::Insert(o) => insert_game_object_components(o, w),
+    //         // Change::Remove(e) => remove_components(e, w),
+    //         Change::Draws(mut draws) => {
+    //             for (team_id, deck) in draws.drain() {
+    //                 result = result.update_deck(team_id, deck);
+    //             }
+    //         }
+    //         _ => {}
+    //     }
+    // }
 
     for fx in fx_seq.into_fx_vec(Instant::now()).drain(..) {
         if wait_until < fx.ends_at() {
@@ -513,7 +525,7 @@ fn activ_team_members(active_team: &Team, w: &CoreWorld) -> HashMap<MapPos, (ID,
 
     for go in w.game_objects() {
         if let GameObject::Actor(a) = go {
-            if active_team.is_member(a) {
+            if a.can_activate() && active_team.is_member(a) {
                 team_members.insert(
                     MapPos::from_world_pos(a.pos),
                     (a.id, a.max_available_activation_val()),

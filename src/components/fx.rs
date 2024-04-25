@@ -64,7 +64,7 @@ impl FxSequence {
     // pub fn debug(&self) {
     //     println!("[DEBUG FxSequence] (length: {})", self.1.len());
     //     for (d, fx) in self.1.iter() {
-    //         println!("  - {:?}: {:?}", d, fx); 
+    //         println!("  - {:?}: {:?}", d, fx);
     //     }
     // }
 }
@@ -87,7 +87,11 @@ impl Fx {
 
 #[derive(Debug)]
 pub enum FxEffect {
-    /// - Entity: the target entity (the entity which should move)
+    Update(GameObject),
+
+    Remove(ID),
+
+    /// - ID: the target game object
     /// - Vec<WorldPos>: the path the entity should move along
     /// - MovementModification: modification of the movement (e.g. add jump effect)
     MoveTo(ID, Vec<WorldPos>, MovementModification, u64),
@@ -183,6 +187,8 @@ impl FxEffect {
             FxEffect::MoveTo(_, p, _, dur) => p.len().checked_sub(1).unwrap_or(0) as u64 * dur,
 
             FxEffect::Custom { duration, .. } => *duration,
+
+            _ => 0,
         };
 
         Duration::from_millis(millis)
@@ -278,6 +284,18 @@ impl<'a> System<'a> for FxSystem {
             let duration = fx_eff.duration();
 
             match fx_eff {
+                FxEffect::Update(go) => {
+                    handle_update_visual(go, &entities, &game_objects, &updater, &texture_map)
+                }
+
+                FxEffect::Remove(id) => {
+                    if let Some(e) = find_entity_by_id(*id, &entities, &game_objects) {
+                        // _ = entities.delete(e);
+                        updater.insert(e, FadeAnimation::fadeout_after(Duration::from_secs(5)));
+                        updater.insert(e, EndOfLive::after(Duration::from_secs(5)));
+                    }
+                }
+
                 FxEffect::BloodSplatter(pos) => {
                     handle_blood_splatter(*pos, duration, &entities, &updater, &texture_map)
                 }
@@ -315,10 +333,14 @@ impl<'a> System<'a> for FxSystem {
     }
 }
 
-fn find_entity_by_id(id: ID, entities: &Entities, game_objects: &ReadStorage<GameObjectCmp>) -> Option<Entity> {
+fn find_entity_by_id(
+    id: ID,
+    entities: &Entities,
+    game_objects: &ReadStorage<GameObjectCmp>,
+) -> Option<Entity> {
     for (e, GameObjectCmp(go)) in (entities, game_objects).join() {
         if go.id() == id {
-            return Some(e)
+            return Some(e);
         }
     }
 
@@ -350,6 +372,23 @@ fn animation_target_pos(wp: &WorldPos, dx: (i32, i32), dy: (i32, i32)) -> WorldP
     let (dx, dy) = (rng.sample(range_x), rng.sample(range_y));
 
     ScreenCoord::translate_world_pos(*wp, dx, dy)
+}
+
+fn handle_update_visual(
+    target_game_obj: &GameObject,
+    entities: &Entities,
+    game_objects: &ReadStorage<GameObjectCmp>,
+    updater: &Read<LazyUpdate>,
+    texture_map: &Read<TextureMap>,
+) {
+    let target_entity =
+        if let Some(entity) = find_entity_by_id(target_game_obj.id(), entities, game_objects) {
+            entity
+        } else {
+            insert_game_object(target_game_obj, entities, updater)
+        };
+
+    update_game_object(target_entity, target_game_obj, texture_map, updater);
 }
 
 fn handle_blood_splatter(
@@ -393,6 +432,7 @@ fn handle_blood_splatter(
                 pos: to,
                 z_layer: ZLayer::Floor,
                 sprites: vec![sprite.clone()],
+                fade_out: Some(Duration::from_secs(60)),
             })
             .build();
     }

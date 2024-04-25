@@ -28,7 +28,11 @@
         visuals: ([
             (Body, "body-light_4", None),
             (Head, "head_6", None),
-        ], []),
+        ], [
+            (Dead, [
+                (Body, "corpses_1", None),
+            ])
+        ]),
     )),
 
     ("actor#spear", (
@@ -39,7 +43,11 @@
         visuals: ([
             (Body, "body-light_2", None),
             (Head, "head_{}", Some((1, 4))),
-        ], []),
+        ], [
+            (Dead, [
+                (Body, "corpses_1", None),
+            ])
+        ]),
     )),
 
     ("actor#saw", (
@@ -50,7 +58,11 @@
         visuals: ([
             (Body, "body-heavy_1", None),
             (Head, "head-heavy_2", None),
-        ], []),
+        ], [
+            (Dead, [
+                (Body, "corpses_1", None),
+            ])
+        ]),
     )),
 
     ("actor#tank", (
@@ -62,7 +74,11 @@
         visuals: ([
             (Body, "body-heavy_1", None),
             (Head, "head-heavy_1", None),
-        ], []),
+        ], [
+            (Dead, [
+                (Body, "corpses_1", None),
+            ])
+        ]),
     )),
 
 
@@ -80,6 +96,9 @@
         ], [
             (Hidden, [
                 (Body, "monster-worm-hidden_1", None),
+            ]),
+            (Dead, [
+                (Body, "corpses_1", None),
             ])
         ]),
     )),
@@ -96,6 +115,9 @@
         ], [ 
             (Prone, [
                 (Body, "monster-sucker-prone_1", None),
+            ]),
+            (Dead, [
+                (Body, "monster-sucker-prone_1", None),
             ])
         ]),
     )),
@@ -108,6 +130,10 @@
         visuals: ([
             (Body, "body-zombi_{}", Some((1, 1))), 
             (Head, "head-zombi_{}", Some((1, 7))),
-        ], []),
+        ], [
+            (Dead, [
+                (Body, "corpses_1", None),
+            ])
+        ]),
     )),
 ]

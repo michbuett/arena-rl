@@ -1,15 +1,15 @@
 use std::cmp::max;
 use std::collections::HashMap;
-use std::path::Path;
 use std::fs::File;
 use std::iter::FromIterator;
+use std::path::Path;
 
 use ron::de::from_reader;
 
 use crate::core::DisplayStr;
 use serde::Deserialize;
 
-pub const NUM_VISUAL_STATES: usize = 3;
+pub const NUM_VISUAL_STATES: usize = 4;
 pub const NUM_VISUAL_LAYERS: usize = 4;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Deserialize)]
@@ -17,6 +17,7 @@ pub enum VisualState {
     Idle = 0,
     Prone = 1,
     Hidden = 2,
+    Dead = 3,
 }
 
 #[derive(Debug, Copy, Clone, Deserialize)]
@@ -102,7 +103,6 @@ pub enum Effect {
     /// (key, trait, target)
     GiveTrait(String, AbilityTarget),
     // GiveTrait(String, Trait, AbilityTarget),
-
     Ability {
         key: String,
         target: AbilityTarget,
@@ -144,7 +144,7 @@ impl TraitStorage {
         if !self.traits.contains_key(key) {
             panic!("Unknown trait: {}", key);
         }
-        
+
         self.traits.get(key).unwrap()
     }
 }
@@ -187,7 +187,7 @@ pub enum Attr {
     /// Offensiv stat; compared to the level of obscurity (cover) to determine
     /// the chance of hitting an enemy with a ranged attack
     RangedSkill,
-    
+
     /// Defensiv stat; used during melee and ranged combat to determine the
     /// chance of hitting the opponent
     Evasion,

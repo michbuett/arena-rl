@@ -11,12 +11,13 @@ use super::{
     TeamId, TraitStorage, ID,
 };
 
-pub enum Change {
-    Draws(HashMap<TeamId, Deck>),
-    Update(Entity, GameObject),
-    Insert(GameObject),
-    Remove(Entity),
-}
+// #[derive(Debug, Clone)]
+// pub enum Change {
+//     Draws(HashMap<TeamId, Deck>),
+//     Update(Entity, GameObject),
+//     Insert(GameObject),
+//     Remove(Entity),
+// }
 
 pub struct CoreWorld<'a> {
     world: &'a SpecsWorld,
@@ -24,12 +25,10 @@ pub struct CoreWorld<'a> {
     // world resources
     generator: Read<'a, ObjectGenerator>,
     decks: HashMap<TeamId, Deck>,
+    decks_changed: bool,
 
     // component storages
     game_objects: ReadStorage<'a, GameObjectCmp>,
-    obstacles: ReadStorage<'a, ObstacleCmp>,
-    positions: ReadStorage<'a, Position>,
-    entities: Entities<'a>,
 
     entity_map: HashMap<ID, Entity>,
     updates: HashMap<ID, Option<GameObject>>,
@@ -38,12 +37,10 @@ pub struct CoreWorld<'a> {
 impl<'a> CoreWorld<'a> {
     pub fn new(w: &'a SpecsWorld) -> Self {
         let mut entity_map = HashMap::new();
-        let (generator, entities, game_objects, obstacles, positions): (
+        let (generator, entities, game_objects): (
             Read<ObjectGenerator>,
             Entities,
             ReadStorage<GameObjectCmp>,
-            ReadStorage<ObstacleCmp>,
-            ReadStorage<Position>,
         ) = w.system_data();
 
         for (e, GameObjectCmp(go)) in (&entities, &game_objects).join() {
@@ -55,11 +52,9 @@ impl<'a> CoreWorld<'a> {
         Self {
             world: w,
             decks: teams.decks(),
+            decks_changed: false,
             generator,
-            entities,
             game_objects,
-            obstacles,
-            positions,
             entity_map,
             updates: HashMap::new(),
         }
@@ -74,6 +69,7 @@ impl<'a> CoreWorld<'a> {
     }
 
     pub fn decks_mut(&mut self) -> &mut HashMap<TeamId, Deck> {
+        self.decks_changed = true;
         &mut self.decks
     }
 
@@ -83,8 +79,13 @@ impl<'a> CoreWorld<'a> {
 
     pub fn collect_obstacles(&self) -> HashMap<MapPos, (ObstacleCmp, Option<ID>)> {
         let mut result: HashMap<MapPos, (ObstacleCmp, Option<ID>)> = HashMap::new();
+        let (entities, obstacles, positions): (
+            Entities,
+            ReadStorage<ObstacleCmp>,
+            ReadStorage<Position>,
+        ) = self.world.system_data();
 
-        for (e, o, p) in (&self.entities, &self.obstacles, &self.positions).join() {
+        for (e, o, p) in (&entities, &obstacles, &positions).join() {
             if let Some(GameObjectCmp(go)) = self.game_objects.get(e) {
                 // obstacle is a game object which may have been changed
                 // -> check for updates
@@ -92,7 +93,8 @@ impl<'a> CoreWorld<'a> {
                     if let Some(Some(go)) = self.updates.get(&go.id()) {
                         // there are updates for this object/Obstacle
                         // -> use the updated infos
-                        result.insert(MapPos::from_world_pos(go.pos()), (o.clone(), Some(go.id())));
+                        result.insert(MapPos::from_world_pos(p.0), (o.clone(), Some(go.id())));
+                        // result.insert(MapPos::from_world_pos(go.pos()), (o.clone(), Some(go.id())));
                     } else {
                         // object has been removed
                         // -> ignore
@@ -196,29 +198,19 @@ impl<'a> CoreWorld<'a> {
             .generate_enemy(pos.to_world_pos(), team, template)
     }
 
-    pub fn into_changes(self) -> Vec<Change> {
-        let mut result = vec![Change::Draws(self.decks)];
-        let mut updates = self.updates;
+    pub fn into_changes(
+        mut self,
+    ) -> (Option<HashMap<TeamId, Deck>>, Vec<(ID, Option<GameObject>)>) {
+        let decks = if self.decks_changed {
+            Some(self.decks)
+        } else {
+            None
+        };
 
-        for (id, go) in updates.drain() {
-            match (go, self.entity_map.get(&id)) {
-                (Some(go), Some(e)) => {
-                    result.push(Change::Update(*e, go));
-                }
+        let updates = self.updates.drain().collect::<Vec<_>>();
 
-                (Some(go), None) => {
-                    result.push(Change::Insert(go));
-                }
-
-                (None, Some(e)) => {
-                    result.push(Change::Remove(*e));
-                }
-
-                _ => {}
-            }
-        }
-
-        result
+        (decks, updates)
+        // let updates = self.updates.values().drain(..).collect::<Vec<_>>();
     }
 
     pub fn game_objects<'b>(&'b self) -> GameObjectIterator<'b> {

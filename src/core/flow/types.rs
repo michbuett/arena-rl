@@ -92,6 +92,7 @@ impl<'a, 'b> CombatData<'a, 'b> {
     pub fn step(mut self, step_result: StepResult) -> Self {
         step_result.unwind(&mut self);
 
+        // println!("world.maintain();");
         self.dispatcher.dispatch(&mut self.world);
         self.world.maintain();
         self

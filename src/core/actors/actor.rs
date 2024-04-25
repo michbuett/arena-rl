@@ -270,6 +270,13 @@ impl Actor {
         self.behaviour.is_none()
     }
 
+    ////////////////////////////////////////////////////////////
+    // Activations
+
+    pub fn can_activate(&self) -> bool {
+        self.is_alive()
+    }
+
     pub fn assigne_activation(mut self, card: Card) -> Self {
         self.activations.push(card);
         self
@@ -490,21 +497,25 @@ impl Actor {
         self.is_alive() && self.health.remaining_wounds >= self.health.pain
     }
 
-    pub fn corpse(&self) -> Item {
-        Item {
-            id: ID::new(),
-            name: format!("Corpse of {}", self.name),
-            look: vec![(1, "corpses_1".to_string())],
-        }
-    }
+    // pub fn corpse(&self) -> Item {
+    //     Item {
+    //         id: ID::new(),
+    //         name: format!("Corpse of {}", self.name),
+    //         look: vec![(1, "corpses_1".to_string())],
+    //     }
+    // }
 
     pub fn visuals(&self) -> impl Iterator<Item = &String> {
-        if !self.is_concious() {
-            return self.visual.get_state(VisualState::Prone);
-        }
+        if self.is_alive() {
+            if !self.is_concious() {
+                return self.visual.get_state(VisualState::Prone);
+            }
 
-        if self.is_underground() {
-            return self.visual.get_state(VisualState::Hidden);
+            if self.is_underground() {
+                return self.visual.get_state(VisualState::Hidden);
+            }
+        } else {
+            return self.visual.get_state(VisualState::Dead);
         }
 
         self.visual.get_state(VisualState::Idle)

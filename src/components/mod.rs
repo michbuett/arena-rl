@@ -276,6 +276,7 @@ pub struct DelayedSpawn {
     pub pos: WorldPos,
     pub z_layer: ZLayer,
     pub sprites: Vec<SpriteConfig>,
+    pub fade_out: Option<Duration>,
 }
 
 pub struct DelayedSpawnSystem;
@@ -303,6 +304,12 @@ impl<'a> System<'a> for DelayedSpawnSystem {
                     // ZLayer::GameObject => builder.with(ZLayerGameObject),
                     // ZLayer::Fx => builder.with(ZLayerFX),
                 };
+
+                if let Some(durration) = spawn.fade_out {
+                    builder = builder
+                        .with(FadeAnimation::fadeout_after(durration))
+                        .with(EndOfLive::after(durration));
+                }
 
                 builder.build();
 

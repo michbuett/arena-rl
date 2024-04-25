@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::components::{FxEffect, FxSequence};
 use crate::core::ai::{attack_vector, AttackVector};
 use crate::core::{DisplayStr, MapPos, Path, WorldPos};
@@ -6,12 +8,11 @@ use super::actors::{
     Actor, AttackOption, AttackTarget, AttackType, GameObject, Hit, HitResult, Wound, ID,
 };
 use super::ai::find_charge_path;
-use super::{resolve_combat_new, Card, Change, CoreWorld, HitEffect, SuperLineIter};
+use super::{resolve_combat_new, Card, CoreWorld, Deck, HitEffect, SuperLineIter, TeamId};
 
 #[derive(Debug, Clone)]
 pub enum Action {
     StartTurn(ID),
-    // EndTurn(Team),
     AssigneActivation(ID, Card),
     ActivateActor(ID),
     DoNothing(ID),
@@ -58,9 +59,20 @@ impl<'a> ActionResultBuilder<'a> {
     }
 
     fn into_result(self) -> ActionResult {
+        let (decks, updates) = self.world.into_changes();
+        let mut fx_seq = FxSequence::new();
+
+        for (id, go) in updates {
+            if let Some(go) = go {
+                fx_seq = fx_seq.then(FxEffect::Update(go));
+            } else {
+                fx_seq = fx_seq.then(FxEffect::Remove(id));
+            }
+        }
+
         ActionResult {
-            changes: self.world.into_changes(),
-            fx_seq: self.fx_seq,
+            decks,
+            fx_seq: self.fx_seq.then_append(fx_seq),
             log: self.log,
             score: self.score,
         }
@@ -113,7 +125,7 @@ impl<'a> ActionResultBuilder<'a> {
 }
 
 pub struct ActionResult {
-    pub changes: Vec<Change>,
+    pub decks: Option<HashMap<TeamId, Deck>>,
     pub fx_seq: FxSequence,
     pub log: Option<DisplayStr>,
     pub score: u64,
@@ -126,17 +138,8 @@ pub fn run_player_action<'a>(action: Action, mut cw: CoreWorld) -> ActionResult 
             ActionResultBuilder::new(cw)
         }
 
-        // Action::EndTurn(_team) => {
-        //     todo!("Requires design decision")
-        //     while let Some(a) = cw.find_actor(|a| a.team == team) {
-        //         // println!(" >> skip turn for actor {}", a.name);
-        //         cw.update_actor(a.done());
-        //     }
-
-        //     ActionResultBuilder::new(cw)
-        // }
-        Action::AssigneActivation(id, card) => {
-            cw.modify_actor(id, |a| a.assigne_activation(card));
+        Action::AssigneActivation(actor_id, card) => {
+            cw.modify_actor(actor_id, |a| a.assigne_activation(card));
             ActionResultBuilder::new(cw)
         }
 
@@ -333,12 +336,34 @@ fn create_fx_changes_for_wound(wound: &Wound, target_pos: WorldPos, delay: u64) 
 
         _ => fx_seq
             .then(FxEffect::blood_splatter(target_pos))
-            .wait(50)
+            .wait(5)
             .then(FxEffect::blood_splatter(target_pos))
             .wait(50)
             .then(FxEffect::scream("AIIEEE!", target_pos)),
     }
 }
+
+// fn create_fx_changes_for_kill(a: &Actor, target_pos: WorldPos, delay: u64) -> FxSequence {
+//     let mut fx_seq = FxSequence::new();
+
+//     for vis_str in a.visuals() {
+//         fx_seq = fx_seq.then(
+//             FxEffect::custom(target_pos, delay + 2000)
+//                 .sprite(vis_str)
+//                 .fade_out()
+//                 .build(),
+//         );
+//     }
+
+//     fx_seq.wait(delay + 2000)
+//     // .then(FxEffect::scream("AIIEEE!", target_pos))
+//     // .then(FxEffect::blood_splatter(target_pos))
+//     // .wait(5)
+//     // .then(FxEffect::blood_splatter(target_pos))
+//     // .wait(5)
+//     // .then(FxEffect::blood_splatter(target_pos))
+//     // .wait(50)
+// }
 
 fn handle_attack<'a>(
     attacker_id: ID,
@@ -479,18 +504,20 @@ fn apply_hit_effect(eff: HitEffect, mut cw: CoreWorld) -> ActionResultBuilder {
             let mut fx_seq = FxSequence::new();
 
             if let Some(t) = cw.get_actor(id).cloned() {
-                fx_seq = fx_seq.then_append(create_fx_changes_for_wound(&w, t.pos, 0));
+                fx_seq = fx_seq.then_insert(create_fx_changes_for_wound(&w, t.pos, 0));
 
                 let target = t.wound(w);
+
+                fx_seq = fx_seq.then(FxEffect::Update(GameObject::Actor(target.clone())));
 
                 if target.is_alive() {
                     cw.update(target.into());
                 } else {
                     cw.remove(id);
-                    cw.update(GameObject::Item(target.pos, target.corpse()));
-
                     score += 100;
                 }
+
+                fx_seq = fx_seq.wait_until_finished();
             }
 
             ActionResultBuilder::new(cw)
@@ -592,6 +619,9 @@ fn move_to(
 
     cw.update_actor(actor);
 
+    // let eff_seq = ActionEffectSeq::new().add(ActionEffect::move_actor(
+    // actor_id, jump, actor_pos, target_pos,
+    // ));
     let move_fx = if jump {
         FxEffect::jump(actor_id, vec![actor_pos, target_pos])
     } else {
@@ -605,6 +635,7 @@ fn move_to(
         .then(FxEffect::dust("fx-dust-1", target_pos, 400));
 
     ActionResultBuilder::new(cw).append_fx_seq(fx_seq)
+    // .append_effects(eff_seq)
     // .chain(|w| handle_aoo(actor_id, w))
 }
 

@@ -1,14 +1,14 @@
 mod actor;
-mod generator;
 mod combat;
+mod generator;
 mod traits;
 
 pub use actor::*;
 pub use combat::*;
 pub use generator::*;
 
-use std::hash::{Hash, Hasher};
 use crate::core::WorldPos;
+use std::hash::{Hash, Hasher};
 
 /// Anything that exists in the world
 #[derive(Debug, Clone)]
@@ -31,6 +31,13 @@ impl GameObject {
             GameObject::Item(p, _) => *p,
         }
     }
+
+    // pub fn dbg_info(&self) -> String {
+    //     match self {
+    //         GameObject::Actor(a) => format!("{} at {:?}", a.name, a.pos),
+    //         GameObject::Item(p, _) => format!("(item) at {:?}", p),
+    //     }
+    // }
 }
 
 impl Hash for GameObject {
