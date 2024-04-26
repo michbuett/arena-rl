@@ -20,6 +20,7 @@ pub enum UserInput {
     SelectPlayerAction(Action),
     SelectActivationCard(usize),
     AssigneActivation(ID, TeamId, Card),
+    AssigneActivationDone(TeamId),
     SelectWorldPos(MapPos),
     StartScrolling(),
     EndScrolling(),
@@ -31,7 +32,7 @@ pub enum InputContext {
     ActivateActor {
         team: TeamId,
         hand: Vec<Card>,
-        possible_actors: HashMap<MapPos, (ID, u8)>,
+        possible_actors: HashMap<MapPos, ID>,
         selected_card_idx: Option<usize>,
     },
     SelectAction {
@@ -142,8 +143,8 @@ impl StepResult {
         self.add_change(StepChange::ModifyTeam(td))
     }
 
-    pub fn start_new_turn(self, team_id: TeamId, num_of_actors: u8) -> Self {
-        self.add_change(StepChange::StartTurn(team_id, num_of_actors))
+    pub fn start_new_turn(self, team_id: TeamId, num_draws: u8) -> Self {
+        self.add_change(StepChange::StartTurn(team_id, num_draws))
     }
 
     pub fn remove_card_from_hand(self, team_id: TeamId, card: Card) -> Self {
@@ -179,10 +180,10 @@ impl StepResult {
                         teams_mut.set(team);
                     }
 
-                    StepChange::StartTurn(team_id, num_actors) => {
+                    StepChange::StartTurn(team_id, num_draws) => {
                         let mut teams_mut = combat_data.world.fetch_mut::<TeamSet>();
                         let td = teams_mut.get_mut(&team_id);
-                        td.start_new_turn(num_actors);
+                        td.start_new_turn(num_draws);
                     }
 
                     StepChange::RemoveCardFromHand(team_id, card) => {
@@ -216,7 +217,7 @@ pub enum CombatState {
     StartTurn(),
     FindActor(),
     AdvanceGame(),
-    SelectInitiative(),
+    AssignActivations(),
     SelectPlayerAction(ID),
     WaitForUserInput(InputContext, Option<SelectedPos>),
     WaitUntil(Instant, Vec<Action>),
@@ -238,24 +239,31 @@ pub struct TeamData {
 }
 
 impl TeamData {
-    fn new(t: Team) -> Self {
+    fn new(team: Team) -> Self {
+        let mut deck = Deck::new_rnd();
+        let hand = if team.is_pc {
+            (1..=3).map(|_| deck.deal()).collect::<Vec<_>>()
+        } else {
+            vec![]
+        };
+
         TeamData {
-            team: t,
-            deck: Deck::new_rnd(),
-            hand: vec![],
+            team,
+            deck,
+            hand,
             ready: false,
         }
     }
 
-    pub fn start_new_turn(&mut self, num_actor: u8) {
-        // pub fn start_new_turn(&mut self, num_actor: u8) -> Self {
-        let mut new_cards = (1..=num_actor)
-            .map(|_| self.deck.deal())
-            .collect::<Vec<_>>();
-
-        self.hand.append(&mut new_cards);
+    pub fn start_new_turn(&mut self, mut num_draws: u8) {
+        if self.team.is_pc {
+            // only player controlled teams should have a hand
+            while self.hand.len() < 6 && num_draws > 0 {
+                self.hand.push(self.deck.deal());
+                num_draws -= 1;
+            }
+        }
         self.ready = false;
-        // self
     }
 }
 

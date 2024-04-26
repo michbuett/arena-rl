@@ -10,52 +10,6 @@ use super::{
 use ron::de::from_reader;
 use serde::Deserialize;
 
-// fn generate_name() -> String {
-//     one_of(&vec![
-//         "Avrak The Gruesome",
-//         "Bhak Toe Burster",
-//         "Bhog Horror Dagger",
-//         "Brumvur The Gargantuan",
-//         "Cukgilug",
-//         "Dhukk The Brutal",
-//         "Drurzod The Rotten",
-//         "Duvrull Iron Splitter",
-//         "Eagungad",
-//         "Ghakk The Fearless",
-//         "Gruvukk Anger Dagger",
-//         "Guvrok Beast Saber",
-//         "Hrolkug",
-//         "Jag Skull Queller",
-//         "Jal The Merciless",
-//         "Klughig",
-//         "Kogan",
-//         "Komarod",
-//         "Lugrub",
-//         "Magdud",
-//         "Meakgu",
-//         "Ohulhug",
-//         "Oogorim",
-//         "Rhuruk The Wretched",
-//         "Rob Muscle Splitter",
-//         "Robruk The Feisty",
-//         "Shortakk The Crazy",
-//         "Shovog The Fierce",
-//         "Taugh",
-//         "Wegub",
-//         "Xagok",
-//         "Xoruk",
-//         "Xuag",
-//         "Yegoth",
-//         "Yokgu",
-//         "Zog",
-//         "Zogugbu",
-//         "Zubzor Tooth Clobberer",
-//         "Zug The Ugly",
-//         "Zuvrog Sorrow Gouger",
-//     ])
-//     .to_string()
-// }
-
 #[derive(Default)]
 pub struct ObjectGenerator {
     traits: TraitStorage,
@@ -101,8 +55,8 @@ impl ObjectGenerator {
             .map(|trait_name| self.get_trait(trait_name))
             .collect();
 
-        let name = format!("{:?} #{}", template_name.0, between(0, 1000)); // TODO generate names
-        ActorBuilder::new(name, pos, t)
+        let name = format!("{}-{}", template_name.0, between(0, 1000)); // TODO generate names
+        ActorBuilder::new(name, pos, t, template.max_activations)
             .traits(traits)
             .visual(visual)
     }
@@ -130,7 +84,7 @@ type VisualConfig = (VLayers, String, Option<(u16, u16)>);
 
 #[derive(Debug, Clone, Deserialize)]
 struct ActorTemplate {
-    /// The list of trait names
+    max_activations: u8,
     traits: Vec<String>,
     visuals: (Vec<VisualConfig>, Vec<(VisualState, Vec<VisualConfig>)>),
 }

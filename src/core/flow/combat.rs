@@ -70,7 +70,7 @@ fn perform_step<'a, 'b>(
 
         CombatState::ResolveAction(actions) => handle_resolve_action(actions, w),
 
-        CombatState::SelectInitiative() => handle_select_initiative(turn, &CoreWorld::new(w)),
+        CombatState::AssignActivations() => handle_assign_activations(turn, &CoreWorld::new(w)),
 
         CombatState::SelectPlayerAction(id) => handle_select_player_action(*id, CoreWorld::new(w)),
 
@@ -92,7 +92,7 @@ fn find_actor_ready_for_activation(turn: &TurnState, world: &CoreWorld) -> Vec<(
         .filter_map(|go| {
             if let GameObject::Actor(a) = go {
                 if !a.activations.is_empty() {
-                    return Some((a.id, a.pos, a.is_pc(), a.team, a.activations[0].value));
+                    return Some((a.id, a.pos, a.is_pc(), a.team, a.initiative()));
                 }
             }
             None
@@ -197,6 +197,15 @@ fn handle_wait_for_user_input(
                 )]));
         }
 
+        Some(UserInput::AssigneActivationDone(team_id)) => {
+            let mut team_data = w.teams().get(team_id).clone();
+            team_data.ready = true;
+
+            return StepResult::new()
+                .modify_team(team_data)
+                .switch_state(CombatState::AssignActivations());
+        }
+
         Some(UserInput::SelectPlayerAction(action)) => {
             // user has selected an action
             // => resolve that action
@@ -242,7 +251,7 @@ fn handle_init(game_objects: &Vec<GameObject>, w: &World) -> StepResult {
 fn handle_find_actor(turn: &TurnState, world: &CoreWorld) -> StepResult {
     if let CombatPhase::Planning = turn.phase {
         // this can happen after advancing the game or resolving an action
-        return StepResult::new().switch_state(CombatState::SelectInitiative());
+        return StepResult::new().switch_state(CombatState::AssignActivations());
     }
 
     if let Some(id) = find_active_actor(world) {
@@ -307,16 +316,15 @@ fn handle_start_turn(world: CoreWorld, turn: &TurnState) -> StepResult {
     let mut actions: Vec<Action> = Vec::new();
     let mut actor_per_team: HashMap<TeamId, u8> = HashMap::new();
     let mut step_result = StepResult::new();
-    let mut new_actors = vec![];
 
-    for (team, pos, actor_type) in turn.reinforcements() {
-        // for (team, pos, actor_type) in world.teams().reinforcements(turn.turn_number) {
-        let actor = world.generate_enemy(pos, team, actor_type);
+    for (team, pos, template) in turn.reinforcements() {
+        let actor = world.generate_enemy(pos, team, template);
         let curr_amout = actor_per_team.get(&actor.team).copied().unwrap_or(0);
+        let actor_id = actor.id;
 
-        new_actors.push(actor.id);
-        actor_per_team.insert(actor.team, curr_amout + 1);
+        actor_per_team.insert(actor.team, curr_amout + actor.num_activation());
         actions.push(Action::SpawnActor { actor });
+        actions.push(Action::StartTurn(actor_id));
     }
 
     for o in world.game_objects() {
@@ -324,31 +332,27 @@ fn handle_start_turn(world: CoreWorld, turn: &TurnState) -> StepResult {
             actions.push(Action::StartTurn(a.id));
 
             let curr_amout = actor_per_team.get(&a.team).copied().unwrap_or(0);
-            actor_per_team.insert(a.team, curr_amout + 1);
+            actor_per_team.insert(a.team, curr_amout + a.num_activation());
         }
     }
 
-    for (team_id, num_actors) in actor_per_team.iter() {
-        step_result = step_result.start_new_turn(*team_id, *num_actors);
-        // step_result = step_result.modify_team(
-        //     world
-        //         .teams()
-        //         .get(team_id)
-        //         .clone()
-        //         .start_new_turn(*num_actors),
-        // )
+    let max_activations = actor_per_team.values().copied().max().unwrap_or(0);
+    for (team_id, num_activations) in actor_per_team.iter() {
+        let num_draws = max_activations - *num_activations;
+        step_result = step_result.start_new_turn(*team_id, num_draws);
     }
 
     step_result.switch_state(CombatState::ResolveAction(actions))
 }
 
-fn handle_select_initiative(turn: &TurnState, world: &CoreWorld) -> StepResult {
+fn handle_assign_activations(turn: &TurnState, world: &CoreWorld) -> StepResult {
     let teams = world.teams();
     let active_team = teams.get(&turn.get_active_team().unwrap());
     // unwrap is save since we are only selecting initiativ in planning phase
     // and there is always an activ team in the planning phase
 
-    if active_team.ready || (active_team.team.is_pc && active_team.hand.is_empty()) {
+    if active_team.ready {
+        // if active_team.ready || (active_team.team.is_pc && active_team.hand.is_empty()) {
         // there are no more activations for this team
         // (eithere by choise or because of lack of resources)
         // => progress to next game state (either next activate next team or
@@ -358,7 +362,7 @@ fn handle_select_initiative(turn: &TurnState, world: &CoreWorld) -> StepResult {
 
     if active_team.team.is_pc {
         // The team is controlled by the a human player
-        // => wait for the user's input
+        // => wait for the user's to distribute hand
         StepResult::new().switch_state(CombatState::WaitForUserInput(
             InputContext::ActivateActor {
                 team: active_team.team.id,
@@ -369,27 +373,11 @@ fn handle_select_initiative(turn: &TurnState, world: &CoreWorld) -> StepResult {
             None,
         ))
     } else {
-        // The team is controlled by the A.I.
-        // distibute the activations randomly
-        // TODO: figure out a need mechanic for ai activation (one that is
-        //       more challenging and allows e.g. for multiple activations)
-        // TODO: Refactoring of modify_team method to avoid cloning
-        let mut actions: Vec<Action> = Vec::new();
+        // The team is controlled by the AI
+        // => no hand for the AI, so continue with the next step
         let mut team_data = active_team.clone();
-
-        for o in world.game_objects() {
-            if let GameObject::Actor(a) = o {
-                if a.can_activate() && team_data.team.is_member(a) {
-                    let card = team_data.deck.deal();
-                    actions.push(Action::AssigneActivation(a.id, card));
-                }
-            }
-        }
-
         team_data.ready = true;
-        StepResult::new()
-            .modify_team(team_data)
-            .switch_state(CombatState::ResolveAction(actions))
+        StepResult::new().modify_team(team_data)
     }
 }
 
@@ -435,7 +423,7 @@ fn handle_resolve_action(actions: &Vec<Action>, w: &World) -> StepResult {
 
     let mut remaining_actions = actions.to_vec();
     let mut wait_until = Instant::now();
-    let action = remaining_actions.pop().unwrap();
+    let action = remaining_actions.remove(0);
     let ActionResult {
         decks,
         fx_seq,
@@ -450,20 +438,6 @@ fn handle_resolve_action(actions: &Vec<Action>, w: &World) -> StepResult {
             result = result.update_deck(team_id, deck);
         }
     }
-
-    // for c in changes {
-    //     match c {
-    //         // Change::Update(e, o) => update_components(e, o, w),
-    //         // Change::Insert(o) => insert_game_object_components(o, w),
-    //         // Change::Remove(e) => remove_components(e, w),
-    //         Change::Draws(mut draws) => {
-    //             for (team_id, deck) in draws.drain() {
-    //                 result = result.update_deck(team_id, deck);
-    //             }
-    //         }
-    //         _ => {}
-    //     }
-    // }
 
     for fx in fx_seq.into_fx_vec(Instant::now()).drain(..) {
         if wait_until < fx.ends_at() {
@@ -520,16 +494,13 @@ fn single_option(options: &HashMap<MapPos, Vec<Action>>) -> Option<Action> {
     Some(actions.get(0).cloned().unwrap())
 }
 
-fn activ_team_members(active_team: &Team, w: &CoreWorld) -> HashMap<MapPos, (ID, u8)> {
+fn activ_team_members(active_team: &Team, w: &CoreWorld) -> HashMap<MapPos, ID> {
     let mut team_members = HashMap::new();
 
     for go in w.game_objects() {
         if let GameObject::Actor(a) = go {
             if a.can_activate() && active_team.is_member(a) {
-                team_members.insert(
-                    MapPos::from_world_pos(a.pos),
-                    (a.id, a.max_available_activation_val()),
-                );
+                team_members.insert(MapPos::from_world_pos(a.pos), a.id);
             }
         }
     }

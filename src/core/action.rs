@@ -134,7 +134,19 @@ pub struct ActionResult {
 pub fn run_player_action<'a>(action: Action, mut cw: CoreWorld) -> ActionResult {
     let result_builder = match action {
         Action::StartTurn(actor_id) => {
-            cw.modify_actor(actor_id, Actor::start_next_turn);
+            if let Some(a) = cw.get_actor(actor_id) {
+                // println!("[DEBUG] run_player_action - StartTurn {}", a.name);
+
+                let mut a = a.clone().start_next_turn();
+                let deck = cw.decks_mut().get_mut(&a.team).unwrap();
+
+                for _ in 1..=a.num_activation() {
+                    a = a.assigne_activation(deck.deal());
+                }
+
+                cw.update_actor(a);
+            }
+
             ActionResultBuilder::new(cw)
         }
 

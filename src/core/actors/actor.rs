@@ -68,6 +68,7 @@ pub struct ActorBuilder {
     behaviour: Option<AiBehaviour>,
     pos: WorldPos,
     team: TeamId,
+    max_activations: u8,
     visual: Visual,
     name: String,
     keywords: Vec<Keyword>,
@@ -75,11 +76,12 @@ pub struct ActorBuilder {
 }
 
 impl ActorBuilder {
-    pub fn new(name: String, pos: WorldPos, team: TeamId) -> Self {
+    pub fn new(name: String, pos: WorldPos, team: TeamId, max_activations: u8) -> Self {
         Self {
             pos,
             team,
             name,
+            max_activations,
             behaviour: None,
             visual: Visual::new(VisualElements::empty()),
             keywords: vec![],
@@ -100,6 +102,7 @@ impl ActorBuilder {
             behaviour: self.behaviour,
             team: self.team,
             visual: self.visual,
+            max_activations: self.max_activations,
             activations: vec![],
             active_activation: None,
         }
@@ -230,6 +233,7 @@ pub struct Actor {
     traits: HashMap<String, Trait>,
     visual: Visual,
     keywords: Vec<Keyword>,
+    max_activations: u8,
 
     pub id: ID,
     pub health: Health,
@@ -277,16 +281,22 @@ impl Actor {
         self.is_alive()
     }
 
+    /// Returns the number of activations this actor gets by default
+    pub fn num_activation(&self) -> u8 {
+        self.max_activations
+    }
+
     pub fn assigne_activation(mut self, card: Card) -> Self {
         self.activations.push(card);
         self
     }
 
-    /// Returns the max value a the next activation card can have
-    pub fn max_available_activation_val(&self) -> u8 {
-        14
-        // TODO: determine value based on assigned activation
-        // and the actors speed factor
+    pub fn initiative(&self) -> u8 {
+        self.activations
+            .iter()
+            .map(|c| c.value)
+            .min()
+            .unwrap_or(u8::MAX)
     }
 
     pub fn activate(mut self) -> Self {
@@ -297,12 +307,8 @@ impl Actor {
 
         self.active = true;
 
-        let (min_activation_idx, _) = self
-            .activations
-            .iter()
-            .enumerate()
-            .min_by_key(|(_, c)| c.value)
-            .unwrap();
+        let i = self.initiative();
+        let min_activation_idx = self.activations.iter().position(|c| c.value == i).unwrap();
 
         self.active_activation = Some(self.activations.swap_remove(min_activation_idx));
         self

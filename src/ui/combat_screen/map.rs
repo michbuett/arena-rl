@@ -239,13 +239,7 @@ fn get_default_action(game: &CombatData) -> DefaultAction {
                 let card = hand[*idx];
                 let activations = possible_actors
                     .iter()
-                    .filter_map(|(pos, (id, max))| {
-                        if card.value <= *max {
-                            Some((*pos, UserInput::AssigneActivation(*id, *team, card)))
-                        } else {
-                            None
-                        }
-                    })
+                    .map(|(pos, id)| (*pos, UserInput::AssigneActivation(*id, *team, card)))
                     .collect::<HashMap<_, _>>();
 
                 return (selected_mpos, activations);

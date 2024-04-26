@@ -41,6 +41,8 @@ pub fn render(
                 selected_actor_at(&selected_pos),
                 *team,
             );
+
+            draw_ready_button(scene, click_areas, viewport, *team);
         }
     };
 }
@@ -162,21 +164,43 @@ fn draw_cards(
     }
 }
 
+fn draw_ready_button(
+    scene: &mut Scene,
+    click_areas: &mut ClickAreas,
+    (viewport_width, viewport_height): (u32, u32),
+    team: TeamId,
+) {
+    let x = (viewport_width - DLG_WIDTH) as i32;
+    let y = (viewport_height - BTN_HEIGHT) as i32;
+
+    scene.texts.push(
+        // scene.texts[FontFace::Normal as usize].push(
+        ScreenText::new(DisplayStr::new("Ready"), ScreenPos(x, y))
+            .padding(10)
+            .border(3, (23, 22, 21, 255))
+            .background((252, 251, 250, 255))
+            .width(DLG_WIDTH),
+    );
+
+    click_areas.push(ClickArea {
+        clipping_area: (x, y, DLG_WIDTH, BTN_HEIGHT),
+        action: Box::new(move |_| UserInput::AssigneActivationDone(team)),
+    });
+}
+
 //////////////////////////////////////////////////
 // PRIVATE HELPER
 //
 
 fn draw_card(scene: &mut Scene, card: &Card, pos: ScreenPos) {
-    let Card { value, suite } = card;
-    let txt = format!("{} of {:?}", value, suite);
-    let color = if let SuiteSubstantiality::Physical = suite.substantiality() {
+    let color = if let SuiteSubstantiality::Physical = card.suite.substantiality() {
         (23, 22, 21, 255)
     } else {
         (253, 22, 21, 255)
     };
 
     scene.texts.push(
-        ScreenText::new(DisplayStr::new(txt), pos)
+        ScreenText::new(DisplayStr::new(format_card(card)), pos)
             .width(CARD_WIDTH)
             .height(CARD_HEIGHT)
             .padding(5)
@@ -249,7 +273,7 @@ fn describe_actor(a: &Actor) -> String {
         .join("\n  - ");
 
     format!(
-        "\n{} (condition: {})\n\nActivations: <{}><{}>\n\nTraits:\n - {}",
+        "\n{} (condition: {})\n\nActivations: \n {}\n <{}>\n\nTraits:\n - {}",
         a.name, condition, active_activation_str, activation_str, traits_str
     )
 }
@@ -266,7 +290,15 @@ fn describe_trait(t: &Trait) -> String {
 }
 
 fn format_card(card: &Card) -> String {
-    format!("[{} of {:?}]", card.value, card.suite)
+    let value = match card.value {
+        1 => "A".to_string(),
+        11 => "J".to_string(),
+        12 => "Q".to_string(),
+        13 => "K".to_string(),
+        _ => format!("{}", card.value),
+    };
+
+    format!("[{} of {:?}]", value, card.suite)
 }
 
 fn create_action_buttons(
