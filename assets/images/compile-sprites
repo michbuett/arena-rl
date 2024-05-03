@@ -18,7 +18,7 @@ echo "done"
 
 echo -n "resizing sprites..."
 
-resize "96x96" "chars/backgrounds"
+# resize "96x96" "chars/backgrounds"
 resize "96x96" "chars/bodies"
 resize "96x96" "chars/equipment"
 resize "96x96" "chars/fx"

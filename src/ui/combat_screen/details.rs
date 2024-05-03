@@ -1,6 +1,6 @@
 use crate::core::{
     Action, Actor, Card, CombatData, CombatState, DisplayStr, GameObject, Health, InputContext,
-    MapPos, SelectedPos, SuiteSubstantiality, TeamId, Trait, TraitSource, UserInput, ID,
+    MapPos, SelectedPos, Suite, TeamId, Trait, TraitSource, UserInput, ID,
 };
 use crate::ui::types::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenText};
 
@@ -193,10 +193,10 @@ fn draw_ready_button(
 //
 
 fn draw_card(scene: &mut Scene, card: &Card, pos: ScreenPos) {
-    let color = if let SuiteSubstantiality::Physical = card.suite.substantiality() {
-        (23, 22, 21, 255)
-    } else {
-        (253, 22, 21, 255)
+    let color = match card.suite {
+        Suite::PhysicalStr | Suite::PhysicalAg => (23, 22, 21, 255),
+        Suite::MentalStr | Suite::MentalAg => (253, 22, 21, 255),
+        _ => panic!("Suite not allowed: {:?}", card.suite),
     };
 
     scene.texts.push(
@@ -298,7 +298,7 @@ fn format_card(card: &Card) -> String {
         _ => format!("{}", card.value),
     };
 
-    format!("[{} of {:?}]", value, card.suite)
+    format!("{} of {:?}", value, card.suite)
 }
 
 fn create_action_buttons(
@@ -314,12 +314,6 @@ fn create_action_buttons(
             is_first = false;
         }
     }
-
-    // TODO clarify what should happen when clicking "End Turn"
-    // result.push((
-    //     DisplayStr::new(format!("End Turn {}", game.turn.turn_number)),
-    //     Action::EndTurn(game.turn.get_active_team().team.clone()),
-    // ));
 
     result
 }

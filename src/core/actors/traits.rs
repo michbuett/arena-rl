@@ -1,4 +1,3 @@
-use std::cmp::max;
 use std::collections::HashMap;
 use std::fs::File;
 use std::iter::FromIterator;
@@ -6,11 +5,12 @@ use std::path::Path;
 
 use ron::de::from_reader;
 
-use crate::core::DisplayStr;
+use crate::core::{DisplayStr, Suite};
 use serde::Deserialize;
 
 pub const NUM_VISUAL_STATES: usize = 4;
 pub const NUM_VISUAL_LAYERS: usize = 4;
+pub const NUM_ATTRIBUTE_MODIFIER: usize = 7;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Deserialize)]
 pub enum VisualState {
@@ -26,6 +26,17 @@ pub enum VLayers {
     Head = 1,
     Weapon1 = 2,
     Weapon2 = 3,
+}
+
+#[derive(Debug, Copy, Clone, Deserialize)]
+pub enum AttributeModifier {
+    PhysicalStrength,
+    PhysicalAgility,
+    PhysicalResistence,
+    MentalStrength,
+    MentalAgility,
+    MentalResitence,
+    MoveDistance,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -49,9 +60,31 @@ pub enum Keyword {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub enum AttackFx {
+    MeleeSingleTarget { name: String },
+    Projectile { name: String },
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub enum Effect {
     /// (attribute, bonus/malus)
     AttrMod(Attr, i8),
+
+    /// (attribute, bonus/malus)
+    Mod(AttributeModifier, i8),
+
+    AttackSingleTarget {
+        to_hit: (Suite, i8),
+        challenge_value: u8,
+        to_wound: (Suite, i8),
+        defence: Suite,
+        distance_max: Option<u8>,
+        distance_min: Option<u8>,
+        effects: Option<Vec<(HitEffectCondition, HitEffect)>>,
+        fx: AttackFx,
+        name: DisplayStr,
+        rend: Option<u8>,
+    },
 
     /// (name, reach, to-hit, to-wound)
     MeleeAttack {
@@ -209,43 +242,42 @@ pub enum Attr {
     RangedBlock,
 }
 
-const ATTR_BASE_VALUE: i8 = 3;
+// const ATTR_BASE_VALUE: i8 = 3;
 
 #[derive(Debug, Clone)]
 pub struct AttrVal(Vec<(DisplayStr, i8)>, u8);
 
-impl AttrVal {
-    pub fn new(attr: Attr, effects: &Vec<(DisplayStr, Effect)>) -> AttrVal {
-        let modifier_effects: Vec<(DisplayStr, i8)> = effects
-            .iter()
-            .filter(|(_, e)| match e {
-                Effect::AttrMod(a, _) => *a == attr,
-                _ => false,
-            })
-            .map(|(n, e)| match e {
-                Effect::AttrMod(_, m) => (n.clone(), *m),
-                _ => panic!("Unexpected effect {:?} while creating AttrVal", e),
-            })
-            .collect();
+// impl AttrVal {
+//     pub fn new(attr: Attr, effects: &Vec<(DisplayStr, Effect)>) -> AttrVal {
+//         let modifier_effects: Vec<(DisplayStr, i8)> = effects
+//             .iter()
+//             .filter(|(_, e)| match e {
+//                 Effect::AttrMod(a, _) => *a == attr,
+//                 _ => false,
+//             })
+//             .map(|(n, e)| match e {
+//                 Effect::AttrMod(_, m) => (n.clone(), *m),
+//                 _ => panic!("Unexpected effect {:?} while creating AttrVal", e),
+//             })
+//             .collect();
 
-        let sum: i8 = modifier_effects.iter().map(|(_, m)| m).sum();
-        let value = max(0, ATTR_BASE_VALUE + sum) as u8;
+//         let sum: i8 = modifier_effects.iter().map(|(_, m)| m).sum();
+//         let value = max(0, ATTR_BASE_VALUE + sum) as u8;
 
-        Self(modifier_effects, value)
-    }
+//         Self(modifier_effects, value)
+//     }
 
-    /// The absolute attribute value (i.e. base value and all modifier)
-    // pub fn abs_val(&self) -> u8 {
-    //     self.1
-    // }
+//     pub fn abs_val(&self) -> u8 {
+//         self.1
+//     }
 
-    pub fn val(&self) -> i8 {
-        self.0.iter().map(|(_, m)| m).sum()
-    }
+//     pub fn val(&self) -> i8 {
+//         self.0.iter().map(|(_, m)| m).sum()
+//     }
 
-    pub fn modify(mut self, name: DisplayStr, modifier: i8) -> Self {
-        self.0.push((name, modifier));
-        self.1 = max(0, self.1 as i8 + modifier) as u8;
-        self
-    }
-}
+//     pub fn modify(mut self, name: DisplayStr, modifier: i8) -> Self {
+//         self.0.push((name, modifier));
+//         self.1 = max(0, self.1 as i8 + modifier) as u8;
+//         self
+//     }
+// }

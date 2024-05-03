@@ -1,42 +1,63 @@
 extern crate rand;
 
 use rand::prelude::*;
+use serde::Deserialize;
 use std::cmp::max;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize)]
 pub enum Suite {
-    Clubs,
-    Spades,
-    Hearts,
-    Diamonds,
+    PhysicalStr,
+    PhysicalAg,
+    MentalStr,
+    MentalAg,
+    Physical,
+    Mental,
+    Strength,
+    Agility,
+    Any,
 }
 
 impl Suite {
-    pub fn affinity(&self) -> SuiteAffinity {
-        match self {
-            Suite::Clubs | Suite::Hearts => SuiteAffinity::Strength,
-            Suite::Spades | Suite::Diamonds => SuiteAffinity::Agilty,
+    fn matches(&self, other: Suite) -> SuiteMatch {
+        let one_way_match = self.match_one_way(other);
+        if let SuiteMatch::No = one_way_match {
+            other.match_one_way(*self)
+        } else {
+            one_way_match
         }
     }
 
-    pub fn substantiality(&self) -> SuiteSubstantiality {
-        match self {
-            Suite::Clubs | Suite::Spades => SuiteSubstantiality::Physical,
-            Suite::Hearts | Suite::Diamonds => SuiteSubstantiality::Mental,
+    fn match_one_way(&self, other: Suite) -> SuiteMatch {
+        use Suite::*;
+        match (self, other) {
+            (PhysicalStr, PhysicalStr)
+            | (PhysicalAg, PhysicalAg)
+            | (MentalStr, MentalStr)
+            | (MentalAg, MentalAg)
+            | (PhysicalStr, Physical)
+            | (PhysicalAg, Physical)
+            | (MentalStr, Mental)
+            | (MentalAg, Mental)
+            | (PhysicalStr, Strength)
+            | (PhysicalAg, Agility)
+            | (MentalStr, Strength)
+            | (MentalAg, Agility)
+            | (_, Any) => SuiteMatch::Full,
+
+            (PhysicalStr, PhysicalAg)
+            | (PhysicalStr, MentalStr)
+            | (MentalStr, MentalAg)
+            | (PhysicalAg, MentalAg) => SuiteMatch::Partial,
+
+            _ => SuiteMatch::No,
         }
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SuiteAffinity {
-    Strength,
-    Agilty,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SuiteSubstantiality {
-    Physical,
-    Mental,
+pub enum SuiteMatch {
+    Full,
+    Partial,
+    No,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -53,14 +74,10 @@ impl Card {
     }
 
     pub fn value(&self, target_suite: Suite) -> u8 {
-        if self.suite == target_suite {
-            self.value
-        } else if self.suite.affinity() == target_suite.affinity()
-            || self.suite.substantiality() == target_suite.substantiality()
-        {
-            (self.value + 1) / 2
-        } else {
-            0
+        match self.suite.matches(target_suite) {
+            SuiteMatch::Full => self.value,
+            SuiteMatch::Partial => (self.value + 1) / 2,
+            SuiteMatch::No => 0,
         }
     }
 }
@@ -104,7 +121,12 @@ impl Deck {
     }
 
     fn rnd_shuffle() -> Vec<Card> {
-        let suites = vec![Suite::Clubs, Suite::Spades, Suite::Hearts, Suite::Diamonds];
+        let suites = vec![
+            Suite::PhysicalStr,
+            Suite::PhysicalAg,
+            Suite::MentalStr,
+            Suite::MentalAg,
+        ];
         let mut cards = Vec::new();
 
         for suite in suites {
@@ -123,10 +145,10 @@ impl Deck {
 fn fixed_deck() -> Vec<Card> {
     use Suite::*;
     vec![
-        Card::new(10, Clubs),
-        Card::new(9, Spades),
-        Card::new(8, Hearts),
-        Card::new(7, Diamonds),
+        Card::new(10, PhysicalStr),
+        Card::new(9, PhysicalAg),
+        Card::new(8, MentalStr),
+        Card::new(7, MentalAg),
     ]
 }
 
@@ -139,18 +161,19 @@ fn test_allow_deterministic_cards() {
 
     // draw all cards from deck
     // should be in the same order we put them in
-    assert_eq!(deck.deal(), Card::new(10, Clubs));
-    assert_eq!(deck.deal(), Card::new(9, Spades));
-    assert_eq!(deck.deal(), Card::new(8, Hearts));
-    assert_eq!(deck.deal(), Card::new(7, Diamonds));
+    assert_eq!(deck.deal(), Card::new(10, PhysicalStr));
+    assert_eq!(deck.deal(), Card::new(9, PhysicalAg));
+    assert_eq!(deck.deal(), Card::new(8, MentalStr));
+    assert_eq!(deck.deal(), Card::new(7, MentalAg));
 
     // draw again all cards
     // should still be the same order
-    assert_eq!(deck.deal(), Card::new(10, Clubs));
-    assert_eq!(deck.deal(), Card::new(9, Spades));
-    assert_eq!(deck.deal(), Card::new(8, Hearts));
-    assert_eq!(deck.deal(), Card::new(7, Diamonds));
+    assert_eq!(deck.deal(), Card::new(10, PhysicalStr));
+    assert_eq!(deck.deal(), Card::new(9, PhysicalAg));
+    assert_eq!(deck.deal(), Card::new(8, MentalStr));
+    assert_eq!(deck.deal(), Card::new(7, MentalAg));
 }
+
 #[derive(Debug)]
 pub struct Challenge {
     pub advantage: i8,
@@ -169,7 +192,7 @@ pub fn resolve_challenge(c: Challenge, deck: &mut Deck) -> ChallengeResult {
     let draw = draw(deck, c.advantage, c.challenge_type);
     let val = c.skill_val + &draw.0.value(c.challenge_type);
     let success_lvl = if val >= c.target_num {
-        (val / c.target_num) as i8
+        (val / max(1, c.target_num)) as i8
     } else {
         -1 * (c.target_num / max(1, val)) as i8
     };
@@ -184,7 +207,7 @@ fn test_can_resolve_simple_challenge() {
     let mut deck = Deck::new(&fixed_deck);
     let challenge = Challenge {
         advantage: 0,
-        challenge_type: Suite::Spades,
+        challenge_type: Suite::PhysicalAg,
         skill_val: 5,
         target_num: 10,
     };
@@ -193,14 +216,14 @@ fn test_can_resolve_simple_challenge() {
 
     assert_eq!(
         result.draw,
-        (Card::new(10, Clubs), vec![Card::new(10, Clubs)])
+        (Card::new(10, PhysicalStr), vec![Card::new(10, PhysicalStr)])
     );
     assert_eq!(result.success_lvl, 1); // 5 (skill) + 5 (half value for 10oC) VS 10 (TN)
 
     let mut deck = Deck::new(&fixed_deck);
     let challenge = Challenge {
         advantage: 0,
-        challenge_type: Suite::Diamonds,
+        challenge_type: Suite::MentalAg,
         skill_val: 5,
         target_num: 10,
     };
@@ -232,9 +255,9 @@ fn test_draw_without_advantage() {
     use Suite::*;
 
     let mut deck = Deck::new(&fixed_deck);
-    let (c, d) = draw(&mut deck, 0, Suite::Spades);
-    assert_eq!(c, Card::new(10, Clubs));
-    assert_eq!(d, vec![Card::new(10, Clubs)]);
+    let (c, d) = draw(&mut deck, 0, Suite::PhysicalAg);
+    assert_eq!(c, Card::new(10, PhysicalStr));
+    assert_eq!(d, vec![Card::new(10, PhysicalStr)]);
 }
 
 #[test]
@@ -242,31 +265,34 @@ fn test_draw_with_advantage() {
     use Suite::*;
 
     let mut deck = Deck::new(&fixed_deck);
-    let (c, d) = draw(&mut deck, 1, Suite::Spades);
-    assert_eq!(c, Card::new(9, Spades));
-    assert_eq!(d, vec![Card::new(10, Clubs), Card::new(9, Spades)]);
+    let (c, d) = draw(&mut deck, 1, Suite::PhysicalAg);
+    assert_eq!(c, Card::new(9, PhysicalAg));
+    assert_eq!(
+        d,
+        vec![Card::new(10, PhysicalStr), Card::new(9, PhysicalAg)]
+    );
 
     let mut deck = Deck::new(&fixed_deck);
-    let (c, d) = draw(&mut deck, 2, Suite::Diamonds);
-    assert_eq!(c, Card::new(9, Spades));
+    let (c, d) = draw(&mut deck, 2, Suite::MentalAg);
+    assert_eq!(c, Card::new(9, PhysicalAg));
     assert_eq!(
         d,
         vec![
-            Card::new(10, Clubs),
-            Card::new(9, Spades),
-            Card::new(8, Hearts)
+            Card::new(10, PhysicalStr),
+            Card::new(9, PhysicalAg),
+            Card::new(8, MentalStr)
         ]
     );
 
     let mut deck = Deck::new(&fixed_deck);
-    let (c, d) = draw(&mut deck, 2, Suite::Hearts);
-    assert_eq!(c, Card::new(8, Hearts));
+    let (c, d) = draw(&mut deck, 2, Suite::MentalStr);
+    assert_eq!(c, Card::new(8, MentalStr));
     assert_eq!(
         d,
         vec![
-            Card::new(10, Clubs),
-            Card::new(9, Spades),
-            Card::new(8, Hearts)
+            Card::new(10, PhysicalStr),
+            Card::new(9, PhysicalAg),
+            Card::new(8, MentalStr)
         ]
     );
 }
@@ -276,31 +302,34 @@ fn test_draw_with_disadvantage() {
     use Suite::*;
 
     let mut deck = Deck::new(&fixed_deck);
-    let (c, d) = draw(&mut deck, -1, Suite::Spades);
-    assert_eq!(c, Card::new(10, Clubs));
-    assert_eq!(d, vec![Card::new(10, Clubs), Card::new(9, Spades)]);
+    let (c, d) = draw(&mut deck, -1, Suite::PhysicalAg);
+    assert_eq!(c, Card::new(10, PhysicalStr));
+    assert_eq!(
+        d,
+        vec![Card::new(10, PhysicalStr), Card::new(9, PhysicalAg)]
+    );
 
     let mut deck = Deck::new(&fixed_deck);
-    let (c, d) = draw(&mut deck, -2, Suite::Diamonds);
-    assert_eq!(c, Card::new(10, Clubs));
+    let (c, d) = draw(&mut deck, -2, Suite::MentalAg);
+    assert_eq!(c, Card::new(10, PhysicalStr));
     assert_eq!(
         d,
         vec![
-            Card::new(10, Clubs),
-            Card::new(9, Spades),
-            Card::new(8, Hearts)
+            Card::new(10, PhysicalStr),
+            Card::new(9, PhysicalAg),
+            Card::new(8, MentalStr)
         ]
     );
 
     let mut deck = Deck::new(&fixed_deck);
-    let (c, d) = draw(&mut deck, -2, Suite::Clubs);
-    assert_eq!(c, Card::new(8, Hearts));
+    let (c, d) = draw(&mut deck, -2, Suite::PhysicalStr);
+    assert_eq!(c, Card::new(8, MentalStr));
     assert_eq!(
         d,
         vec![
-            Card::new(10, Clubs),
-            Card::new(9, Spades),
-            Card::new(8, Hearts)
+            Card::new(10, PhysicalStr),
+            Card::new(9, PhysicalAg),
+            Card::new(8, MentalStr)
         ]
     );
 }

@@ -5,7 +5,7 @@ use crate::core::ai::{attack_vector, AttackVector};
 use crate::core::{DisplayStr, MapPos, Path, WorldPos};
 
 use super::actors::{
-    Actor, AttackOption, AttackTarget, AttackType, GameObject, Hit, HitResult, Wound, ID,
+    Actor, AttackFx, AttackOption, AttackTarget, GameObject, Hit, HitResult, Wound, ID,
 };
 use super::ai::find_charge_path;
 use super::{resolve_combat_new, Card, CoreWorld, Deck, HitEffect, SuperLineIter, TeamId};
@@ -217,13 +217,13 @@ fn create_combat_fx(
     attack_end_pos: WorldPos,
     combat_result: &HitResult,
 ) -> FxSequence {
-    match &combat_result.attack.attack_type {
-        AttackType::Melee(s) => {
-            create_melee_combat_fx(s.to_string(), attacker, &combat_result.hits)
+    match &combat_result.attack.attack_fx {
+        AttackFx::MeleeSingleTarget { name } => {
+            create_melee_combat_fx(name.to_string(), attacker, &combat_result.hits)
         }
 
-        AttackType::Ranged(s) => create_ranged_combat_fx(
-            s.to_string(),
+        AttackFx::Projectile { name } => create_ranged_combat_fx(
+            name.to_string(),
             attacker.pos,
             attack_end_pos,
             &combat_result.hits,
@@ -392,47 +392,44 @@ fn handle_attack<'a>(
 
     let mut attacker = attacker.unwrap();
     let target = target.unwrap();
-    let max_distance = attack.advance + attack.max_distance;
+    let max_distance = attacker.move_distance() + attack.max_distance;
     let from = MapPos::from_world_pos(attacker.pos);
     let to = MapPos::from_world_pos(target.pos);
+    let d = from.distance(to);
 
     if !attacker.is_concious() {
         return ActionResultBuilder::new(cw).add_fx(FxEffect::say("Ahhh", attacker.pos));
     }
 
-    if from.distance(to) > max_distance.into() {
+    if d > max_distance.into() {
         return ActionResultBuilder::new(cw).add_fx(FxEffect::say("It's too far!", attacker.pos));
     }
 
-    let partial_result = if attack.advance > 0 {
-        let p = find_charge_path(&attacker, &target, &cw);
-        if p.is_none() {
+    let advance_distance = d.checked_sub(attack.max_distance.into()).unwrap_or(0);
+    let partial_result = if advance_distance > 0 {
+        let path = find_charge_path(&attacker, &target, &cw);
+        if path.is_none() {
             return ActionResultBuilder::new(cw)
                 .add_fx(FxEffect::say("The way is blocked!", attacker.pos));
         }
 
-        let mut p = p.unwrap();
-        p.pop(); // ignore last tile which is where the target is
+        let path = path.unwrap();
+        let pos_start = from.to_world_pos();
+        let pos_end = path.get(advance_distance).unwrap().to_world_pos();
 
-        // TODO it is possible that attack.advance > 1 and attack.distance > 1. In
-        // this case following code would not work correctly (it would move the
-        // attacker all the way). So far I think an advance and reach attack makes no sence
-        let p0 = from.to_world_pos();
-        let p1 = p.last().unwrap().to_world_pos();
-
-        attacker.pos = p1;
+        attacker.pos = pos_end;
 
         cw.update_actor(attacker);
 
         let mut charge_fx = FxSequence::new()
-            .then(FxEffect::scream("Charge!", p0))
+            .then(FxEffect::scream("Charge!", pos_start))
             .wait(500)
-            .then(FxEffect::move_along(attacker_id, vec![p0, p1]));
+            .then(FxEffect::move_along(attacker_id, vec![pos_start, pos_end]));
 
-        for (i, tile) in p.iter().enumerate() {
+        for (i, tile) in path.iter().enumerate() {
             charge_fx = charge_fx.then(FxEffect::dust("fx-dust-1", tile.to_world_pos(), 400));
 
-            if i < p.len() - 1 {
+            if i < path.len() - 1 {
                 charge_fx = charge_fx.wait(200)
             }
         }

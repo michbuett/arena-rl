@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use super::actor::*;
 use super::traits::HitEffect as AttackHitEffect;
 
-use crate::core::cards::SuiteSubstantiality::*;
 use crate::core::{dice::*, resolve_challenge, Challenge, Deck, MapPos, Obstacle, Suite, WorldPos};
 
 #[derive(Debug, Clone)]
@@ -113,16 +112,16 @@ pub fn resolve_attack(
     decks: &mut HashMap<TeamId, Deck>,
     pos: MapPos,
 ) -> Hit {
-    let quality =
-        attacker.skill(attack.challenge_suite) + attack.effort_card.value(attack.challenge_suite);
+    let quality = attacker.skill(attack.to_hit.0, attack.to_hit.1)
+        + attack.effort_card.value(attack.to_hit.0);
 
     // STEP defender flips agains the attack to determine if the attack hits
     let defence_result = resolve_challenge(
         Challenge {
             target_num: quality,
             advantage: 0,
-            challenge_type: defence_suite(attack),
-            skill_val: target.skill(Suite::Spades),
+            challenge_type: attack.defence,
+            skill_val: target.skill(Suite::PhysicalAg, 0),
         },
         decks.get_mut(&target.team).unwrap(),
     );
@@ -144,9 +143,9 @@ pub fn resolve_attack(
         let dmg_result = resolve_challenge(
             Challenge {
                 advantage: -1 * defence_result.success_lvl,
-                challenge_type: damage_suite(attack),
-                skill_val: attack.damage,
-                target_num: target.soak(),
+                challenge_type: attack.to_wound.0,
+                skill_val: attacker.skill(attack.to_wound.0, attack.to_wound.1),
+                target_num: max(3, target.soak().checked_sub(attack.rend).unwrap_or(0)),
             },
             decks.get_mut(&attacker.team).unwrap(),
         );
@@ -173,105 +172,6 @@ pub fn resolve_attack(
     let roll = Roll::new(0, 0); // deprecated
     Hit { pos, roll, effects }
 }
-
-fn defence_suite(attack: &Attack) -> Suite {
-    if let Physical = attack.challenge_suite.substantiality() {
-        Suite::Spades
-    } else {
-        Suite::Diamonds
-    }
-}
-
-fn damage_suite(attack: &Attack) -> Suite {
-    if let Physical = attack.challenge_suite.substantiality() {
-        Suite::Clubs
-    } else {
-        Suite::Hearts
-    }
-}
-
-// pub fn resolve_combat(attack: &Attack, vector: Vec<AttackTarget>) -> HitResult {
-//     HitResult {
-//         attack: attack.clone(),
-//         hits: resolve_hits(attack, vector),
-//     }
-// }
-
-// fn resolve_hits(attack: &Attack, mut vector: Vec<AttackTarget>) -> Vec<Hit> {
-//     let mut result = vec![];
-
-//     for t in vector.drain(..) {
-//         if t.is_target {
-//             if let Some(target_actor) = t.actor {
-//                 result.push(resolve_hit(&attack, &target_actor, t.pos, &t.cover));
-//             }
-//         }
-//     }
-
-//     result
-// }
-
-// fn resolve_hit(attack: &Attack, target_actor: &Actor, pos: MapPos, cover: &Cover) -> Hit {
-//     let attack_roll = roll_to_hit(attack, target_actor, cover);
-
-//     Hit {
-//         pos,
-//         effects: calculate_hit_effects(attack_roll.num_successes, attack, target_actor, cover),
-//         roll: attack_roll,
-//     }
-// }
-
-// fn calculate_hit_effects(
-//     mut attack_quality: u8,
-//     attack: &Attack,
-//     target_actor: &Actor,
-//     cover: &Cover,
-// ) -> Vec<HitEffect> {
-//     if attack_quality == 0 {
-//         return vec![HitEffect::Miss()];
-//     }
-
-//     if let Some((block_pos, block_mod)) = determine_blocking(attack, target_actor, cover) {
-//         attack_quality = max(0, attack_quality as i8 - block_mod) as u8;
-
-//         if attack_quality == 0 {
-//             return vec![HitEffect::Block(block_pos, target_actor.id)];
-//         }
-//     }
-
-//     let mut effects = vec![];
-
-//     add_attack_effects(
-//         HitEffectCondition::OnHit,
-//         attack,
-//         target_actor,
-//         &mut effects,
-//     );
-
-//     add_wound_effects(attack_quality as i8 - 2, attack, target_actor, &mut effects);
-
-//     effects
-// }
-
-// fn add_wound_effects(
-//     roll_advantage: i8,
-//     attack: &Attack,
-//     target_actor: &Actor,
-//     effects: &mut Vec<HitEffect>,
-// ) {
-//     let wound_roll = Roll::new(roll_advantage, to_wound_threshold(attack, &target_actor));
-//     let wound_quality =
-//         wound_roll.num_successes as i8 + attack.rend - target_actor.attr(Attr::Resilience).val();
-
-//     if wound_quality > 0 {
-//         let w = Wound {
-//             pain: 1,
-//             wound: wound_quality as u8 - 1,
-//         };
-
-//         effects.push(HitEffect::Wound(w, target_actor.id));
-//     }
-// }
 
 fn add_attack_effects(
     when_cond: HitEffectCondition,
@@ -317,84 +217,6 @@ fn convert_attack_hit_effect(
         }
     }
 }
-
-// fn roll_to_hit(attack: &Attack, target_actor: &Actor, cover: &Cover) -> Roll {
-//     match attack.attack_type {
-//         AttackType::Melee(..) => Roll::new(
-//             attack.advantage,
-//             melee_to_hit_threshold(attack, target_actor),
-//         ),
-
-//         AttackType::Ranged(..) => Roll::new(
-//             attack.advantage,
-//             ranged_to_hit_threshold(attack, target_actor, cover),
-//         ),
-//     }
-// }
-
-// fn determine_blocking(
-//     attack: &Attack,
-//     target_actor: &Actor,
-//     cover: &Cover,
-// ) -> Option<(MapPos, i8)> {
-//     match attack.attack_type {
-//         AttackType::Melee(..) => {
-//             let block = target_actor.attr(Attr::MeleeBlock).val();
-//             if block == 0 {
-//                 None
-//             } else {
-//                 Some((MapPos::from_world_pos(target_actor.pos), block))
-//             }
-//         }
-
-//         AttackType::Ranged(..) => {
-//             if let Some((pos, max_block, _)) = cover.last_obstacle {
-//                 if pos.distance(MapPos::from_world_pos(target_actor.pos)) == 1 {
-//                     return Some((pos, max_block));
-//                 }
-//             }
-
-//             None
-//         }
-//     }
-// }
-
-// fn melee_to_hit_threshold(attack: &Attack, target: &Actor) -> u8 {
-//     if !target.is_concious() {
-//         return 2;
-//     }
-
-//     let offence_mod = attack.to_hit.val();
-//     let defence_mod = target.attr(Attr::MeleeSkill).val() + target.attr(Attr::Evasion).val();
-//     let th = 4 + defence_mod - offence_mod;
-
-//     max(2, th) as u8
-// }
-
-// fn ranged_to_hit_threshold(attack: &Attack, target: &Actor, cover: &Cover) -> u8 {
-//     let base_th = match cover.obscured {
-//         0..=24 => 2,
-//         25..=49 => 3,
-//         50..=74 => 4,
-//         75..=99 => 5,
-//         _ => {
-//             // If target is completly obscured than it is not possible to hit it
-//             // even for the most skilled marksman
-//             // => exit here
-//             return 7;
-//         }
-//     };
-
-//     let th = base_th + target.attr(Attr::Evasion).val() - attack.to_hit.val();
-//     max(2, th) as u8
-// }
-
-// fn to_wound_threshold(attack: &Attack, target: &Actor) -> u8 {
-//     max(
-//         0,
-//         4 + target.attr(Attr::Protection).val() - attack.to_wound.val(),
-//     ) as u8
-// }
 
 fn direction(p1: WorldPos, p2: WorldPos) -> (i32, i32) {
     let mp1 = MapPos::from_world_pos(p1);

@@ -5,7 +5,7 @@ use specs::prelude::*;
 use crate::components::{
     GameObjectCmp, ObstacleCmp, Position, Sprites, WorldPos, ZLayerFloor, ZLayerGameObject,
 };
-use crate::core::{Actor, Attr, Card, GameObject, Item, Obstacle, SpriteConfig, Suite, TextureMap};
+use crate::core::{Actor, Card, GameObject, Item, Obstacle, SpriteConfig, Suite, TextureMap};
 
 use super::{Hitbox, HoverAnimation, Text};
 
@@ -108,10 +108,11 @@ fn activation_str(card: &Card) -> String {
         "[{}{}]",
         card.value,
         match card.suite {
-            Suite::Clubs => "C",
-            Suite::Hearts => "H",
-            Suite::Spades => "S",
-            Suite::Diamonds => "D",
+            Suite::PhysicalStr => "C",
+            Suite::MentalStr => "H",
+            Suite::PhysicalAg => "S",
+            Suite::MentalAg => "D",
+            _ => panic!("Suite not allowed: {:?}", card.suite),
         }
     )
 }
@@ -191,8 +192,6 @@ fn append_status_icons(sprites: &mut Vec<SpriteConfig>, a: &Actor, texture_map: 
     let icons = (0..a.health.recieved_wounds)
         .map(|_| "icon-dot-red")
         .chain((0..a.health.pain).map(|_| "icon-dot-yellow"))
-        .chain((0..a.attr(Attr::MeleeBlock).val()).map(|_| "icon-action-Defend"))
-        .chain((0..a.attr(Attr::RangedBlock).val()).map(|_| "icon-action-Defend"))
         .collect::<Vec<_>>();
 
     let icon_space = 16;

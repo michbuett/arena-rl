@@ -4,7 +4,7 @@ use crate::core::WorldPos;
 
 use super::{
     actor::{Actor, ActorBuilder, AiBehaviour, TeamId, Trait},
-    TraitStorage, VLayers, Visual, VisualElements, VisualState,
+    ActorAttriubes, TraitStorage, VLayers, Visual, VisualElements, VisualState,
 };
 
 use ron::de::from_reader;
@@ -36,7 +36,7 @@ impl ObjectGenerator {
     pub fn generate_actor(
         &self,
         pos: WorldPos,
-        t: TeamId,
+        team_id: TeamId,
         template_name: ActorTemplateName,
     ) -> ActorBuilder {
         let template = self.actors.get(&template_name);
@@ -56,9 +56,15 @@ impl ObjectGenerator {
             .collect();
 
         let name = format!("{}-{}", template_name.0, between(0, 1000)); // TODO generate names
-        ActorBuilder::new(name, pos, t, template.max_activations)
-            .traits(traits)
-            .visual(visual)
+        ActorBuilder::new(
+            name,
+            pos,
+            team_id,
+            template.attributes.clone(),
+            template.max_activations,
+        )
+        .traits(traits)
+        .visual(visual)
     }
 
     pub fn generate_player(&self, pos: WorldPos, t: TeamId, template: ActorTemplateName) -> Actor {
@@ -85,6 +91,7 @@ type VisualConfig = (VLayers, String, Option<(u16, u16)>);
 #[derive(Debug, Clone, Deserialize)]
 struct ActorTemplate {
     max_activations: u8,
+    attributes: ActorAttriubes,
     traits: Vec<String>,
     visuals: (Vec<VisualConfig>, Vec<(VisualState, Vec<VisualConfig>)>),
 }
@@ -144,5 +151,31 @@ fn map_visual_config(vcfg: &VisualConfig) -> (VLayers, String) {
         (*vl, name.replace("{}", &format!("{}", between(*a, *b))))
     } else {
         (*vl, name.clone())
+    }
+}
+
+/////////////////////////////////////////////////////////////////////
+// tests
+
+#[test]
+fn test_can_create_all_actors() {
+    let templates = vec![
+        "actor#tank",
+        "actor#saw",
+        "actor#spear",
+        "actor#gunner",
+        "enemy#sucker",
+        "enemy#worm",
+        "enemy#zombi",
+    ];
+
+    let generator = ObjectGenerator::new(Path::new("assets/data/"));
+    let p = WorldPos::new(0.0, 0.0, 0.0);
+    let t = TeamId::new(0);
+
+    for tn in templates {
+        let atn = ActorTemplateName(tn.to_string());
+        let a = generator.generate_actor(p, t, atn).build();
+        assert_eq!(a.team, t); // the real test is loading and deserializing the data files
     }
 }

@@ -2,7 +2,11 @@ use std::cmp::max;
 use std::collections::HashMap;
 use std::time::Instant;
 
+use serde::Deserialize;
+
+pub use super::traits::AttributeModifier::*;
 pub use super::traits::*;
+
 use super::ActorTemplateName;
 
 use crate::core::{Card, DisplayStr, MapPos, Suite, WorldPos};
@@ -72,15 +76,23 @@ pub struct ActorBuilder {
     visual: Visual,
     name: String,
     keywords: Vec<Keyword>,
+    attributes: ActorAttriubes,
     traits: HashMap<String, Trait>,
 }
 
 impl ActorBuilder {
-    pub fn new(name: String, pos: WorldPos, team: TeamId, max_activations: u8) -> Self {
+    pub fn new(
+        name: String,
+        pos: WorldPos,
+        team: TeamId,
+        attributes: ActorAttriubes,
+        max_activations: u8,
+    ) -> Self {
         Self {
             pos,
             team,
             name,
+            attributes,
             max_activations,
             behaviour: None,
             visual: Visual::new(VisualElements::empty()),
@@ -98,6 +110,8 @@ impl ActorBuilder {
             health: Health::new(0),
             keywords: self.keywords,
             effects: Vec::new(),
+            attributes: self.attributes,
+            modifier: Default::default(),
             traits: self.traits,
             behaviour: self.behaviour,
             team: self.team,
@@ -108,8 +122,7 @@ impl ActorBuilder {
         }
         .process_traits();
 
-        let physical_strength = 3 + AttrVal::new(Attr::Physical, &a.effects).val();
-        a.health = Health::new(max(physical_strength, 1) as u8);
+        a.health = Health::new(a.skill(Suite::PhysicalStr, 0));
         a
     }
 
@@ -228,12 +241,22 @@ impl Visual {
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct ActorAttriubes {
+    physical_strength: u8,
+    physical_agility: u8,
+    mental_strength: u8,
+    mental_agility: u8,
+}
+
 #[derive(Debug, Clone)]
 pub struct Actor {
     traits: HashMap<String, Trait>,
     visual: Visual,
     keywords: Vec<Keyword>,
     max_activations: u8,
+    attributes: ActorAttriubes,
+    modifier: [i8; NUM_ATTRIBUTE_MODIFIER],
 
     pub id: ID,
     pub health: Health,
@@ -255,8 +278,7 @@ impl Actor {
     }
 
     pub fn move_distance(&self) -> u8 {
-        let move_mod = self.attr(Attr::Movement).val();
-        max(1, 3 + move_mod) as u8
+        self.attr_value(3, MoveDistance, 0)
     }
 
     pub fn is_flying(&self) -> bool {
@@ -363,58 +385,33 @@ impl Actor {
         let attacks = self
             .effects
             .iter()
-            .filter_map(|(_, eff)| {
-                match eff {
-                    Effect::MeleeAttack {
-                        name,
-                        required_effort,
-                        advance,
-                        distance,
-                        to_hit,
-                        ap,
-                        rend,
-                        fx,
-                        effects,
-                    } => Some(AttackOption {
-                        name: name.clone(),
-                        min_distance: 1,
-                        max_distance: max(1, distance.unwrap_or(1)),
-                        advance: advance.unwrap_or(0),
-                        to_hit: to_hit.unwrap_or(0),
-                        to_wound: ap.unwrap_or(0),
-                        rend: rend.unwrap_or(0),
-                        advantage: 0,
-                        attack_type: AttackType::Melee(fx.to_string()),
-                        required_effort: *required_effort,
-                        allocated_effort: 0,
-                        effects: effects.clone(),
-                        to_hit_threshold: 4, // TODO calculate from to-hit modifier and defence
-                    }),
+            .filter_map(|(_, eff)| match eff {
+                Effect::AttackSingleTarget {
+                    name,
+                    challenge_value,
+                    to_hit,
+                    to_wound,
+                    defence,
+                    distance_min,
+                    distance_max,
+                    rend,
+                    fx,
+                    effects,
+                } => Some(AttackOption {
+                    name: name.clone(),
+                    to_hit: *to_hit,
+                    to_wound: *to_wound,
+                    defence: *defence,
+                    challenge_value: *challenge_value,
+                    min_distance: distance_min.unwrap_or(0),
+                    max_distance: distance_max.unwrap_or(1),
+                    advance: 0,
+                    rend: rend.unwrap_or(0),
+                    attack_fx: fx.clone(),
+                    effects: effects.clone(),
+                }),
 
-                    Effect::RangeAttack {
-                        name,
-                        distance,
-                        to_hit,
-                        to_wound,
-                        fx,
-                    } => Some(AttackOption {
-                        name: name.clone(),
-                        min_distance: distance.0,
-                        max_distance: distance.1,
-                        advance: 0,
-                        to_hit: *to_hit,
-                        to_wound: *to_wound,
-                        rend: 0,
-                        advantage: 0,
-                        attack_type: AttackType::Ranged(fx.to_string()),
-                        required_effort: 3, // TODO read from effect
-                        allocated_effort: 0,
-                        effects: None, // TODO read from effect
-                        to_hit_threshold: 4,
-                    }),
-
-                    _ => None,
-                }
+                _ => None,
             })
             .collect::<Vec<_>>();
 
@@ -423,16 +420,16 @@ impl Actor {
                 name: DisplayStr::new("Unarmed attack"),
                 min_distance: 0,
                 max_distance: 1,
+                to_hit: (Suite::PhysicalStr, 0),
+                to_wound: (Suite::PhysicalStr, 0),
+                defence: Suite::Physical,
+                challenge_value: 7,
                 advance: 0,
-                to_hit: 0,
-                to_wound: -1,
-                rend: -1,
-                advantage: 0,
-                attack_type: AttackType::Melee("fx-hit-1".to_string()),
-                required_effort: 2,
-                allocated_effort: 0,
+                rend: 0,
+                attack_fx: AttackFx::MeleeSingleTarget {
+                    name: "fx-hit-1".to_string(),
+                },
                 effects: None,
-                to_hit_threshold: 4,
             }]
         } else {
             attacks
@@ -527,28 +524,56 @@ impl Actor {
         self.visual.get_state(VisualState::Idle)
     }
 
-    /// Returns the active modifier for a given attribute
-    /// -3 => None
-    /// -2 => Puny
-    /// -1 => Low — rusty
-    ///  0 => Average
-    ///  1 => Good — trained (decent)
-    ///  2 => Very good
-    ///  3 => Elite (only the best have elite stats)
-    ///  4 => Exceptional (once per generagion; the best of the best)
-    ///  5 => Legendary (once per era)
-    ///  6 => Supernatural
-    ///  7 => Godlike (unlimited power)
-    pub fn attr(&self, s: Attr) -> AttrVal {
-        AttrVal::new(s, &self.effects)
+    /// Returns the active value for a given attribute
+    ///  0 => None
+    ///  1 => Puny
+    ///  2 => Low — rusty
+    ///  3 => Average
+    ///  4 => Good — trained (decent)
+    ///  5 => Very good
+    ///  6 => Elite (only the best have elite stats)
+    ///  7 => Exceptional (once per generagion; the best of the best)
+    ///  8 => Legendary (once per era)
+    ///  9 => Supernatural
+    /// 10 => Godlike (unlimited power)
+    pub fn skill(&self, s: Suite, modifier: i8) -> u8 {
+        let a = &self.attributes;
+
+        match s {
+            Suite::PhysicalStr => self.attr_value(a.physical_strength, PhysicalStrength, modifier),
+            Suite::PhysicalAg => self.attr_value(a.physical_agility, PhysicalAgility, modifier),
+            Suite::MentalStr => self.attr_value(a.mental_strength, MentalStrength, modifier),
+            Suite::MentalAg => self.attr_value(a.mental_agility, MentalAgility, modifier),
+            Suite::Physical => max(
+                self.skill(Suite::PhysicalStr, modifier),
+                self.skill(Suite::PhysicalAg, modifier),
+            ),
+            Suite::Mental => max(
+                self.skill(Suite::MentalStr, modifier),
+                self.skill(Suite::MentalAg, modifier),
+            ),
+            Suite::Strength => max(
+                self.skill(Suite::PhysicalStr, modifier),
+                self.skill(Suite::MentalStr, modifier),
+            ),
+            Suite::Agility => max(
+                self.skill(Suite::PhysicalAg, modifier),
+                self.skill(Suite::MentalAg, modifier),
+            ),
+            Suite::Any => max(
+                self.skill(Suite::Physical, modifier),
+                self.skill(Suite::Mental, modifier),
+            ),
+        }
     }
 
-    pub fn skill(&self, _s: Suite) -> u8 {
-        5 // TODO make configurable
+    fn attr_value(&self, base_val: u8, attr_mod: AttributeModifier, skill_mod: i8) -> u8 {
+        let attr_val = base_val as i8 + self.modifier[attr_mod as usize] + skill_mod;
+        max(0, attr_val) as u8
     }
 
     pub fn soak(&self) -> u8 {
-        5 // TODO make configurable
+        self.attr_value(self.attributes.physical_strength, PhysicalResistence, 0)
     }
 
     pub fn active_traits(&self) -> ActiveTraitIter {
@@ -594,60 +619,33 @@ impl<'a> Iterator for ActiveTraitIter<'a> {
 
 #[derive(Debug, Clone)]
 pub struct AttackOption {
-    pub name: DisplayStr,
-    pub min_distance: u8,
-    pub max_distance: u8,
     pub advance: u8,
-    pub to_hit: i8,
-    pub to_wound: i8,
-    pub rend: i8,
-    pub advantage: i8,
-    pub attack_type: AttackType,
-    pub required_effort: u8,
-    pub allocated_effort: u8,
+    pub to_hit: (Suite, i8),
+    pub to_wound: (Suite, i8),
+    pub attack_fx: AttackFx,
+    pub challenge_value: u8,
+    pub defence: Suite,
     pub effects: Option<Vec<(HitEffectCondition, HitEffect)>>,
-    pub to_hit_threshold: u8,
+    pub max_distance: u8,
+    pub min_distance: u8,
+    pub name: DisplayStr,
+    pub rend: u8,
 }
 
 impl AttackOption {
     pub fn into_attack(self, a: &Actor) -> Attack {
-        let to_hit = match self.attack_type {
-            AttackType::Melee(..) => a.attr(Attr::MeleeSkill),
-            AttackType::Ranged(..) => a.attr(Attr::RangedSkill),
-        }
-        .modify(self.name.clone(), self.to_hit);
-
-        let to_wound = a
-            .attr(Attr::ArmorPenetration)
-            .modify(self.name.clone(), self.to_wound);
-
-        let num_dice = self.required_effort;
-
-        // let advantage = if self.required_effort > a.available_effort() {
-        //     -1
-        // } else {
-        //     0
-        // };
-
-        let challenge_suite = match self.attack_type {
-            AttackType::Melee(..) => Suite::Clubs,
-            AttackType::Ranged(..) => Suite::Spades,
-        };
-
         Attack {
             origin_pos: a.pos,
-            to_hit,
-            to_wound,
             rend: self.rend,
             name: self.name,
-            attack_type: self.attack_type,
-            num_dice,
+            attack_fx: self.attack_fx,
             advantage: 0,
             effects: self.effects,
-            challenge_suite,
             effort_card: a.active_activation.unwrap(),
-            challenge_value: 10, // TODO make configurable
-            damage: 5,           // TODO make configurable
+            to_hit: self.to_hit,
+            to_wound: self.to_wound,
+            challenge_value: self.challenge_value,
+            defence: self.defence,
         }
     }
 }
@@ -656,24 +654,16 @@ impl AttackOption {
 pub struct Attack {
     pub origin_pos: WorldPos,
     pub name: DisplayStr,
-    pub to_hit: AttrVal,
-    pub to_wound: AttrVal,
-    pub rend: i8,
-    pub num_dice: u8,
-    pub attack_type: AttackType,
+    pub rend: u8,
+    pub attack_fx: AttackFx,
     pub advantage: i8,
     pub effects: Option<Vec<(HitEffectCondition, HitEffect)>>,
 
     pub effort_card: Card,
     pub challenge_value: u8,
-    pub challenge_suite: Suite,
-    pub damage: u8,
-}
-
-#[derive(Debug, Clone)]
-pub enum AttackType {
-    Melee(String),
-    Ranged(String),
+    pub to_hit: (Suite, i8),
+    pub to_wound: (Suite, i8),
+    pub defence: Suite,
 }
 
 #[derive(Debug, Clone)]

@@ -99,7 +99,7 @@ pub fn attack_vector(
 ) -> Option<AttackVector> {
     let from = MapPos::from_world_pos(attacker.pos);
     let to = MapPos::from_world_pos(target.pos);
-    let max_distance = attack.advance + attack.max_distance;
+    let max_distance = attacker.move_distance() + attack.max_distance;
     let d = from.distance(to);
 
     if d > max_distance.into() {
@@ -116,6 +116,7 @@ pub fn attack_vector(
     let line_of_attack = SuperLineIter::new(from, to);
     let mut result: AttackVector = vec![];
     let mut is_advancing = true;
+    let advance_distance = d.checked_sub(attack.max_distance.into()).unwrap_or(0);
     let mut cover = Cover::none();
 
     for pos in line_of_attack {
@@ -132,7 +133,7 @@ pub fn attack_vector(
 
         let is_target = pos == to;
 
-        is_advancing = is_advancing && !is_target && from.distance(pos) <= attack.advance.into();
+        is_advancing = is_advancing && !is_target && from.distance(pos) <= advance_distance;
 
         if let Some((obs, id)) = obstacles.get(&pos) {
             if is_advancing {
