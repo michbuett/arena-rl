@@ -57,6 +57,8 @@ pub enum TraitSource {
 pub enum Keyword {
     Flying,
     Underground,
+    Quick,
+    Slow,
 }
 
 #[derive(Debug, Clone, Deserialize)]

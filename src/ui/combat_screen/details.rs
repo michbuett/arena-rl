@@ -1,6 +1,6 @@
 use crate::core::{
-    Action, Actor, Card, CombatData, CombatState, DisplayStr, GameObject, Health, InputContext,
-    MapPos, SelectedPos, Suite, TeamId, Trait, TraitSource, UserInput, ID,
+    Action, Activation, Actor, Card, CombatData, CombatState, DisplayStr, GameObject, Health,
+    InputContext, MapPos, SelectedPos, Suite, TeamId, Trait, TraitSource, UserInput, ID,
 };
 use crate::ui::types::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenText};
 
@@ -151,7 +151,7 @@ fn draw_cards(
                 click_areas.push(ClickArea {
                     clipping_area: (x, y, CARD_WIDTH, CARD_HEIGHT),
                     action: Box::new(move |_| {
-                        UserInput::AssigneActivation(selected_actor_id, team, card)
+                        UserInput::BoostActivation(selected_actor_id, team, card)
                     }),
                 });
             }
@@ -257,14 +257,14 @@ fn describe_actor(a: &Actor) -> String {
     let active_activation_str = a
         .active_activation
         .as_ref()
-        .map(format_card)
-        .unwrap_or(" - ".to_string());
+        .map(format_activation)
+        .unwrap_or("(none)".to_string());
     let activation_str = a
         .activations
         .iter()
-        .map(format_card)
+        .map(format_activation)
         .collect::<Vec<_>>()
-        .join(" ");
+        .join("\n - ");
 
     let traits_str: String = a
         .active_traits()
@@ -273,7 +273,7 @@ fn describe_actor(a: &Actor) -> String {
         .join("\n  - ");
 
     format!(
-        "\n{} (condition: {})\n\nActivations: \n {}\n <{}>\n\nTraits:\n - {}",
+        "\n{} (condition: {})\n\nActivations: \n - active: {}\n - {}\n\nTraits:\n - {}",
         a.name, condition, active_activation_str, activation_str, traits_str
     )
 }
@@ -289,6 +289,15 @@ fn describe_trait(t: &Trait) -> String {
     format!("{} ({})", name.clone().into_string(), source_str)
 }
 
+fn format_activation(a: &Activation) -> String {
+    match a {
+        Activation::Single(c) => format_card(c),
+        Activation::Boosted(c1, c2) => {
+            format!("Best of {}/{}", format_card(c1), format_card(c2))
+        }
+    }
+}
+
 fn format_card(card: &Card) -> String {
     let value = match card.value {
         1 => "A".to_string(),
@@ -298,7 +307,18 @@ fn format_card(card: &Card) -> String {
         _ => format!("{}", card.value),
     };
 
-    format!("{} of {:?}", value, card.suite)
+    let suite = match card.suite {
+        Suite::PhysicalStr => "Clubs",
+        Suite::PhysicalAg => "Spades",
+        Suite::MentalStr => "Hearts",
+        Suite::MentalAg => "Diamonds",
+        Suite::Physical => "Black",
+        Suite::Mental => "Red",
+        Suite::Any => "Any",
+        _ => panic!("Non valid suite: {:?}", card.suite),
+    };
+
+    format!("{} of {}", value, suite)
 }
 
 fn create_action_buttons(

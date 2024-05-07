@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::core::{DisplayStr, UserInput, WorldPos, Sprite};
+use crate::core::{DisplayStr, Sprite, UserInput, WorldPos};
 
 pub const TILE_WIDTH: u32 = 128;
 pub const TILE_HEIGHT: u32 = 128;
@@ -12,7 +12,7 @@ pub struct ScreenCoord(
     /// the y coordinate
     i32,
     /// the z coordinate
-    i32
+    i32,
 );
 
 impl ScreenCoord {
@@ -65,7 +65,6 @@ impl ScreenCoord {
         self.1
     }
 }
-
 
 #[derive(Clone, Copy, Debug)]
 pub struct ScreenPos(pub i32, pub i32);
@@ -196,10 +195,7 @@ impl ScreenText {
     }
 
     pub fn padding(self: Self, padding: u32) -> Self {
-        Self {
-            padding: padding,
-            ..self
-        }
+        Self { padding, ..self }
     }
 
     pub fn border(mut self: Self, padding: u32, color: (u8, u8, u8, u8)) -> Self {
@@ -232,9 +228,9 @@ impl Scene {
     pub fn empty() -> Self {
         Self {
             background: (252, 251, 250),
-            texts: vec!(),
+            texts: vec![],
             sprites: Vec::with_capacity(500),
-            images: vec!(),
+            images: vec![],
         }
     }
 

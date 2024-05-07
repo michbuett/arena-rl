@@ -1,4 +1,4 @@
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -9,7 +9,7 @@ pub use super::traits::*;
 
 use super::ActorTemplateName;
 
-use crate::core::{Card, DisplayStr, MapPos, Suite, WorldPos};
+use crate::core::{Card, Deck, DisplayStr, MapPos, Suite, WorldPos};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct ID(Instant, u64, u64);
@@ -241,6 +241,35 @@ impl Visual {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum Activation {
+    Single(Card),
+    Boosted(Card, Card),
+    // Hindered(Card, Card),
+}
+
+impl Activation {
+    pub fn initiativ(&self) -> u8 {
+        match self {
+            Activation::Single(c) => c.value,
+            Activation::Boosted(c1, c2) => min(c1.value, c2.value),
+        }
+    }
+
+    pub fn value_card(&self, suite: Suite) -> Card {
+        match self {
+            Activation::Single(c) => *c,
+            Activation::Boosted(c1, c2) => {
+                if c1.value(suite) >= c2.value(suite) {
+                    *c1
+                } else {
+                    *c2
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct ActorAttriubes {
     physical_strength: u8,
@@ -265,8 +294,8 @@ pub struct Actor {
     pub active: bool,
     pub team: TeamId,
     pub pos: WorldPos,
-    pub activations: Vec<Card>,
-    pub active_activation: Option<Card>,
+    pub activations: Vec<Activation>,
+    pub active_activation: Option<Activation>,
     pub behaviour: Option<AiBehaviour>,
 }
 
@@ -282,11 +311,11 @@ impl Actor {
     }
 
     pub fn is_flying(&self) -> bool {
-        self.is_concious() && self.keywords.contains(&Keyword::Flying)
+        self.is_concious() && self.has_keyword(Keyword::Flying)
     }
 
     pub fn is_underground(&self) -> bool {
-        self.is_concious() && self.keywords.contains(&Keyword::Underground)
+        self.is_concious() && self.has_keyword(Keyword::Underground)
     }
 
     ////////////////////////////////////////////////////////////
@@ -308,16 +337,49 @@ impl Actor {
         self.max_activations
     }
 
-    pub fn assigne_activation(mut self, card: Card) -> Self {
-        self.activations.push(card);
+    pub fn add_activation(mut self, new_card: Card) -> Self {
+        debug_assert!(
+            self.activations.len() < self.max_activations as usize + 1,
+            "It is not allowed to assign this activation {:?}",
+            new_card
+        );
+        self.activations.push(Activation::Single(new_card));
+        self.activations.sort_by_key(|a| a.initiativ());
         self
+    }
+
+    pub fn boost_activation(mut self, new_card: Card) -> Self {
+        if let Some((idx, activation)) = self.activations.iter().enumerate().find_map(|(idx, a)| {
+            if let Activation::Boosted(..) = a {
+                return None;
+            } else {
+                return Some((idx, a));
+            }
+        }) {
+            match activation {
+                Activation::Single(curr_card) => {
+                    self.activations[idx] = Activation::Boosted(*curr_card, new_card);
+                }
+                Activation::Boosted(..) => {
+                    // ignore this case (we filtered for non-boosted activation)
+                    // case is explicit to help the compiler identify new types
+                    // of activations
+                }
+            }
+
+            self.activations.sort_by_key(|a| a.initiativ());
+            self
+        } else {
+            // no existing non-boosted activation found
+            // => add a new one (only one bonus activation is allowed)
+            self.add_activation(new_card)
+        }
     }
 
     pub fn initiative(&self) -> u8 {
         self.activations
-            .iter()
-            .map(|c| c.value)
-            .min()
+            .first()
+            .map(|a| a.initiativ())
             .unwrap_or(u8::MAX)
     }
 
@@ -328,11 +390,7 @@ impl Actor {
         );
 
         self.active = true;
-
-        let i = self.initiative();
-        let min_activation_idx = self.activations.iter().position(|c| c.value == i).unwrap();
-
-        self.active_activation = Some(self.activations.swap_remove(min_activation_idx));
+        self.active_activation = Some(self.activations.remove(0));
         self
     }
 
@@ -343,13 +401,6 @@ impl Actor {
         }
     }
 
-    // pub fn use_ability(self, key: impl ToString, ability: Trait) -> Self {
-    //     let msg = format!("Used ability {}", ability.name);
-
-    //     self.add_trait(key.to_string(), ability)
-    //         .prepare(Act::done(msg))
-    // }
-
     ////////////////////////////////////////////////////////////
     // Handle turn cycle
 
@@ -358,7 +409,7 @@ impl Actor {
         self
     }
 
-    pub fn start_next_turn(mut self) -> Actor {
+    pub fn start_next_turn(mut self, deck: &mut Deck) -> Actor {
         // handle temporary traits
         let mut new_traits = HashMap::new();
         for (k, t) in self.traits.drain() {
@@ -374,11 +425,38 @@ impl Actor {
             }
         }
 
-        Self {
+        let mut result = Self {
             traits: new_traits,
             ..self
         }
-        .process_traits()
+        .process_traits();
+
+        for _ in 1..=result.num_activation() {
+            let card = if result.has_keyword(Keyword::Quick) {
+                // Quick actors draw two cards and discard the higher one
+                // (lower cards act faster)
+                let (c1, c2) = (deck.deal(), deck.deal());
+                if c1.value < c2.value {
+                    c1
+                } else {
+                    c2
+                }
+            } else if result.has_keyword(Keyword::Slow) {
+                // Slow actors draw two cards and discard the lower one
+                let (c1, c2) = (deck.deal(), deck.deal());
+                if c1.value > c2.value {
+                    c1
+                } else {
+                    c2
+                }
+            } else {
+                deck.deal()
+            };
+
+            result = result.add_activation(card);
+        }
+
+        result
     }
 
     pub fn attacks(&self) -> Vec<AttackOption> {
@@ -468,18 +546,21 @@ impl Actor {
         }
     }
 
+    pub fn has_keyword(&self, kw: Keyword) -> bool {
+        self.keywords.contains(&kw)
+    }
+
     pub fn add_trait(mut self, key: String, new_trait: Trait) -> Self {
         self.traits.insert(key, new_trait);
         self.process_traits()
     }
 
-    // pub fn remove_trait(mut self, key: &str) -> Self {
-    //     if let Some(_) = self.traits.remove(key) {
-    //         self.process_traits()
-    //     } else {
-    //         self
-    //     }
-    // }
+    pub fn active_traits(&self) -> ActiveTraitIter {
+        ActiveTraitIter(self.traits.values())
+    }
+
+    ////////////////////////////////////////////////////////////
+    // Health
 
     pub fn wound(mut self, w: Wound) -> Self {
         self.health = self.health.wound(w);
@@ -575,10 +656,6 @@ impl Actor {
     pub fn soak(&self) -> u8 {
         self.attr_value(self.attributes.physical_strength, PhysicalResistence, 0)
     }
-
-    pub fn active_traits(&self) -> ActiveTraitIter {
-        ActiveTraitIter(self.traits.values())
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -634,6 +711,12 @@ pub struct AttackOption {
 
 impl AttackOption {
     pub fn into_attack(self, a: &Actor) -> Attack {
+        let effort_card = a
+            .active_activation
+            .as_ref()
+            .unwrap()
+            .value_card(self.to_hit.0);
+
         Attack {
             origin_pos: a.pos,
             rend: self.rend,
@@ -641,7 +724,7 @@ impl AttackOption {
             attack_fx: self.attack_fx,
             advantage: 0,
             effects: self.effects,
-            effort_card: a.active_activation.unwrap(),
+            effort_card,
             to_hit: self.to_hit,
             to_wound: self.to_wound,
             challenge_value: self.challenge_value,

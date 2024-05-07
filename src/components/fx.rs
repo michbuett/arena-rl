@@ -111,10 +111,14 @@ pub enum FxEffect {
 
 impl FxEffect {
     pub fn say(txt: impl ToString, pos: WorldPos) -> FxEffect {
-        let txt = Text::new(txt.to_string(), FontFace::Big)
-            .padding(5)
-            .align(Align::MidCenter)
-            .color(21, 22, 23, 255);
+        let txt = Text {
+            txt: txt.to_string(),
+            font: FontFace::Big,
+            padding: 5,
+            align: Align::MidCenter,
+            color: (21, 22, 23, 255),
+            ..Default::default()
+        };
 
         FxBuilder::new(pos, 1000)
             .text(txt)
@@ -125,11 +129,14 @@ impl FxEffect {
     }
 
     pub fn scream(txt: impl ToString, pos: WorldPos) -> FxEffect {
-        let txt = Text::new(txt.to_string(), FontFace::VeryBig)
-            .align(Align::MidCenter)
-            .padding(5)
-            .color(195, 31, 42, 255);
-
+        let txt = Text {
+            txt: txt.to_string(),
+            font: FontFace::VeryBig,
+            padding: 5,
+            align: Align::MidCenter,
+            color: (195, 31, 42, 255),
+            ..Default::default()
+        };
         FxBuilder::new(pos, 1000)
             .text(txt)
             .scale(1.0, 3.0)

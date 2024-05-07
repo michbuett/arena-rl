@@ -5,7 +5,9 @@ use specs::prelude::*;
 use crate::components::{
     GameObjectCmp, ObstacleCmp, Position, Sprites, WorldPos, ZLayerFloor, ZLayerGameObject,
 };
-use crate::core::{Actor, Card, GameObject, Item, Obstacle, SpriteConfig, Suite, TextureMap};
+use crate::core::{
+    Activation, Actor, Card, GameObject, Item, Obstacle, SpriteConfig, Suite, TextureMap,
+};
 
 use super::{Hitbox, HoverAnimation, Text};
 
@@ -100,12 +102,27 @@ fn get_text_actor(a: &Actor) -> Option<Text> {
             Some(beginng) => Some(format!("{}, {}", beginng, s)),
             None => Some(s),
         })
-        .map(|txt| Text::new(txt, crate::ui::FontFace::Normal).offset(-32, 16));
+        .map(|txt| Text {
+            txt,
+            background: Some((203, 201, 200, 175)),
+            align: crate::ui::Align::MidCenter,
+            offset: Some((0, 32)),
+            ..Default::default()
+        });
 }
 
-fn activation_str(card: &Card) -> String {
+fn activation_str(a: &Activation) -> String {
+    match a {
+        Activation::Single(c) => format!("{}", format_card(c)),
+        Activation::Boosted(c1, c2) => {
+            format!("+{}/{}", format_card(c1), format_card(c2))
+        }
+    }
+}
+
+fn format_card(card: &Card) -> String {
     format!(
-        "[{}{}]",
+        "{}{}",
         card.value,
         match card.suite {
             Suite::PhysicalStr => "C",

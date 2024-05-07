@@ -239,7 +239,7 @@ fn get_default_action(game: &CombatData) -> DefaultAction {
                 let card = hand[*idx];
                 let activations = possible_actors
                     .iter()
-                    .map(|(pos, id)| (*pos, UserInput::AssigneActivation(*id, *team, card)))
+                    .map(|(pos, id)| (*pos, UserInput::BoostActivation(*id, *team, card)))
                     .collect::<HashMap<_, _>>();
 
                 return (selected_mpos, activations);

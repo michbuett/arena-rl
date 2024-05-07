@@ -19,7 +19,7 @@ pub enum UserInput {
     SelectTeam(Vec<GameObject>),
     SelectPlayerAction(Action),
     SelectActivationCard(usize),
-    AssigneActivation(ID, TeamId, Card),
+    BoostActivation(ID, TeamId, Card),
     AssigneActivationDone(TeamId),
     SelectWorldPos(MapPos),
     StartScrolling(),

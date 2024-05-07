@@ -175,13 +175,15 @@ pub struct Text {
     pub alpha: u8,
     pub scale: f32,
     pub align: Align,
+    pub text_align: Align,
+    pub width: Option<u32>,
 }
 
-impl Text {
-    pub fn new(txt: String, font: FontFace) -> Self {
+impl Default for Text {
+    fn default() -> Self {
         Self {
-            txt,
-            font,
+            txt: "(empty)".to_string(),
+            font: FontFace::Normal,
             offset: None,
             padding: 0,
             color: (0, 0, 0, 255),
@@ -190,9 +192,13 @@ impl Text {
             alpha: 255,
             scale: 1.0,
             align: Align::TopLeft,
+            text_align: Align::TopLeft,
+            width: None,
         }
     }
+}
 
+impl Text {
     pub fn into_screen_text(&self, pos: ScreenPos) -> ScreenText {
         let mut t = ScreenText::new(DisplayStr::new(self.txt.clone()), pos)
             .font(self.font)
@@ -200,7 +206,8 @@ impl Text {
             .padding(self.padding)
             .alpha(self.alpha)
             .scale(self.scale)
-            .align(self.align);
+            .align(self.align)
+            .text_align(self.text_align);
 
         if let Some(bg) = self.background {
             t = t.background(bg);
@@ -210,36 +217,12 @@ impl Text {
             t = t.border(b_size, b_color);
         }
 
+        if let Some(w) = self.width {
+            t = t.width(w);
+        }
+
         t
     }
-
-    pub fn align(mut self, new_alignment: Align) -> Self {
-        self.align = new_alignment;
-        self
-    }
-
-    pub fn offset(mut self, dx: i32, dy: i32) -> Self {
-        self.offset = Some((dx, dy));
-        self
-    }
-
-    pub fn padding(self, padding: u32) -> Self {
-        Self { padding, ..self }
-    }
-
-    pub fn color(self, r: u8, g: u8, b: u8, a: u8) -> Self {
-        Self {
-            color: (r, g, b, a),
-            ..self
-        }
-    }
-
-    // pub fn background(self, r: u8, g: u8, b: u8, a: u8) -> Self {
-    //     Self {
-    //         background: Some((r, g, b, a)),
-    //         ..self
-    //     }
-    // }
 }
 
 #[derive(Component, Debug, Clone)]

@@ -13,7 +13,7 @@ use super::{resolve_combat_new, Card, CoreWorld, Deck, HitEffect, SuperLineIter,
 #[derive(Debug, Clone)]
 pub enum Action {
     StartTurn(ID),
-    AssigneActivation(ID, Card),
+    BoostActivation(ID, Card),
     ActivateActor(ID),
     DoNothing(ID),
 
@@ -137,12 +137,13 @@ pub fn run_player_action<'a>(action: Action, mut cw: CoreWorld) -> ActionResult 
             if let Some(a) = cw.get_actor(actor_id) {
                 // println!("[DEBUG] run_player_action - StartTurn {}", a.name);
 
-                let mut a = a.clone().start_next_turn();
+                let a = a.clone();
                 let deck = cw.decks_mut().get_mut(&a.team).unwrap();
+                let a = a.start_next_turn(deck);
 
-                for _ in 1..=a.num_activation() {
-                    a = a.assigne_activation(deck.deal());
-                }
+                // for _ in 1..=a.num_activation() {
+                //     a = a.add_activation(deck.deal());
+                // }
 
                 cw.update_actor(a);
             }
@@ -150,8 +151,8 @@ pub fn run_player_action<'a>(action: Action, mut cw: CoreWorld) -> ActionResult 
             ActionResultBuilder::new(cw)
         }
 
-        Action::AssigneActivation(actor_id, card) => {
-            cw.modify_actor(actor_id, |a| a.assigne_activation(card));
+        Action::BoostActivation(actor_id, card) => {
+            cw.modify_actor(actor_id, |a| a.boost_activation(card));
             ActionResultBuilder::new(cw)
         }
 

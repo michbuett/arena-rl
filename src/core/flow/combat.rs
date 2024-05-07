@@ -185,14 +185,14 @@ fn handle_wait_for_user_input(
             }
         }
 
-        Some(UserInput::AssigneActivation(actor_id, team_id, card)) => {
+        Some(UserInput::BoostActivation(actor_id, team_id, card)) => {
             // let mut team_data = w.teams().get(team_id).clone();
             //     let card = team_data.hand.remove(*card_idx);
 
             return StepResult::new()
                 // .modify_team(team_data)
                 .remove_card_from_hand(*team_id, *card)
-                .switch_state(CombatState::ResolveAction(vec![Action::AssigneActivation(
+                .switch_state(CombatState::ResolveAction(vec![Action::BoostActivation(
                     *actor_id, *card,
                 )]));
         }

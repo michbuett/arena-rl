@@ -160,13 +160,13 @@
 
     ("intrinsic#Trait_Quick", (
         name: ("Quick"),
-        effects: [AttrMod(Movement, 1)], // TODO overhaul quick and slow traits
+        effects: [Keyword(Quick)], 
         source: IntrinsicProperty,
     )),
 
     ("intrinsic#Trait_Slow", (
         name: ("Slow"),
-        effects: [AttrMod(Movement, -1)],
+        effects: [Keyword(Slow)],
         source: IntrinsicProperty,
     )),
 
