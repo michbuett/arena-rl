@@ -13,7 +13,7 @@ use specs::prelude::{
 };
 use specs_derive::Component;
 
-use crate::core::{DisplayStr, GameObject, Obstacle, SpriteConfig, WorldPos};
+use crate::core::{Actor, DisplayStr, Obstacle, SpriteConfig, WorldPos};
 use crate::ui::{Align, ScreenPos, ScreenText};
 
 pub use crate::components::actors::*;
@@ -25,7 +25,7 @@ pub fn register(world: &mut World) {
     world.register::<Text>();
     world.register::<EndOfLive>();
     world.register::<DelayedSpawn>();
-    world.register::<GameObjectCmp>();
+    world.register::<ActorCmp>();
     world.register::<ObstacleCmp>();
     world.register::<Position>();
 
@@ -52,7 +52,7 @@ pub struct Position(pub WorldPos);
 
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
-pub struct GameObjectCmp(pub GameObject);
+pub struct ActorCmp(pub Actor);
 
 #[derive(Debug, Clone)]
 pub struct HitArea {

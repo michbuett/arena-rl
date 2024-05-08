@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use super::actor::*;
 use super::traits::HitEffect as AttackHitEffect;
 
-use crate::core::{dice::*, resolve_challenge, Challenge, Deck, MapPos, Obstacle, Suite, WorldPos};
+use crate::core::{resolve_challenge, Challenge, Deck, MapPos, Obstacle, Suite, WorldPos};
 
 #[derive(Debug, Clone)]
 pub struct Cover {
@@ -47,20 +47,20 @@ pub struct AttackTarget {
 }
 
 #[derive(Clone, Debug)]
-pub struct HitResult {
+pub struct CombatResult {
     pub attack: Attack,
     pub hits: Vec<Hit>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Hit {
-    pub roll: Roll,
+    // pub roll: Roll,
     pub pos: MapPos,
-    pub effects: Vec<HitEffect>,
+    pub effects: Vec<Impact>,
 }
 
 #[derive(Clone, Debug)]
-pub enum HitEffect {
+pub enum Impact {
     Miss(),
 
     Block(MapPos, ID),
@@ -80,7 +80,7 @@ pub fn resolve_combat_new(
     attacker: &Actor, // required for team id => maybe adde to Attack?
     targets: Vec<AttackTarget>,
     decks: &mut HashMap<TeamId, Deck>,
-) -> HitResult {
+) -> CombatResult {
     let mut hits = vec![];
 
     for t in targets {
@@ -99,7 +99,7 @@ pub fn resolve_combat_new(
         }
     }
 
-    HitResult {
+    CombatResult {
         attack: attack.clone(),
         hits,
     }
@@ -134,7 +134,7 @@ pub fn resolve_attack(
 
     let effects = if defence_result.success_lvl > 0 {
         println!(" - no hit");
-        vec![HitEffect::Miss()]
+        vec![Impact::Miss()]
     } else {
         println!(" - Hit! (advantage: {})", -1 * defence_result.success_lvl);
 
@@ -154,14 +154,14 @@ pub fn resolve_attack(
         let mut effects = if dmg_result.success_lvl <= -2 {
             // armor more then twice as high as damage
             // => the hit was completely negated
-            vec![HitEffect::Block(pos, target.id)]
+            vec![Impact::Block(pos, target.id)]
         } else {
             let w = Wound {
                 pain: 1,
                 wound: i8::max(0, dmg_result.success_lvl) as u8,
             };
 
-            vec![HitEffect::Wound(w, target.id)]
+            vec![Impact::Wound(w, target.id)]
         };
 
         add_attack_effects(HitEffectCondition::OnHit, attack, &target, &mut effects);
@@ -169,15 +169,14 @@ pub fn resolve_attack(
         effects
     };
 
-    let roll = Roll::new(0, 0); // deprecated
-    Hit { pos, roll, effects }
+    Hit { pos, effects }
 }
 
 fn add_attack_effects(
     when_cond: HitEffectCondition,
     attack: &Attack,
     target_actor: &Actor,
-    effects: &mut Vec<HitEffect>,
+    effects: &mut Vec<Impact>,
 ) {
     if let Some(attack_eff_list) = &attack.effects {
         for (cond, eff) in attack_eff_list {
@@ -192,12 +191,12 @@ fn convert_attack_hit_effect(
     eff: &AttackHitEffect,
     attack: &Attack,
     target_actor: &Actor,
-) -> HitEffect {
+) -> Impact {
     match eff {
         AttackHitEffect::PushBack(d) => {
             let (dx, dy) = direction(attack.origin_pos, target_actor.pos);
 
-            HitEffect::ForceMove {
+            Impact::ForceMove {
                 id: target_actor.id,
                 dx,
                 dy,
@@ -208,7 +207,7 @@ fn convert_attack_hit_effect(
         AttackHitEffect::PullCloser(d) => {
             let (dx, dy) = direction(target_actor.pos, attack.origin_pos);
 
-            HitEffect::ForceMove {
+            Impact::ForceMove {
                 id: target_actor.id,
                 dx,
                 dy,

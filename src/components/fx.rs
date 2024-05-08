@@ -87,7 +87,7 @@ impl Fx {
 
 #[derive(Debug)]
 pub enum FxEffect {
-    Update(GameObject),
+    Update(Actor),
 
     Remove(ID),
 
@@ -274,13 +274,13 @@ impl<'a> System<'a> for FxSystem {
     type SystemData = (
         Entities<'a>,
         ReadStorage<'a, Fx>,
-        ReadStorage<'a, GameObjectCmp>,
+        ReadStorage<'a, ActorCmp>,
         Read<'a, LazyUpdate>,
         Read<'a, TextureMap>,
     );
 
     fn run(&mut self, data: Self::SystemData) {
-        let (entities, fx, game_objects, updater, texture_map) = data;
+        let (entities, fx, actors, updater, texture_map) = data;
         let now = Instant::now();
 
         for (e, Fx(start_time, fx_eff)) in (&entities, &fx).join() {
@@ -292,11 +292,11 @@ impl<'a> System<'a> for FxSystem {
 
             match fx_eff {
                 FxEffect::Update(go) => {
-                    handle_update_visual(go, &entities, &game_objects, &updater, &texture_map)
+                    handle_update_visual(go, &entities, &actors, &updater, &texture_map)
                 }
 
                 FxEffect::Remove(id) => {
-                    if let Some(e) = find_entity_by_id(*id, &entities, &game_objects) {
+                    if let Some(e) = find_entity_by_id(*id, &entities, &actors) {
                         // _ = entities.delete(e);
                         updater.insert(e, FadeAnimation::fadeout_after(Duration::from_secs(5)));
                         updater.insert(e, EndOfLive::after(Duration::from_secs(5)));
@@ -308,7 +308,7 @@ impl<'a> System<'a> for FxSystem {
                 }
 
                 FxEffect::MoveTo(id, path, modification, _) => {
-                    if let Some(e) = find_entity_by_id(*id, &entities, &game_objects) {
+                    if let Some(e) = find_entity_by_id(*id, &entities, &actors) {
                         handle_move_to(e, path.to_vec(), duration, *modification, &updater);
                     }
                 }
@@ -343,10 +343,10 @@ impl<'a> System<'a> for FxSystem {
 fn find_entity_by_id(
     id: ID,
     entities: &Entities,
-    game_objects: &ReadStorage<GameObjectCmp>,
+    actors: &ReadStorage<ActorCmp>,
 ) -> Option<Entity> {
-    for (e, GameObjectCmp(go)) in (entities, game_objects).join() {
-        if go.id() == id {
+    for (e, ActorCmp(a)) in (entities, actors).join() {
+        if a.id == id {
             return Some(e);
         }
     }
@@ -382,20 +382,19 @@ fn animation_target_pos(wp: &WorldPos, dx: (i32, i32), dy: (i32, i32)) -> WorldP
 }
 
 fn handle_update_visual(
-    target_game_obj: &GameObject,
+    target_actor: &Actor,
     entities: &Entities,
-    game_objects: &ReadStorage<GameObjectCmp>,
+    actors: &ReadStorage<ActorCmp>,
     updater: &Read<LazyUpdate>,
     texture_map: &Read<TextureMap>,
 ) {
-    let target_entity =
-        if let Some(entity) = find_entity_by_id(target_game_obj.id(), entities, game_objects) {
-            entity
-        } else {
-            insert_game_object(target_game_obj, entities, updater)
-        };
+    let target_entity = if let Some(entity) = find_entity_by_id(target_actor.id, entities, actors) {
+        entity
+    } else {
+        insert_actor(target_actor, entities, updater)
+    };
 
-    update_game_object(target_entity, target_game_obj, texture_map, updater);
+    update_actor(target_entity, target_actor, texture_map, updater);
 }
 
 fn handle_blood_splatter(

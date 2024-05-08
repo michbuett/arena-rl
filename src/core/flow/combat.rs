@@ -10,7 +10,7 @@ use crate::core::ai::possible_player_actions;
 use crate::core::*;
 
 pub fn init_combat_data<'a, 'b>(
-    game_objects: Vec<GameObject>,
+    actors: Vec<Actor>,
     teams: Vec<Team>,
     generator: ObjectGenerator,
     texture_map: TextureMap,
@@ -35,7 +35,7 @@ pub fn init_combat_data<'a, 'b>(
     world.insert(generator);
     world.insert(texture_map);
 
-    CombatData::new(CombatState::Init(game_objects), world, dispatcher, teams)
+    CombatData::new(CombatState::Init(actors), world, dispatcher, teams)
 }
 
 /// Steps the game one tick forward using the given user input
@@ -60,7 +60,7 @@ fn perform_step<'a, 'b>(
     // }
 
     match current_state {
-        CombatState::Init(game_objects) => handle_init(game_objects, w),
+        CombatState::Init(actors) => handle_init(actors, w),
 
         CombatState::StartTurn() => handle_start_turn(CoreWorld::new(w), turn),
 
@@ -88,12 +88,10 @@ fn find_active_actor(world: &CoreWorld) -> Option<ID> {
 
 fn find_actor_ready_for_activation(turn: &TurnState, world: &CoreWorld) -> Vec<(ID, MapPos, bool)> {
     let candidates = world
-        .game_objects()
-        .filter_map(|go| {
-            if let GameObject::Actor(a) = go {
-                if !a.activations.is_empty() {
-                    return Some((a.id, a.pos, a.is_pc(), a.team, a.initiative()));
-                }
+        .actors()
+        .filter_map(|a| {
+            if !a.activations.is_empty() {
+                return Some((a.id, a.pos, a.is_pc(), a.team, a.initiative()));
             }
             None
         })
@@ -160,7 +158,7 @@ fn handle_wait_for_user_input(
                 ctxt.clone(),
                 Some(SelectedPos {
                     pos: *pos,
-                    objects: find_objects_at(*pos, &w),
+                    objects: find_actors_at(*pos, &w),
                 }),
             ));
         }
@@ -221,25 +219,26 @@ fn handle_wait_for_user_input(
     StepResult::new()
 }
 
-fn find_objects_at(mpos: MapPos, world: &CoreWorld) -> Vec<GameObject> {
-    let mut result = Vec::new();
-
-    for o in world.game_objects() {
-        if mpos == MapPos::from_world_pos(o.pos()) {
-            result.push(o.clone());
-        }
-    }
-
-    result
+fn find_actors_at(mpos: MapPos, world: &CoreWorld) -> Vec<Actor> {
+    world
+        .actors()
+        .filter_map(|a| {
+            if mpos == a.pos.into() {
+                Some(a.clone())
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
-fn handle_init(game_objects: &Vec<GameObject>, w: &World) -> StepResult {
+fn handle_init(game_objects: &Vec<Actor>, w: &World) -> StepResult {
     let (texture_map, updater, entities): (Read<TextureMap>, Read<LazyUpdate>, Entities) =
         w.system_data();
 
     for o in game_objects {
-        let e = insert_game_object(o, &entities, &updater);
-        update_game_object(e, o, &texture_map, &updater);
+        let e = insert_actor(o, &entities, &updater);
+        update_actor(e, o, &texture_map, &updater);
         // insert_game_object_components(o.clone(), w);
     }
 
@@ -282,7 +281,7 @@ fn handle_find_actor(turn: &TurnState, world: &CoreWorld) -> StepResult {
                     InputContext::SelectAction { options },
                     Some(SelectedPos {
                         pos: selected_pos,
-                        objects: find_objects_at(selected_pos, world),
+                        objects: find_actors_at(selected_pos, world),
                     }),
                 ))
             } else {
@@ -327,13 +326,11 @@ fn handle_start_turn(world: CoreWorld, turn: &TurnState) -> StepResult {
         actions.push(Action::StartTurn(actor_id));
     }
 
-    for o in world.game_objects() {
-        if let GameObject::Actor(a) = o {
-            actions.push(Action::StartTurn(a.id));
+    for a in world.actors() {
+        actions.push(Action::StartTurn(a.id));
 
-            let curr_amout = actor_per_team.get(&a.team).copied().unwrap_or(0);
-            actor_per_team.insert(a.team, curr_amout + a.num_activation());
-        }
+        let curr_amout = actor_per_team.get(&a.team).copied().unwrap_or(0);
+        actor_per_team.insert(a.team, curr_amout + a.num_activation());
     }
 
     let max_activations = actor_per_team.values().copied().max().unwrap_or(0);
@@ -403,7 +400,7 @@ fn handle_select_player_action(id: ID, w: CoreWorld) -> StepResult {
                 },
                 Some(SelectedPos {
                     pos: selected_pos,
-                    objects: find_objects_at(selected_pos, &w),
+                    objects: find_actors_at(selected_pos, &w),
                 }),
             ))
         }
@@ -497,11 +494,9 @@ fn single_option(options: &HashMap<MapPos, Vec<Action>>) -> Option<Action> {
 fn activ_team_members(active_team: &Team, w: &CoreWorld) -> HashMap<MapPos, ID> {
     let mut team_members = HashMap::new();
 
-    for go in w.game_objects() {
-        if let GameObject::Actor(a) = go {
-            if a.can_activate() && active_team.is_member(a) {
-                team_members.insert(MapPos::from_world_pos(a.pos), a.id);
-            }
+    for a in w.actors() {
+        if a.can_activate() && active_team.is_member(a) {
+            team_members.insert(MapPos::from_world_pos(a.pos), a.id);
         }
     }
     team_members

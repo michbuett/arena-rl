@@ -1,6 +1,6 @@
 use crate::core::{
-    Action, Activation, Actor, Card, CombatData, CombatState, DisplayStr, GameObject, Health,
-    InputContext, MapPos, SelectedPos, Suite, TeamId, Trait, TraitSource, UserInput, ID,
+    Action, Activation, Actor, Card, CombatData, CombatState, DisplayStr, Health, InputContext,
+    MapPos, SelectedPos, Suite, TeamId, Trait, TraitSource, UserInput, ID,
 };
 use crate::ui::types::{ClickArea, ClickAreas, Scene, ScreenPos, ScreenText};
 
@@ -16,8 +16,12 @@ pub fn render(
     game: &CombatData,
 ) {
     if let CombatState::WaitForUserInput(ctxt, selected_pos) = &game.state {
-        if let Some(SelectedPos { pos, objects }) = selected_pos {
-            draw_area_details(scene, viewport.0, *pos, objects);
+        if let Some(SelectedPos {
+            pos,
+            objects: actors,
+        }) = selected_pos
+        {
+            draw_area_details(scene, viewport.0, *pos, actors);
 
             if let InputContext::SelectAction { options, .. } = ctxt {
                 let actions = options.get(pos);
@@ -49,10 +53,8 @@ pub fn render(
 
 fn selected_actor_at(selected_pos: &Option<SelectedPos>) -> Option<ID> {
     if let Some(SelectedPos { objects, .. }) = selected_pos {
-        for go in objects.iter() {
-            if let GameObject::Actor(a) = go {
-                return Some(a.id);
-            }
+        for a in objects.iter() {
+            return Some(a.id);
         }
     }
     None
@@ -62,24 +64,17 @@ fn draw_area_details(
     scene: &mut Scene,
     viewport_width: u32,
     MapPos(x, y): MapPos,
-    objects: &Vec<GameObject>,
+    actors: &Vec<Actor>,
 ) {
     let mut txt = format!("You look at ({}, {}).", x, y);
 
-    if objects.is_empty() {
+    if actors.is_empty() {
         txt += &"\nNothing special here.".to_string();
     } else {
         txt += &"\nYou see ...".to_string();
-        for o in objects {
-            match o {
-                GameObject::Actor(a) => {
-                    txt += &describe_actor(a);
-                }
 
-                GameObject::Item(_, i) => {
-                    txt += &format!("\nan item ({}) on the ground\n", i.name);
-                }
-            }
+        for a in actors {
+            txt += &describe_actor(a);
         }
     }
 

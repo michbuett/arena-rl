@@ -22,13 +22,6 @@ impl ID {
 }
 
 #[derive(Debug, Clone)]
-pub struct Item {
-    pub id: ID,
-    pub name: String,
-    pub look: Look,
-}
-
-#[derive(Debug, Clone)]
 pub enum AiBehaviour {
     Default,
 }
@@ -75,7 +68,6 @@ pub struct ActorBuilder {
     max_activations: u8,
     visual: Visual,
     name: String,
-    keywords: Vec<Keyword>,
     attributes: ActorAttriubes,
     traits: HashMap<String, Trait>,
 }
@@ -96,7 +88,6 @@ impl ActorBuilder {
             max_activations,
             behaviour: None,
             visual: Visual::new(VisualElements::empty()),
-            keywords: vec![],
             traits: HashMap::new(),
         }
     }
@@ -108,7 +99,7 @@ impl ActorBuilder {
             active: false,
             pos: self.pos,
             health: Health::new(0),
-            keywords: self.keywords,
+            keywords: 0,
             effects: Vec::new(),
             attributes: self.attributes,
             modifier: Default::default(),
@@ -145,8 +136,6 @@ impl ActorBuilder {
         Self { traits, ..self }
     }
 }
-
-pub type Look = Vec<(u8, String)>;
 
 #[derive(Debug, Clone)]
 pub struct VisualElements([Option<String>; NUM_VISUAL_LAYERS]);
@@ -282,7 +271,7 @@ pub struct ActorAttriubes {
 pub struct Actor {
     traits: HashMap<String, Trait>,
     visual: Visual,
-    keywords: Vec<Keyword>,
+    keywords: u64,
     max_activations: u8,
     attributes: ActorAttriubes,
     modifier: [i8; NUM_ATTRIBUTE_MODIFIER],
@@ -516,14 +505,12 @@ impl Actor {
 
     fn process_traits(mut self) -> Self {
         let mut effects = vec![];
-        let mut keywords = vec![];
+        let mut keywords = 0;
 
         for t in self.traits.values() {
             for e in t.effects.iter() {
                 match e {
-                    Effect::Keyword(k) => {
-                        keywords.push(k.clone());
-                    }
+                    Effect::Keyword(k) => keywords = keywords | k.as_bit(),
                     _ => {
                         effects.push((t.name.clone(), e.clone()));
                     }
@@ -547,7 +534,7 @@ impl Actor {
     }
 
     pub fn has_keyword(&self, kw: Keyword) -> bool {
-        self.keywords.contains(&kw)
+        self.keywords & kw.as_bit() > 0
     }
 
     pub fn add_trait(mut self, key: String, new_trait: Trait) -> Self {
@@ -580,14 +567,6 @@ impl Actor {
     pub fn is_concious(&self) -> bool {
         self.is_alive() && self.health.remaining_wounds >= self.health.pain
     }
-
-    // pub fn corpse(&self) -> Item {
-    //     Item {
-    //         id: ID::new(),
-    //         name: format!("Corpse of {}", self.name),
-    //         look: vec![(1, "corpses_1".to_string())],
-    //     }
-    // }
 
     pub fn visuals(&self) -> impl Iterator<Item = &String> {
         if self.is_alive() {
@@ -747,13 +726,6 @@ pub struct Attack {
     pub to_hit: (Suite, i8),
     pub to_wound: (Suite, i8),
     pub defence: Suite,
-}
-
-#[derive(Debug, Clone)]
-pub struct Defence {
-    pub defence: AttrVal,
-    pub defence_type: DefenceType,
-    pub num_dice: u8,
 }
 
 #[derive(Debug, Clone)]

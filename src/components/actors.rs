@@ -1,28 +1,17 @@
-use std::num::NonZeroU8;
-
 use specs::prelude::*;
 
-use crate::components::{
-    GameObjectCmp, ObstacleCmp, Position, Sprites, WorldPos, ZLayerFloor, ZLayerGameObject,
-};
-use crate::core::{
-    Activation, Actor, Card, GameObject, Item, Obstacle, SpriteConfig, Suite, TextureMap,
-};
+use crate::components::{ActorCmp, ObstacleCmp, Position, Sprites, ZLayerGameObject};
+use crate::core::{Activation, Actor, Card, Obstacle, SpriteConfig, Suite, TextureMap};
 
 use super::{Hitbox, HoverAnimation, Text};
 
-pub fn insert_game_object(obj: &GameObject, entities: &Entities, updater: &LazyUpdate) -> Entity {
+pub fn insert_actor(a: &Actor, entities: &Entities, updater: &LazyUpdate) -> Entity {
     let e = updater.create_entity(&entities).build();
-
-    match obj {
-        GameObject::Actor(a) => insert_actor(e, a, updater),
-        GameObject::Item(pos, _) => insert_item(e, *pos, updater),
-    }
-
+    insert_actor_components(e, a, updater);
     e
 }
 
-fn insert_actor<'a>(entity: Entity, a: &Actor, updater: &LazyUpdate) {
+fn insert_actor_components<'a>(entity: Entity, a: &Actor, updater: &LazyUpdate) {
     updater.insert(entity, Position(a.pos));
 
     updater.insert(
@@ -40,42 +29,8 @@ fn insert_actor<'a>(entity: Entity, a: &Actor, updater: &LazyUpdate) {
     updater.insert(entity, ZLayerGameObject);
 }
 
-fn insert_item<'a>(entity: Entity, pos: WorldPos, updater: &LazyUpdate) {
-    updater.insert(entity, Position(pos));
-    updater.insert(entity, ZLayerFloor);
-    updater.insert(
-        entity,
-        ObstacleCmp {
-            movement: (
-                Some(Obstacle::Impediment(NonZeroU8::new(1).unwrap(), 0)),
-                None,
-                None,
-            ),
-            reach: None,
-        },
-    );
-}
-
-pub fn update_game_object(
-    entity: Entity,
-    obj: &GameObject,
-    texture_map: &TextureMap,
-    updater: &LazyUpdate,
-) {
-    // println!("[DEBUG] update_game_object {:?}", entity);
-    match obj {
-        GameObject::Actor(a) => update_actor(entity, a, texture_map, updater),
-
-        GameObject::Item(pos, item) => {
-            updater.insert(entity, get_sprites_items(&item, &texture_map));
-            updater.insert(entity, GameObjectCmp(GameObject::Item(*pos, item.clone())));
-        }
-    }
-}
-
-fn update_actor(entity: Entity, a: &Actor, texture_map: &TextureMap, updater: &LazyUpdate) {
+pub fn update_actor(entity: Entity, a: &Actor, texture_map: &TextureMap, updater: &LazyUpdate) {
     // println!("[DEBUG] update_actor {:?} (at {:?})", a.name, a.pos);
-
     if let Some(text) = get_text_actor(a) {
         updater.insert(entity, text);
     } else {
@@ -90,7 +45,7 @@ fn update_actor(entity: Entity, a: &Actor, texture_map: &TextureMap, updater: &L
         updater.remove::<HoverAnimation>(entity);
     }
 
-    updater.insert(entity, GameObjectCmp(GameObject::Actor(a.clone())));
+    updater.insert(entity, ActorCmp(a.clone()));
 }
 
 fn get_text_actor(a: &Actor) -> Option<Text> {
@@ -146,17 +101,6 @@ fn get_sprites_actor(a: &Actor, texture_map: &TextureMap) -> Sprites {
     );
 
     append_status_icons(&mut sprites, a, texture_map);
-
-    Sprites::new(sprites)
-}
-
-fn get_sprites_items(item: &Item, texture_map: &TextureMap) -> Sprites {
-    let sprites = item
-        .look
-        .iter()
-        .filter_map(|(_, key)| texture_map.get(key))
-        .cloned()
-        .collect();
 
     Sprites::new(sprites)
 }

@@ -26,22 +26,22 @@ fn start_step<'a, 'b>(g: ObjectGenerator, tm: TextureMap, i: &Option<UserInput>)
     match i {
         Some(UserInput::NewGame) => {
             let player_chars = vec![
-                GameObject::Actor(g.generate_player(
+                (g.generate_player(
                     WorldPos::new(7.0, 6.0, 0.0),
                     team_id_player,
                     ActorTemplateName::new("actor#tank"),
                 )),
-                GameObject::Actor(g.generate_player(
+                (g.generate_player(
                     WorldPos::new(8.0, 6.0, 0.0),
                     team_id_player,
                     ActorTemplateName::new("actor#saw"),
                 )),
-                GameObject::Actor(g.generate_player(
+                (g.generate_player(
                     WorldPos::new(7.0, 7.0, 0.0),
                     team_id_player,
                     ActorTemplateName::new("actor#spear"),
                 )),
-                GameObject::Actor(g.generate_player(
+                (g.generate_player(
                     WorldPos::new(8.0, 7.0, 0.0),
                     team_id_player,
                     ActorTemplateName::new("actor#gunner"),
@@ -58,7 +58,7 @@ fn start_step<'a, 'b>(g: ObjectGenerator, tm: TextureMap, i: &Option<UserInput>)
 fn teams_step<'a, 'b>(
     g: ObjectGenerator,
     tm: TextureMap,
-    t: Vec<GameObject>,
+    t: Vec<Actor>,
     i: &Option<UserInput>,
 ) -> Game<'a, 'b> {
     match i {

@@ -8,7 +8,7 @@ use std::{
 use specs::prelude::*;
 
 use crate::core::{
-    ai::PlayerActionOptions, Action, ActorTemplateName, Card, Deck, DisplayStr, GameObject, MapPos,
+    ai::PlayerActionOptions, Action, Actor, ActorTemplateName, Card, Deck, DisplayStr, MapPos,
     ObjectGenerator, Team, TeamId, TextureMap, ID,
 };
 
@@ -16,7 +16,7 @@ use crate::core::{
 pub enum UserInput {
     Exit(),
     NewGame,
-    SelectTeam(Vec<GameObject>),
+    SelectTeam(Vec<Actor>),
     SelectPlayerAction(Action),
     SelectActivationCard(usize),
     BoostActivation(ID, TeamId, Card),
@@ -42,7 +42,7 @@ pub enum InputContext {
 
 pub enum Game<'a, 'b> {
     Start(ObjectGenerator, TextureMap),
-    TeamSelection(ObjectGenerator, TextureMap, Vec<GameObject>),
+    TeamSelection(ObjectGenerator, TextureMap, Vec<Actor>),
     Combat(CombatData<'a, 'b>),
 }
 
@@ -213,7 +213,7 @@ impl StepResult {
 
 #[derive(Debug)]
 pub enum CombatState {
-    Init(Vec<GameObject>),
+    Init(Vec<Actor>),
     StartTurn(),
     FindActor(),
     AdvanceGame(),
@@ -227,7 +227,7 @@ pub enum CombatState {
 #[derive(Debug, Clone)]
 pub struct SelectedPos {
     pub pos: MapPos,
-    pub objects: Vec<GameObject>,
+    pub objects: Vec<Actor>,
 }
 
 #[derive(Clone, Debug)]
@@ -268,19 +268,17 @@ impl TeamData {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct TeamSet(BTreeMap<TeamId, TeamData>, Vec<TeamId>);
+pub struct TeamSet(BTreeMap<TeamId, TeamData>);
 
 impl TeamSet {
     fn new(mut teams: Vec<Team>) -> Self {
         let mut btree_map = BTreeMap::new();
-        let mut team_ids = vec![];
 
         for t in teams.drain(..) {
-            team_ids.push(t.id);
             btree_map.insert(t.id, TeamData::new(t));
         }
 
-        Self(btree_map, team_ids)
+        Self(btree_map)
     }
 
     pub fn get(&self, team_id: &TeamId) -> &TeamData {

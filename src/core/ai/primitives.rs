@@ -258,23 +258,21 @@ pub fn add_move_to_options(active_actor: &Actor, w: &CoreWorld, result: &mut Pla
 pub fn add_combat_options(active_actor: &Actor, w: &CoreWorld, result: &mut PlayerActionOptions) {
     let attacks = active_actor.attacks();
 
-    for go in w.game_objects() {
-        if let GameObject::Actor(other) = go {
-            if other.id != active_actor.id && other.team != active_actor.team {
-                for a in attacks.iter() {
-                    if let Some(attack_vector) = attack_vector(active_actor, other, a, w) {
-                        if !attack_vector.is_empty() {
-                            let msg = format!("{} at {}", a.name, other.name);
-                            let action = Action::Attack {
-                                attacker: active_actor.id,
-                                target: other.id,
-                                attack: a.clone(),
-                                attack_vector,
-                                msg,
-                            };
+    for other in w.actors() {
+        if other.id != active_actor.id && other.team != active_actor.team {
+            for a in attacks.iter() {
+                if let Some(attack_vector) = attack_vector(active_actor, other, a, w) {
+                    if !attack_vector.is_empty() {
+                        let msg = format!("{} at {}", a.name, other.name);
+                        let action = Action::Attack {
+                            attacker: active_actor.id,
+                            target: other.id,
+                            attack: a.clone(),
+                            attack_vector,
+                            msg,
+                        };
 
-                            add_option(other.pos, action, result);
-                        }
+                        add_option(other.pos, action, result);
                     }
                 }
             }

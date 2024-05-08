@@ -1,4 +1,4 @@
-use crate::ui::{ScreenPos, ScreenCoord};
+// use crate::ui::{ScreenCoord, ScreenPos};
 
 #[derive(Debug, Clone, Copy)]
 pub struct WorldPos(f32, f32, f32);
@@ -33,21 +33,21 @@ impl WorldPos {
 pub struct Direction(f32);
 
 impl Direction {
-    pub fn from_point(from: WorldPos, to: WorldPos) -> Self {
-        let ScreenPos(x0, y0) = ScreenCoord::from_world_pos(from).to_screen_pos((0, 0));
-        let ScreenPos(x1, y1) = ScreenCoord::from_world_pos(to).to_screen_pos((0, 0));
-        let dx = (x1 - x0) as f32;
-        let dy = (y1 - y0) as f32;
-        let alpha = dy.atan2(dx);
+    // pub fn from_point(from: WorldPos, to: WorldPos) -> Self {
+    //     let ScreenPos(x0, y0) = ScreenCoord::from_world_pos(from).to_screen_pos((0, 0));
+    //     let ScreenPos(x1, y1) = ScreenCoord::from_world_pos(to).to_screen_pos((0, 0));
+    //     let dx = (x1 - x0) as f32;
+    //     let dy = (y1 - y0) as f32;
+    //     let alpha = dy.atan2(dx);
 
-        Self(alpha)
-    }
+    //     Self(alpha)
+    // }
 
     pub fn as_degree(&self) -> f64 {
         self.0.to_degrees() as f64
     }
 
-    pub fn as_radian(&self) -> f64 {
-        self.0 as f64
-    }
+    // pub fn as_radian(&self) -> f64 {
+    //     self.0 as f64
+    // }
 }

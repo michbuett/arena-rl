@@ -4,11 +4,9 @@ use crate::components::{FxEffect, FxSequence};
 use crate::core::ai::{attack_vector, AttackVector};
 use crate::core::{DisplayStr, MapPos, Path, WorldPos};
 
-use super::actors::{
-    Actor, AttackFx, AttackOption, AttackTarget, GameObject, Hit, HitResult, Wound, ID,
-};
+use super::actors::{Actor, AttackFx, AttackOption, AttackTarget, CombatResult, Hit, Wound, ID};
 use super::ai::find_charge_path;
-use super::{resolve_combat_new, Card, CoreWorld, Deck, HitEffect, SuperLineIter, TeamId};
+use super::{resolve_combat_new, Card, CoreWorld, Deck, Impact, SuperLineIter, TeamId};
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -62,8 +60,8 @@ impl<'a> ActionResultBuilder<'a> {
         let (decks, updates) = self.world.into_changes();
         let mut fx_seq = FxSequence::new();
 
-        for (id, go) in updates {
-            if let Some(go) = go {
+        for (id, a) in updates {
+            if let Some(go) = a {
                 fx_seq = fx_seq.then(FxEffect::Update(go));
             } else {
                 fx_seq = fx_seq.then(FxEffect::Remove(id));
@@ -141,11 +139,7 @@ pub fn run_player_action<'a>(action: Action, mut cw: CoreWorld) -> ActionResult 
                 let deck = cw.decks_mut().get_mut(&a.team).unwrap();
                 let a = a.start_next_turn(deck);
 
-                // for _ in 1..=a.num_activation() {
-                //     a = a.add_activation(deck.deal());
-                // }
-
-                cw.update_actor(a);
+                cw.update(a);
             }
 
             ActionResultBuilder::new(cw)
@@ -187,7 +181,7 @@ pub fn run_player_action<'a>(action: Action, mut cw: CoreWorld) -> ActionResult 
         Action::SpawnActor { actor } => {
             let fx = FxSequence::new().then(FxEffect::dust("fx-dust-1", actor.pos, 400));
 
-            cw.update_actor(actor);
+            cw.update(actor);
 
             ActionResultBuilder::new(cw).append_fx_seq(fx)
         }
@@ -216,7 +210,7 @@ fn filter_attack_vector(input: &AttackVector, w: &CoreWorld) -> Vec<AttackTarget
 fn create_combat_fx(
     attacker: &Actor,
     attack_end_pos: WorldPos,
-    combat_result: &HitResult,
+    combat_result: &CombatResult,
 ) -> FxSequence {
     match &combat_result.attack.attack_fx {
         AttackFx::MeleeSingleTarget { name } => {
@@ -261,7 +255,7 @@ fn create_melee_combat_fx(attack_fx: String, attacker: &Actor, hits: &Vec<Hit>) 
 
 fn is_miss(hit: &Hit) -> bool {
     for e in hit.effects.iter() {
-        if let HitEffect::Miss() = e {
+        if let Impact::Miss() = e {
             return true;
         }
     }
@@ -272,18 +266,18 @@ fn all_misses(hits: &Vec<Hit>) -> bool {
     hits.iter().fold(true, |result, h| result && is_miss(h))
 }
 
-fn create_hit_fx(effects: &Vec<HitEffect>, target_pos: WorldPos) -> FxSequence {
+fn create_hit_fx(effects: &Vec<Impact>, target_pos: WorldPos) -> FxSequence {
     let mut fx_seq = FxSequence::new();
 
     for eff in effects.iter() {
         fx_seq = match eff {
-            HitEffect::Wound(wound, ..) => {
+            Impact::Wound(wound, ..) => {
                 fx_seq.then_append(create_fx_changes_for_wound(&wound, target_pos, 0))
             }
 
-            HitEffect::Block(pos, ..) => fx_seq.then(FxEffect::say("Defended", pos.to_world_pos())),
+            Impact::Block(pos, ..) => fx_seq.then(FxEffect::say("Defended", pos.to_world_pos())),
 
-            HitEffect::Miss() => fx_seq.then(FxEffect::say("Missed", target_pos)),
+            Impact::Miss() => fx_seq.then(FxEffect::say("Missed", target_pos)),
 
             _ => fx_seq,
         }
@@ -420,7 +414,7 @@ fn handle_attack<'a>(
 
         attacker.pos = pos_end;
 
-        cw.update_actor(attacker);
+        cw.update(attacker);
 
         let mut charge_fx = FxSequence::new()
             .then(FxEffect::scream("Charge!", pos_start))
@@ -493,9 +487,9 @@ fn perform_attack(
     result
 }
 
-fn apply_hit_effect(eff: HitEffect, mut cw: CoreWorld) -> ActionResultBuilder {
+fn apply_hit_effect(eff: Impact, mut cw: CoreWorld) -> ActionResultBuilder {
     match eff {
-        HitEffect::Block(mpos, id) => {
+        Impact::Block(mpos, id) => {
             let mut fx_seq = FxSequence::new();
             if let Some(t) = cw.get_actor(id).cloned() {
                 let target = t;
@@ -509,7 +503,7 @@ fn apply_hit_effect(eff: HitEffect, mut cw: CoreWorld) -> ActionResultBuilder {
             ActionResultBuilder::new(cw).append_fx_seq(fx_seq)
         }
 
-        HitEffect::Wound(w, id) => {
+        Impact::Wound(w, id) => {
             let mut score = 0;
             let mut fx_seq = FxSequence::new();
 
@@ -518,7 +512,7 @@ fn apply_hit_effect(eff: HitEffect, mut cw: CoreWorld) -> ActionResultBuilder {
 
                 let target = t.wound(w);
 
-                fx_seq = fx_seq.then(FxEffect::Update(GameObject::Actor(target.clone())));
+                fx_seq = fx_seq.then(FxEffect::Update(target.clone()));
 
                 if target.is_alive() {
                     cw.update(target.into());
@@ -535,7 +529,7 @@ fn apply_hit_effect(eff: HitEffect, mut cw: CoreWorld) -> ActionResultBuilder {
                 .append_fx_seq(fx_seq)
         }
 
-        HitEffect::ForceMove {
+        Impact::ForceMove {
             id,
             dx,
             dy,
@@ -627,7 +621,7 @@ fn move_to(
 
     actor.pos = target_pos;
 
-    cw.update_actor(actor);
+    cw.update(actor);
 
     // let eff_seq = ActionEffectSeq::new().add(ActionEffect::move_actor(
     // actor_id, jump, actor_pos, target_pos,

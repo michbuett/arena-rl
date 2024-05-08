@@ -2,7 +2,7 @@ mod action;
 mod actors;
 mod ai;
 mod cards;
-mod dice;
+// mod dice;
 mod flow;
 mod map;
 mod model;
@@ -11,12 +11,12 @@ mod visuals;
 mod world;
 
 pub use action::*;
-pub use ai::AttackVector;
+// pub use ai::AttackVector;
 pub use cards::*;
-pub use dice::D6;
+// pub use dice::D6;
 pub use flow::{
-    step, CombatData, CombatPhase, CombatState, Game, InputContext, SelectedPos, TeamSet,
-    TurnState, UserInput,
+    step, CombatData, CombatPhase, CombatState, Game, InputContext, SelectedPos, TurnState,
+    UserInput,
 };
 pub use map::*;
 pub use model::*;

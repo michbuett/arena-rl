@@ -17,7 +17,7 @@ use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
 use std::time::Instant;
 
-use crate::core::{DisplayStr, Game, Sprite, UserInput, Direction};
+use crate::core::{Direction, DisplayStr, Game, Sprite, UserInput};
 
 pub fn render(
     cvs: &mut WindowCanvas,
@@ -29,9 +29,9 @@ pub fn render(
     let (mut scene, click_areas) = match game {
         Game::Start(..) => start_screen::render(ui.viewport),
 
-        Game::TeamSelection(_, _, game_objects) => {
+        Game::TeamSelection(_, _, actors) => {
             let (_, _, w, h) = ui.viewport;
-            teams_screen::render((w, h), game_objects)
+            teams_screen::render((w, h), actors)
         }
 
         Game::Combat(combat_data) => {
@@ -217,7 +217,16 @@ fn draw_sprite(
     let to = (pos.0 + dx, pos.1 + dy, tw, th);
 
     if let Some(dir) = sprite.rotate {
-        draw_with_ration(frame, prev_frame, next_frame, to, sprite.alpha, dir, tex, cvs)
+        draw_with_ration(
+            frame,
+            prev_frame,
+            next_frame,
+            to,
+            sprite.alpha,
+            dir,
+            tex,
+            cvs,
+        )
     } else {
         draw(frame, prev_frame, next_frame, to, sprite.alpha, tex, cvs)
     }
@@ -264,18 +273,42 @@ fn draw_with_ration(
 ) -> Result<(), String> {
     let (x, y, w, h) = frame_pos;
     let to = Rect::new(target_pos.0, target_pos.1, target_pos.2, target_pos.3);
-    
+
     if let Some((t, xp, yp)) = prev_frame {
         tex.set_alpha_mod((t * alpha as f64).round() as u8);
-        cvs.copy_ex(tex, Rect::new(xp, yp, w, h), to, angle.as_degree(), None, false, false)?;
+        cvs.copy_ex(
+            tex,
+            Rect::new(xp, yp, w, h),
+            to,
+            angle.as_degree(),
+            None,
+            false,
+            false,
+        )?;
     }
 
     tex.set_alpha_mod(alpha);
-    cvs.copy_ex(tex, Rect::new(x, y, w, h), to, angle.as_degree(), None, false, false)?;
+    cvs.copy_ex(
+        tex,
+        Rect::new(x, y, w, h),
+        to,
+        angle.as_degree(),
+        None,
+        false,
+        false,
+    )?;
 
     if let Some((t, xn, yn)) = next_frame {
         tex.set_alpha_mod((t * alpha as f64).round() as u8);
-        cvs.copy_ex(tex, Rect::new(xn, yn, w, h), to, angle.as_degree(), None, false, false)?;
+        cvs.copy_ex(
+            tex,
+            Rect::new(xn, yn, w, h),
+            to,
+            angle.as_degree(),
+            None,
+            false,
+            false,
+        )?;
     }
     Ok(())
 }
