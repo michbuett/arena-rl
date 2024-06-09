@@ -504,7 +504,6 @@ fn it_can_find_a_staight_path() {
     let from = MapPos(0, 0);
     let to = MapPos(5, 2);
     let p = m.find_path(from, to, &ObstacleSet(HashMap::new())).unwrap();
-    println!("{:?}", p);
 
     // assert!(p.is_some());
     assert_eq!(p.len(), 5);

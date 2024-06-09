@@ -416,18 +416,11 @@ fn handle_attack<'a>(
 
         cw.update(attacker);
 
-        let mut charge_fx = FxSequence::new()
+        let charge_fx = FxSequence::new()
             .then(FxEffect::scream("Charge!", pos_start))
-            .wait(500)
+            .wait(100)
+            .then(FxEffect::dust("fx-dust-1", pos_start, 400))
             .then(FxEffect::move_along(attacker_id, vec![pos_start, pos_end]));
-
-        for (i, tile) in path.iter().enumerate() {
-            charge_fx = charge_fx.then(FxEffect::dust("fx-dust-1", tile.to_world_pos(), 400));
-
-            if i < path.len() - 1 {
-                charge_fx = charge_fx.wait(200)
-            }
-        }
 
         ActionResultBuilder::new(cw).append_fx_seq(charge_fx)
     } else {
@@ -490,16 +483,7 @@ fn perform_attack(
 fn apply_hit_effect(eff: Impact, mut cw: CoreWorld) -> ActionResultBuilder {
     match eff {
         Impact::Block(mpos, id) => {
-            let mut fx_seq = FxSequence::new();
-            if let Some(t) = cw.get_actor(id).cloned() {
-                let target = t;
-                // let target = t.use_effort(1); // TODO pass number of blocks
-                let target_pos = mpos.to_world_pos();
-
-                cw.update(target.into());
-                fx_seq = fx_seq.then(FxEffect::say("Blocked", target_pos));
-            }
-
+            let fx_seq = FxSequence::new().then(FxEffect::say("Blocked", mpos.to_world_pos()));
             ActionResultBuilder::new(cw).append_fx_seq(fx_seq)
         }
 
@@ -520,8 +504,6 @@ fn apply_hit_effect(eff: Impact, mut cw: CoreWorld) -> ActionResultBuilder {
                     cw.remove(id);
                     score += 100;
                 }
-
-                fx_seq = fx_seq.wait_until_finished();
             }
 
             ActionResultBuilder::new(cw)
