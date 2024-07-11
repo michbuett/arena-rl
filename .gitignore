@@ -1,5 +1,7 @@
 /target
 /assets/images/**/*
 /assets/images/raw
+/assets_old
+/src_old
 **/*.rs.bk
 **/.DS_Store
