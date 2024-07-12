@@ -1,5 +1,5 @@
 /target
-/assets/images/**/*
+/assets/images/combat/**/*
 /assets/images/raw
 /assets_old
 /src_old
