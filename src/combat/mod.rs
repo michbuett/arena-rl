@@ -1,6 +1,14 @@
 mod map;
+mod ui;
+
+use std::time::Duration;
 
 use bevy::{input::mouse::MouseMotion, prelude::*};
+
+use rand::{
+    distributions::uniform::{SampleRange, SampleUniform},
+    prelude::*,
+};
 
 use crate::{
     assets::{SpriteConfig, SpriteConfigMap},
@@ -22,7 +30,8 @@ pub fn combat_plugin(app: &mut App) {
     )
     .add_systems(
         Update,
-        update_camera_after_scrolling.run_if(in_state(GameState::Combat)),
+        (update_camera_after_scrolling, update_sprite_animation)
+            .run_if(in_state(GameState::Combat)),
     )
     .add_systems(OnExit(GameState::Combat), despawn_screen::<OnCombatState>);
 }
@@ -30,9 +39,7 @@ pub fn combat_plugin(app: &mut App) {
 fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
     let map = map::dummy_hex();
 
-    // for t in map.tiles() {
     for (hex_pos, tile_type) in map.tiles() {
-        // if t.is_void() {
         if let TileType::Void = tile_type {
             continue;
         }
@@ -40,7 +47,6 @@ fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
         commands.spawn((
             SpriteBundle {
                 transform: Transform::from_translation(hex_pos.into_vec3()),
-                // transform: Transform::from_translation(t.world_pos().into()),
                 texture: asset_server.load("images/combat/map/floor-hex-1.png"),
                 ..Default::default()
             },
@@ -80,8 +86,23 @@ fn setup_actors(
             "melee-1h_2".to_string(),
         ],
         MapPosHex::from_oddr(5, 5),
-        sprite_cfg_map,
-        layouts,
+        &sprite_cfg_map,
+        &layouts,
+    );
+
+    create_actor(
+        &mut commands,
+        vec!["monster-sucker_1".to_string()],
+        MapPosHex::from_oddr(2, 2),
+        &sprite_cfg_map,
+        &layouts,
+    );
+    create_actor(
+        &mut commands,
+        vec!["monster-sucker_1".to_string()],
+        MapPosHex::from_oddr(8, 2),
+        &sprite_cfg_map,
+        &layouts,
     );
 }
 
@@ -126,8 +147,8 @@ fn create_actor(
     commands: &mut Commands,
     visual: Vec<String>,
     map_pos: MapPosHex,
-    sprite_cfg_map: Res<SpriteConfigMap>,
-    layouts: Res<Assets<TextureAtlasLayout>>,
+    sprite_cfg_map: &Res<SpriteConfigMap>,
+    layouts: &Res<Assets<TextureAtlasLayout>>,
 ) {
     let Some(layout) = layouts.get(sprite_cfg_map.layout.id()) else {
         panic!("Could not find layout in assets for sprite map")
@@ -169,10 +190,20 @@ fn create_actor(
                 offset: (dx, dy),
                 frame_duration,
             }) => {
-                let idx_list = image_ids
+                let indices = image_ids
                     .iter()
                     .map(|image_id| layout.get_texture_index(*image_id).unwrap_or(0))
                     .collect::<Vec<_>>();
+
+                let current_idx: usize = rand_between(0..indices.len());
+                let mut timer = Timer::new(
+                    Duration::from_millis(*frame_duration as u64),
+                    TimerMode::Repeating,
+                );
+
+                timer.tick(Duration::from_millis(
+                    rand_between(0..*frame_duration) as u64
+                ));
 
                 child_commands.with_children(|parent| {
                     parent.spawn((
@@ -183,7 +214,12 @@ fn create_actor(
                         },
                         TextureAtlas {
                             layout: sprite_cfg_map.layout.clone(),
-                            index: *idx_list.first().unwrap(),
+                            index: *indices.first().unwrap(),
+                        },
+                        SpriteAnimation {
+                            indices,
+                            current_idx,
+                            timer,
                         },
                     ));
                 });
@@ -192,4 +228,39 @@ fn create_actor(
             _ => {}
         }
     }
+}
+
+#[derive(Debug, Component)]
+struct SpriteAnimation {
+    indices: Vec<usize>,
+    current_idx: usize,
+    timer: Timer,
+}
+
+fn update_sprite_animation(
+    mut animations: Query<(&mut TextureAtlas, &mut SpriteAnimation)>,
+    time: Res<Time>,
+) {
+    for (mut atlas, mut anim) in animations.iter_mut() {
+        anim.timer.tick(time.delta());
+
+        if anim.timer.finished() {
+            if anim.current_idx < anim.indices.len() - 1 {
+                anim.current_idx += 1;
+            } else {
+                anim.current_idx = 0;
+            }
+
+            atlas.index = anim.indices[anim.current_idx];
+        }
+    }
+}
+
+fn rand_between<R, T>(r: R) -> T
+where
+    T: SampleUniform,
+    R: SampleRange<T>,
+{
+    let mut rng = thread_rng();
+    rng.gen_range(r)
 }

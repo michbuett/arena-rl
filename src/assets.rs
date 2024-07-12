@@ -194,7 +194,7 @@ fn create_texture_atlas(
                     SpriteConfig::Animated {
                         image_ids,
                         offset,
-                        frame_duration: 0,
+                        frame_duration: proto_sprite_cfg.frame_durration.unwrap_or(50),
                     },
                 );
             }
