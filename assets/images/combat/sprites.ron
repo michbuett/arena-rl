@@ -214,7 +214,15 @@
 
     // === BEGIN SECTION floor backgrounds ================================
     ("floor", ProtoSpriteConfig(
-            files: ["map/floor-1.png"],
+            files: ["map/floor-hex-1.png"],
+        )),
+    ("floor-selected", ProtoSpriteConfig(
+            files: [
+                    "map/floor-hex-selected-2.png",
+                    "map/floor-hex-selected-3.png",
+                    "map/floor-hex-selected-4.png",
+                    "map/floor-hex-selected-5.png",
+            ],
         )),
     ("wall-1", ProtoSpriteConfig(
             files: ["map/wall-1.png"],

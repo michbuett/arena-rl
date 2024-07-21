@@ -8,7 +8,7 @@ use std::hash::Hash;
 
 use bevy::ecs::component::Component;
 use bevy::ecs::system::Resource;
-use bevy::math::Vec3;
+use bevy::math::{Vec2, Vec3};
 
 const SQRT_3: f32 = 1.7320508076;
 const HEX_SIZE: f32 = 64.0;
@@ -31,6 +31,14 @@ impl MapPosHex {
         let q = col - (row - (row & 1)) / 2;
         let r = row;
         Self::new(q, r)
+    }
+
+    pub fn from_xy(x: f32, y: f32) -> Self {
+        let frac_q = (SQRT_3 / 3.0 * x - y / 3.0) / HEX_SIZE;
+        let frac_r = (2.0 / 3.0 * y) / HEX_SIZE;
+        let frac_s = -frac_q - frac_r;
+
+        Self::round_hex(frac_q, frac_r, frac_s)
     }
 
     pub fn into_vec3(self) -> Vec3 {
@@ -69,11 +77,13 @@ impl MapPosHex {
 
 impl From<Vec3> for MapPosHex {
     fn from(point: Vec3) -> Self {
-        let frac_q = (SQRT_3 / 3.0 * point.x - point.y / 3.0) / HEX_SIZE;
-        let frac_r = (2.0 / 3.0 * point.y) / HEX_SIZE;
-        let frac_s = -frac_q - frac_r;
+        MapPosHex::from_xy(point.x, point.y)
+    }
+}
 
-        MapPosHex::round_hex(frac_q, frac_r, frac_s)
+impl From<Vec2> for MapPosHex {
+    fn from(point: Vec2) -> Self {
+        MapPosHex::from_xy(point.x, point.y)
     }
 }
 
@@ -99,6 +109,10 @@ pub struct HexMap {
 impl HexMap {
     pub fn tiles(&self) -> impl Iterator<Item = (&MapPosHex, &TileType)> {
         self.tiles.iter()
+    }
+
+    pub fn find_tile(&self, hex: &MapPosHex) -> Option<(MapPosHex, TileType)> {
+        self.tiles.get(hex).map(|tt| (*hex, *tt))
     }
 }
 
@@ -160,7 +174,7 @@ fn test_can_build_hex_map() {
 #[derive(Debug, Clone, Copy)]
 pub enum TileType {
     Floor,
-    Void,
+    // Void,
 }
 
 // #[derive(Debug, Clone, Copy)]

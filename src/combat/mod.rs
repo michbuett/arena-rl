@@ -3,7 +3,7 @@ mod ui;
 
 use std::time::Duration;
 
-use bevy::{input::mouse::MouseMotion, prelude::*};
+use bevy::{ecs::system::EntityCommands, prelude::*};
 
 use rand::{
     distributions::uniform::{SampleRange, SampleUniform},
@@ -15,7 +15,10 @@ use crate::{
     despawn_screen, GameState,
 };
 
-use self::map::{HexMap, MapPosHex, TileType};
+use self::{
+    map::{HexMap, MapPosHex},
+    ui::{handle_select_map_pos, setup_ui, update_user_input, SelectMapPosEvent},
+};
 
 #[derive(Component)]
 struct OnCombatState;
@@ -24,32 +27,33 @@ struct OnCombatState;
 struct ScrollBounds(Rect);
 
 pub fn combat_plugin(app: &mut App) {
-    app.add_systems(
-        OnEnter(GameState::Combat),
-        (setup_map, setup_camera, setup_actors).chain(),
-    )
-    .add_systems(
-        Update,
-        (update_camera_after_scrolling, update_sprite_animation)
-            .run_if(in_state(GameState::Combat)),
-    )
-    .add_systems(OnExit(GameState::Combat), despawn_screen::<OnCombatState>);
+    app.add_event::<SelectMapPosEvent>()
+        .add_systems(
+            OnEnter(GameState::Combat),
+            ((setup_map, setup_camera, setup_actors).chain(), setup_ui),
+        )
+        .add_systems(
+            Update,
+            (
+                (update_user_input, handle_select_map_pos).chain(),
+                update_sprites_from_visuals,
+                update_sprite_animation,
+            )
+                .run_if(in_state(GameState::Combat)),
+        )
+        .add_systems(OnExit(GameState::Combat), despawn_screen::<OnCombatState>);
 }
 
-fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup_map(mut commands: Commands) {
     let map = map::dummy_hex();
 
-    for (hex_pos, tile_type) in map.tiles() {
-        if let TileType::Void = tile_type {
-            continue;
-        }
-
+    for (hex_pos, _tile_type) in map.tiles() {
         commands.spawn((
             SpriteBundle {
                 transform: Transform::from_translation(hex_pos.into_vec3()),
-                texture: asset_server.load("images/combat/map/floor-hex-1.png"),
                 ..Default::default()
             },
+            Visual::Single("floor".to_string()),
             OnCombatState,
         ));
     }
@@ -73,159 +77,46 @@ fn setup_camera(
     commands.insert_resource(ScrollBounds(scroll_zone));
 }
 
-fn setup_actors(
-    mut commands: Commands,
-    sprite_cfg_map: Res<SpriteConfigMap>,
-    layouts: Res<Assets<TextureAtlasLayout>>,
-) {
-    create_actor(
-        &mut commands,
-        vec![
+fn setup_actors(mut commands: Commands) {
+    commands.spawn(ActorBundle::new(
+        MapPosHex::from_oddr(5, 5),
+        Visual::Multi(vec![
             "body-heavy_1".to_string(),
             "head-heavy_1".to_string(),
             "melee-1h_2".to_string(),
-        ],
-        MapPosHex::from_oddr(5, 5),
-        &sprite_cfg_map,
-        &layouts,
-    );
-
-    create_actor(
-        &mut commands,
-        vec!["monster-sucker_1".to_string()],
-        MapPosHex::from_oddr(2, 2),
-        &sprite_cfg_map,
-        &layouts,
-    );
-    create_actor(
-        &mut commands,
-        vec!["monster-sucker_1".to_string()],
-        MapPosHex::from_oddr(8, 2),
-        &sprite_cfg_map,
-        &layouts,
-    );
-}
-
-fn update_camera_after_scrolling(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mouse_button_input: Res<ButtonInput<MouseButton>>,
-    dim: Res<ScrollBounds>,
-    mut mouse_motion_evr: EventReader<MouseMotion>,
-    mut camera_query: Query<&mut Transform, With<Camera>>,
-) {
-    let mut camera_transform = camera_query.single_mut();
-
-    if keyboard_input.pressed(KeyCode::KeyA) || keyboard_input.pressed(KeyCode::ArrowLeft) {
-        move_camera(&mut camera_transform, -10.0, 0.0, &dim);
-    } else if keyboard_input.pressed(KeyCode::KeyD) || keyboard_input.pressed(KeyCode::ArrowRight) {
-        move_camera(&mut camera_transform, 10.0, 0.0, &dim);
-    } else if keyboard_input.pressed(KeyCode::KeyW) || keyboard_input.pressed(KeyCode::ArrowUp) {
-        move_camera(&mut camera_transform, 0.0, 10.0, &dim);
-    } else if keyboard_input.pressed(KeyCode::KeyS) || keyboard_input.pressed(KeyCode::ArrowDown) {
-        move_camera(&mut camera_transform, 0.0, -10.0, &dim);
-    }
-
-    if mouse_button_input.pressed(MouseButton::Left) {
-        for ev in mouse_motion_evr.read() {
-            move_camera(&mut camera_transform, -ev.delta.x, ev.delta.y, &dim);
-        }
-    }
-}
-
-fn move_camera(camera_transform: &mut Transform, dx: f32, dy: f32, scroll_bounds: &ScrollBounds) {
-    let bounds_min = scroll_bounds.0.min;
-    let bounds_max = scroll_bounds.0.max;
-
-    camera_transform.translation.x =
-        (camera_transform.translation.x + dx).clamp(bounds_min.x, bounds_max.x);
-
-    camera_transform.translation.y =
-        (camera_transform.translation.y + dy).clamp(bounds_min.y, bounds_max.y);
-}
-
-fn create_actor(
-    commands: &mut Commands,
-    visual: Vec<String>,
-    map_pos: MapPosHex,
-    sprite_cfg_map: &Res<SpriteConfigMap>,
-    layouts: &Res<Assets<TextureAtlasLayout>>,
-) {
-    let Some(layout) = layouts.get(sprite_cfg_map.layout.id()) else {
-        panic!("Could not find layout in assets for sprite map")
-    };
-
-    let mut child_commands = commands.spawn((
-        map_pos,
-        Transform::from_translation(map_pos.into_vec3()),
-        Visibility::Visible,
-        InheritedVisibility::default(),
-        GlobalTransform::default(),
+        ]),
     ));
 
-    for (idx, v) in visual.iter().enumerate() {
-        match sprite_cfg_map.map.get(v) {
-            Some(SpriteConfig::Single {
-                image_id,
-                offset: (dx, dy),
-            }) => {
-                let index = layout.get_texture_index(*image_id).unwrap_or(0);
+    commands.spawn(ActorBundle::new(
+        MapPosHex::from_oddr(2, 2),
+        Visual::Single("monster-sucker_1".to_string()),
+    ));
 
-                child_commands.with_children(|parent| {
-                    parent.spawn((
-                        SpriteBundle {
-                            texture: sprite_cfg_map.texture.clone(),
-                            transform: Transform::from_xyz(*dx, *dy, (100 + idx) as f32),
-                            ..Default::default()
-                        },
-                        TextureAtlas {
-                            layout: sprite_cfg_map.layout.clone(),
-                            index,
-                        },
-                    ));
-                });
-            }
+    commands.spawn(ActorBundle::new(
+        MapPosHex::from_oddr(8, 2),
+        Visual::Single("monster-sucker_1".to_string()),
+    ));
+}
 
-            Some(SpriteConfig::Animated {
-                image_ids,
-                offset: (dx, dy),
-                frame_duration,
-            }) => {
-                let indices = image_ids
-                    .iter()
-                    .map(|image_id| layout.get_texture_index(*image_id).unwrap_or(0))
-                    .collect::<Vec<_>>();
+#[derive(Bundle)]
+struct ActorBundle {
+    map_pos: MapPosHex,
+    visual: Visual,
+    transform: Transform,
+    global_transform: GlobalTransform,
+    visibility: Visibility,
+    inherited_visibility: InheritedVisibility,
+}
 
-                let current_idx: usize = rand_between(0..indices.len());
-                let mut timer = Timer::new(
-                    Duration::from_millis(*frame_duration as u64),
-                    TimerMode::Repeating,
-                );
-
-                timer.tick(Duration::from_millis(
-                    rand_between(0..*frame_duration) as u64
-                ));
-
-                child_commands.with_children(|parent| {
-                    parent.spawn((
-                        SpriteBundle {
-                            texture: sprite_cfg_map.texture.clone(),
-                            transform: Transform::from_xyz(*dx, *dy, (100 + idx) as f32),
-                            ..Default::default()
-                        },
-                        TextureAtlas {
-                            layout: sprite_cfg_map.layout.clone(),
-                            index: *indices.first().unwrap(),
-                        },
-                        SpriteAnimation {
-                            indices,
-                            current_idx,
-                            timer,
-                        },
-                    ));
-                });
-            }
-
-            _ => {}
+impl ActorBundle {
+    fn new(map_pos: MapPosHex, visual: Visual) -> Self {
+        Self {
+            map_pos,
+            visual,
+            transform: Transform::from_translation(map_pos.into_vec3().with_z(100.0)),
+            global_transform: GlobalTransform::default(),
+            visibility: Visibility::Visible,
+            inherited_visibility: InheritedVisibility::default(),
         }
     }
 }
@@ -263,4 +154,119 @@ where
 {
     let mut rng = thread_rng();
     rng.gen_range(r)
+}
+
+#[derive(Component)]
+pub enum Visual {
+    Single(String),
+    Multi(Vec<String>),
+}
+
+fn update_sprites_from_visuals(
+    mut commands: Commands,
+    sprite_cfg_map: Res<SpriteConfigMap>,
+    layouts: Res<Assets<TextureAtlasLayout>>,
+    visual_q: Query<(Entity, &Visual, &Transform), Changed<Visual>>,
+) {
+    let Some(layout) = layouts.get(sprite_cfg_map.layout.id()) else {
+        panic!("Could not find layout in assets for sprite map")
+    };
+
+    for (entity, visual, transform) in visual_q.iter() {
+        let mut entity_commands = commands.entity(entity);
+
+        entity_commands.clear_children();
+
+        match visual {
+            Visual::Single(v) => {
+                insert_sprite(
+                    entity_commands,
+                    &sprite_cfg_map,
+                    layout,
+                    v,
+                    transform.translation,
+                );
+            }
+
+            Visual::Multi(visuals) => {
+                for (idx, v) in visuals.iter().enumerate() {
+                    entity_commands.with_children(|parent| {
+                        let c = parent.spawn_empty();
+                        insert_sprite(c, &sprite_cfg_map, layout, v, Vec3::ZERO.with_y(idx as f32));
+                    });
+                }
+            }
+        }
+    }
+}
+
+fn insert_sprite(
+    mut commands: EntityCommands,
+    sprite_cfg_map: &Res<SpriteConfigMap>,
+    layout: &TextureAtlasLayout,
+    visual: &str,
+    translation: Vec3,
+) {
+    match sprite_cfg_map.map.get(visual) {
+        Some(SpriteConfig::Single {
+            image_id,
+            offset: (dx, dy),
+        }) => {
+            let index = layout.get_texture_index(*image_id).unwrap_or(0);
+
+            commands.insert((
+                SpriteBundle {
+                    texture: sprite_cfg_map.texture.clone(),
+                    transform: Transform::from_translation(translation + Vec3::new(*dx, *dy, 0.0)),
+                    // transform: Transform::from_xyz(*dx, *dy, z_index),
+                    ..Default::default()
+                },
+                TextureAtlas {
+                    layout: sprite_cfg_map.layout.clone(),
+                    index,
+                },
+            ));
+        }
+
+        Some(SpriteConfig::Animated {
+            image_ids,
+            offset: (dx, dy),
+            frame_duration,
+        }) => {
+            let indices = image_ids
+                .iter()
+                .map(|image_id| layout.get_texture_index(*image_id).unwrap_or(0))
+                .collect::<Vec<_>>();
+
+            let current_idx: usize = rand_between(0..indices.len());
+            let mut timer = Timer::new(
+                Duration::from_millis(*frame_duration as u64),
+                TimerMode::Repeating,
+            );
+
+            timer.tick(Duration::from_millis(
+                rand_between(0..*frame_duration) as u64
+            ));
+
+            commands.insert((
+                SpriteBundle {
+                    texture: sprite_cfg_map.texture.clone(),
+                    transform: Transform::from_translation(translation + Vec3::new(*dx, *dy, 0.0)),
+                    // transform: Transform::from_xyz(*dx, *dy, z_index),
+                    ..Default::default()
+                },
+                TextureAtlas {
+                    layout: sprite_cfg_map.layout.clone(),
+                    index: *indices.first().unwrap(),
+                },
+                SpriteAnimation {
+                    indices,
+                    current_idx,
+                    timer,
+                },
+            ));
+        }
+
+        _ => {}
+    }
 }
