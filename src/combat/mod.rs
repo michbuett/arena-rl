@@ -1,3 +1,6 @@
+mod actor;
+mod cards;
+mod flow;
 mod map;
 mod ui;
 
@@ -16,8 +19,10 @@ use crate::{
 };
 
 use self::{
-    map::{HexMap, MapPosHex},
-    ui::{handle_select_map_pos, setup_ui, update_user_input, SelectMapPosEvent},
+    actor::{ActionSelectedEvent, Activations, ActorBundle},
+    flow::{setup_combat_flow, update_combat_flow, CombatFlowEvent},
+    map::{update_obstacles_in_map, HexMap, MapPos},
+    ui::{setup_ui, update_user_input, update_waiting_state, MapPosSelectedEvent, PlayerActions},
 };
 
 #[derive(Component)]
@@ -27,15 +32,34 @@ struct OnCombatState;
 struct ScrollBounds(Rect);
 
 pub fn combat_plugin(app: &mut App) {
-    app.add_event::<SelectMapPosEvent>()
+    app.add_event::<MapPosSelectedEvent>()
+        .add_event::<ActionSelectedEvent>()
+        .add_event::<CombatFlowEvent>()
         .add_systems(
             OnEnter(GameState::Combat),
-            ((setup_map, setup_camera, setup_actors).chain(), setup_ui),
+            (
+                (setup_map, setup_camera, setup_actors).chain(),
+                setup_combat_flow,
+                setup_ui,
+            ),
         )
         .add_systems(
             Update,
             (
-                (update_user_input, handle_select_map_pos).chain(),
+                (
+                    update_user_input,
+                    (
+                        ui::handle_select_map_pos,
+                        actor::handle_select_map_pos,
+                        actor::handle_action_selected,
+                    ),
+                )
+                    .chain(),
+                ui::update_available_playeractions
+                    .run_if(resource_exists_and_changed::<PlayerActions>),
+                update_obstacles_in_map,
+                update_waiting_state,
+                update_combat_flow,
                 update_sprites_from_visuals,
                 update_sprite_animation,
             )
@@ -78,47 +102,43 @@ fn setup_camera(
 }
 
 fn setup_actors(mut commands: Commands) {
-    commands.spawn(ActorBundle::new(
-        MapPosHex::from_oddr(5, 5),
+    let mut player = ActorBundle::new(
+        MapPos::from_oddr(5, 5),
         Visual::Multi(vec![
             "body-heavy_1".to_string(),
             "head-heavy_1".to_string(),
             "melee-1h_2".to_string(),
         ]),
-    ));
+    );
+
+    player.activations = Activations {
+        active: Some(actor::Activation::Single(cards::Card {
+            value: 5,
+            suite: cards::Suite::PhysicalStr,
+        })),
+        remaining: vec![],
+    };
+
+    commands.spawn(player);
+
+    // commands.spawn(ActorBundle::new(
+    //     MapPos::from_oddr(5, 5),
+    //     Visual::Multi(vec![
+    //         "body-heavy_1".to_string(),
+    //         "head-heavy_1".to_string(),
+    //         "melee-1h_2".to_string(),
+    //     ]),
+    // ));
 
     commands.spawn(ActorBundle::new(
-        MapPosHex::from_oddr(2, 2),
+        MapPos::from_oddr(2, 2),
         Visual::Single("monster-sucker_1".to_string()),
     ));
 
     commands.spawn(ActorBundle::new(
-        MapPosHex::from_oddr(8, 2),
+        MapPos::from_oddr(8, 2),
         Visual::Single("monster-sucker_1".to_string()),
     ));
-}
-
-#[derive(Bundle)]
-struct ActorBundle {
-    map_pos: MapPosHex,
-    visual: Visual,
-    transform: Transform,
-    global_transform: GlobalTransform,
-    visibility: Visibility,
-    inherited_visibility: InheritedVisibility,
-}
-
-impl ActorBundle {
-    fn new(map_pos: MapPosHex, visual: Visual) -> Self {
-        Self {
-            map_pos,
-            visual,
-            transform: Transform::from_translation(map_pos.into_vec3().with_z(100.0)),
-            global_transform: GlobalTransform::default(),
-            visibility: Visibility::Visible,
-            inherited_visibility: InheritedVisibility::default(),
-        }
-    }
 }
 
 #[derive(Debug, Component)]
@@ -168,6 +188,10 @@ fn update_sprites_from_visuals(
     layouts: Res<Assets<TextureAtlasLayout>>,
     visual_q: Query<(Entity, &Visual, &Transform), Changed<Visual>>,
 ) {
+    if visual_q.is_empty() {
+        return;
+    }
+
     let Some(layout) = layouts.get(sprite_cfg_map.layout.id()) else {
         panic!("Could not find layout in assets for sprite map")
     };
@@ -218,7 +242,6 @@ fn insert_sprite(
                 SpriteBundle {
                     texture: sprite_cfg_map.texture.clone(),
                     transform: Transform::from_translation(translation + Vec3::new(*dx, *dy, 0.0)),
-                    // transform: Transform::from_xyz(*dx, *dy, z_index),
                     ..Default::default()
                 },
                 TextureAtlas {
@@ -252,7 +275,6 @@ fn insert_sprite(
                 SpriteBundle {
                     texture: sprite_cfg_map.texture.clone(),
                     transform: Transform::from_translation(translation + Vec3::new(*dx, *dy, 0.0)),
-                    // transform: Transform::from_xyz(*dx, *dy, z_index),
                     ..Default::default()
                 },
                 TextureAtlas {

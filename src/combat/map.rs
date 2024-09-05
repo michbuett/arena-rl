@@ -1,28 +1,20 @@
-// use std::cmp::Ordering;
-use std::collections::HashMap;
-// use std::collections::BinaryHeap;
+use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap};
 use std::hash::Hash;
-// use std::hash::Hasher;
-// use std::iter::FromIterator;
-// use std::num::NonZeroU8;
 
-use bevy::ecs::component::Component;
-use bevy::ecs::system::Resource;
-use bevy::math::{Vec2, Vec3};
+use bevy::prelude::*;
 
 const SQRT_3: f32 = 1.7320508076;
 const HEX_SIZE: f32 = 64.0;
-// const HEX_WIDTH: f32 = SQRT_3 * HEX_SIZE; // size * sqrt(3)
-// const HEX_HEIGHT: f32 = 2.0 * HEX_SIZE;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Hash, Component)]
-pub struct MapPosHex {
+pub struct MapPos {
     q: i32,
     r: i32,
     s: i32,
 }
 
-impl MapPosHex {
+impl MapPos {
     pub fn new(q: i32, r: i32) -> Self {
         Self { q, r, s: -q - r }
     }
@@ -73,47 +65,102 @@ impl MapPosHex {
             s: s as i32,
         }
     }
+
+    // fn distance(&self, other: &MapPos) -> f32 {
+    //     (((self.q - other.q).abs() + (self.r - other.r).abs() + (self.s - other.s).abs()) / 2)
+    //         as f32
+    // }
+
+    // fn lerp(&self, other: &MapPos, delta: f32) -> Self {
+    //     let fraq_q = self.q as f32 + (other.q - self.q) as f32 * delta;
+    //     let fraq_r = self.r as f32 + (other.r - self.r) as f32 * delta;
+    //     let fraq_s = self.s as f32 + (other.s - self.s) as f32 * delta;
+    //     Self::round_hex(fraq_q, fraq_r, fraq_s)
+    // }
 }
 
-impl From<Vec3> for MapPosHex {
+impl From<Vec3> for MapPos {
     fn from(point: Vec3) -> Self {
-        MapPosHex::from_xy(point.x, point.y)
+        MapPos::from_xy(point.x, point.y)
     }
 }
 
-impl From<Vec2> for MapPosHex {
+impl From<Vec2> for MapPos {
     fn from(point: Vec2) -> Self {
-        MapPosHex::from_xy(point.x, point.y)
+        MapPos::from_xy(point.x, point.y)
     }
 }
 
 #[test]
 fn test_can_convert_screen_coord_to_hex_and_back() {
-    let hex1 = MapPosHex::new(-1, -2);
-    let hex2 = MapPosHex::new(1, -1);
-    let hex3 = MapPosHex::new(-2, 3);
+    let hex1 = MapPos::new(-1, -2);
+    let hex2 = MapPos::new(1, -1);
+    let hex3 = MapPos::new(-2, 3);
 
-    assert_eq!(hex1, MapPosHex::from(hex1.into_vec3()));
-    assert_eq!(hex2, MapPosHex::from(hex2.into_vec3()));
-    assert_eq!(hex3, MapPosHex::from(hex3.into_vec3()));
+    assert_eq!(hex1, MapPos::from(hex1.into_vec3()));
+    assert_eq!(hex2, MapPos::from(hex2.into_vec3()));
+    assert_eq!(hex3, MapPos::from(hex3.into_vec3()));
 }
 
 #[derive(Resource)]
 pub struct HexMap {
-    tiles: HashMap<MapPosHex, TileType>,
-    pub camera_focus: MapPosHex,
+    tiles: HashMap<MapPos, TileType>,
+    obstacles: HashMap<MapPos, Obstacle>,
+
+    pub camera_focus: MapPos,
     pub scroll_limit_x: (f32, f32),
     pub scroll_limit_y: (f32, f32),
 }
 
 impl HexMap {
-    pub fn tiles(&self) -> impl Iterator<Item = (&MapPosHex, &TileType)> {
+    pub fn tiles(&self) -> impl Iterator<Item = (&MapPos, &TileType)> {
         self.tiles.iter()
     }
 
-    pub fn find_tile(&self, hex: &MapPosHex) -> Option<(MapPosHex, TileType)> {
-        self.tiles.get(hex).map(|tt| (*hex, *tt))
+    pub fn find_tile(&self, hex: &MapPos) -> Option<Tile> {
+        self.tiles
+            .get(hex)
+            .map(|tt| (*hex, *tt, self.obstacles.get(hex).cloned()))
     }
+
+    pub fn neighbors<'a>(&'a self, pos: MapPos) -> NeighborTileIter<'a> {
+        NeighborTileIter {
+            map: self,
+            start_pos: pos,
+            step: 0,
+        }
+    }
+
+    pub fn find_path(&self, from: MapPos, to: MapPos) -> Option<Path> {
+        if self.find_tile(&from).is_none() || self.find_tile(&to).is_none() {
+            return None;
+        }
+
+        // let straight_path = self.find_straight_path(from, to);
+        // if straight_path.is_some() {
+        //     return straight_path;
+        // }
+
+        find_path_astar(from, to, self)
+    }
+
+    // pub fn find_straight_path(&self, start: MapPos, goal: MapPos) -> Option<Path> {
+    //     let mut p = Path::new();
+    //     let d = start.distance(&goal);
+
+    //     for i in 0..=(d.floor() as i32) {
+    //         let delta = 1.0 / d * (i as f32);
+    //         let next_pos = MapPos::lerp(&start, &goal, delta);
+
+    //         if let Some((mp, ..)) = self.find_tile(&next_pos) {
+    //             p.push(mp);
+    //         } else {
+    //             return None;
+    //         }
+    //     }
+
+    //     Some(p)
+    // }
 }
 
 pub fn dummy_hex() -> HexMap {
@@ -146,17 +193,18 @@ pub fn dummy_hex() -> HexMap {
 
         for (col, ttype) in tiles_in_row {
             tiles.insert(
-                MapPosHex::from_oddr((start_idx + col) as i32, row as i32),
+                MapPos::from_oddr((start_idx + col) as i32, row as i32),
                 ttype,
             );
         }
     }
 
-    let camera_focus = MapPosHex::from_oddr(5, 5);
+    let camera_focus = MapPos::from_oddr(5, 5);
     let focus_vec = camera_focus.into_vec3();
 
     HexMap {
         tiles,
+        obstacles: HashMap::new(), // TODO
         camera_focus,
         scroll_limit_x: (focus_vec.x - 500.0, focus_vec.x + 500.0),
         scroll_limit_y: (focus_vec.y - 500.0, focus_vec.y + 500.0),
@@ -169,68 +217,14 @@ fn test_can_build_hex_map() {
     assert!(map.tiles().count() > 0);
 }
 
-// const TILE_SIZE: f32 = 96.0;
-
 #[derive(Debug, Clone, Copy)]
 pub enum TileType {
     Floor,
     // Void,
 }
 
-// #[derive(Debug, Clone, Copy)]
-// pub struct Tile(MapPos, TileType);
-
-// impl Tile {
-//     pub fn column(self: &Self) -> u32 {
-//         self.0.col()
-//     }
-
-//     pub fn row(self: &Self) -> u32 {
-//         self.0.row()
-//     }
-
-//     pub fn tile_type(self: &Self) -> TileType {
-//         self.1.clone()
-//     }
-
-//     pub fn is_void(&self) -> bool {
-//         match self.1 {
-//             TileType::Void => true,
-//             _ => false,
-//         }
-//     }
-
-//     pub fn world_pos(self: &Self) -> WorldPos {
-//         self.map_pos().into()
-//     }
-
-//     pub fn map_pos(self: &Self) -> MapPos {
-//         self.0
-//     }
-
-//     pub fn distance(&self, o: &Self) -> f32 {
-//         distance(self.map_pos(), o.map_pos())
-//     }
-// }
-
-// impl PartialEq for Tile {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.column() == other.column() && self.row() == other.row()
-//     }
-// }
-
-// impl Hash for Tile {
-//     fn hash<H>(&self, state: &mut H)
-//     where
-//         H: Hasher,
-//     {
-//         self.0.hash(state);
-//     }
-// }
-
-// impl Eq for Tile {}
-
-// pub type Path = Vec<Tile>;
+pub type Tile = (MapPos, TileType, Option<Obstacle>);
+pub type Path = Vec<MapPos>;
 
 // #[derive(Resource)]
 // pub struct Map(Vec<Vec<TileType>>);
@@ -379,57 +373,15 @@ pub enum TileType {
 //     Impediment(NonZeroU8, i8),
 // }
 
-// pub struct WorldPos(Vec3);
+#[derive(Component, Clone, Copy)]
+pub struct Obstacle(pub f32);
 
-// impl Into<Vec3> for WorldPos {
-//     fn into(self) -> Vec3 {
-//         return self.0;
-//     }
-// }
-
-// impl From<MapPos> for WorldPos {
-//     fn from(value: MapPos) -> Self {
-//         Self(Vec3 {
-//             x: value.col() as f32 * TILE_SIZE,
-//             y: value.row() as f32 * TILE_SIZE,
-//             z: 0.0,
-//         })
-//     }
-// }
-
-// #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Hash, Component)]
-// pub struct MapPos(pub u32, pub u32);
-
-// impl MapPos {
-//     pub fn col(&self) -> u32 {
-//         self.0
-//     }
-
-//     pub fn row(&self) -> u32 {
-//         self.1
-//     }
-
-//     pub fn distance(self, other: MapPos) -> usize {
-//         let dx = i32::abs(other.0 as i32 - self.0 as i32) as usize;
-//         let dy = i32::abs(other.1 as i32 - self.1 as i32) as usize;
-//         usize::max(dx, dy)
-//     }
-
-//     pub fn lerp(Self(x1, y1): &Self, Self(x2, y2): &Self, t: f32) -> Self {
-//         let xn = *x1 as f32 + t * (x2 - x1) as f32;
-//         let yn = *y1 as f32 + t * (y2 - y1) as f32;
-//         let col = i32::max(xn.round() as i32, 0) as u32;
-//         let row = i32::max(yn.round() as i32, 0) as u32;
-
-//         Self(col, row)
-//     }
-// }
-
-// impl Into<MapPos> for Tile {
-//     fn into(self) -> MapPos {
-//         self.0
-//     }
-// }
+pub fn update_obstacles_in_map(mut map: ResMut<HexMap>, obstacles_q: Query<(&Obstacle, &MapPos)>) {
+    map.obstacles.clear();
+    for (o, mpos) in obstacles_q.iter() {
+        map.obstacles.insert(*mpos, o.clone());
+    }
+}
 
 // #[derive(Clone)]
 // pub struct ObstacleSet(pub HashMap<MapPos, Obstacle>);
@@ -563,55 +515,44 @@ pub enum TileType {
 //     }
 // }
 
-// pub struct NeighborTileIter<'a> {
-//     map: &'a Map,
-//     distance: NonZeroU8,
-//     center_col: i32,
-//     center_row: i32,
-//     step: usize,
-//     obstacles: &'a ObstacleSet,
-// }
+const NEIGHBOR_DELTAS: [(i32, i32, i32); 6] = [
+    (1, 0, -1),
+    (1, -1, 0),
+    (0, -1, 1),
+    (-1, 0, 1),
+    (-1, 1, 0),
+    (0, 1, -1),
+];
 
-// impl<'a> Iterator for NeighborTileIter<'a> {
-//     type Item = Tile;
+pub struct NeighborTileIter<'a> {
+    map: &'a HexMap,
+    start_pos: MapPos,
+    step: usize,
+}
 
-//     fn next(&mut self) -> Option<Tile> {
-//         let dim = 2 * self.distance.get() as usize + 1;
-//         let last_step_num = dim * dim;
+impl<'a> Iterator for NeighborTileIter<'a> {
+    type Item = Tile;
 
-//         while self.step < last_step_num {
-//             self.step += 1;
+    fn next(&mut self) -> Option<Tile> {
+        while self.step < NEIGHBOR_DELTAS.len() {
+            let (dq, dr, ds) = NEIGHBOR_DELTAS[self.step];
+            let candidate_pos = MapPos {
+                q: self.start_pos.q + dq,
+                r: self.start_pos.r + dr,
+                s: self.start_pos.s + ds,
+            };
 
-//             let dx = ((self.step - 1) % dim) as i32 - self.distance.get() as i32;
-//             let dy = ((self.step - 1) / dim) as i32 - self.distance.get() as i32;
+            let candidate_tile = self.map.find_tile(&candidate_pos);
 
-//             if dx == 0 && dy == 0 {
-//                 // the center is not a neighbor
-//                 continue;
-//             }
+            self.step += 1;
+            if candidate_tile.is_some() {
+                return candidate_tile;
+            }
+        }
 
-//             let p = MapPos((self.center_col + dx) as u32, (self.center_row + dy) as u32);
-
-//             if let Some(t) = self.map.get_tile(p) {
-//                 if let TileType::Void = t.tile_type() {
-//                     // you cannot pass the void
-//                     continue;
-//                 }
-
-//                 if self.obstacles.0.contains_key(&p) {
-//                     // if !self.obstacles.0.get(&p).map(|o| o.allow_movement).unwrap_or(true) {
-//                     // if let Some(Obstacle::Inaccessible()) = self.obstacles.0.get(&p) {
-//                     // the way is blocked by an inpenetrable obstacle
-//                     continue;
-//                 }
-
-//                 return Some(t);
-//             }
-//         }
-
-//         None
-//     }
-// }
+        None
+    }
+}
 
 // #[test]
 // fn it_can_find_a_path() {
@@ -699,74 +640,79 @@ pub enum TileType {
 //     }))
 // }
 
+// #[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct Node(MapPos, f32);
 // struct Node(Tile, f32);
 
-// impl PartialEq for Node {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.0 == other.0
-//     }
-// }
+impl PartialEq for Node {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
 
-// impl Eq for Node {}
+impl Eq for Node {}
 
-// impl Ord for Node {
-//     fn cmp(&self, other: &Self) -> Ordering {
-//         if self.0 == other.0 {
-//             return Ordering::Equal;
-//         }
+impl Ord for Node {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self == other {
+            return Ordering::Equal;
+        }
 
-//         match self.1 > other.1 {
-//             true => Ordering::Less,
-//             false => Ordering::Greater,
-//         }
-//     }
-// }
+        match self.1 > other.1 {
+            true => Ordering::Less,
+            false => Ordering::Greater,
+        }
+    }
+}
 
-// impl PartialOrd for Node {
-//     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-//         Some(self.cmp(other))
-//     }
-// }
+impl PartialOrd for Node {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
-// fn find_path_astar(m: &Map, start: Tile, goal: Tile, obstacles: &ObstacleSet) -> Option<Path> {
-//     let start_node = Node(start, 0.0);
-//     let mut costs_so_far: HashMap<Tile, (f32, Path)> = HashMap::new();
-//     let mut open: BinaryHeap<Node> = BinaryHeap::new();
+fn find_path_astar(start: MapPos, goal: MapPos, m: &HexMap) -> Option<Path> {
+    // println!("find_path_astar from={:?} to={:?}", start, goal);
+    let mut costs_so_far: HashMap<MapPos, (f32, Path)> = HashMap::new();
+    let mut open: BinaryHeap<Node> = BinaryHeap::new();
+    let start_node = Node(start, 0.0);
 
-//     open.push(start_node);
-//     costs_so_far.insert(start, (0.0, Vec::new()));
+    open.push(start_node);
+    costs_so_far.insert(start, (0.0, Vec::new()));
 
-//     while let Some(Node(tile, _)) = open.pop() {
-//         let (current_costs, path) = costs_so_far.get(&tile).unwrap().clone();
+    while let Some(Node(current_pos, _)) = open.pop() {
+        let (current_costs, path) = costs_so_far.get(&current_pos).unwrap().clone();
 
-//         // println!("  > explore {:?} (costs={})", tile, current_costs);
-//         if tile == goal {
-//             // the current candidat is the goal tile
-//             // -> return result
-//             return Some(path.clone());
-//         } else {
-//             // the current candidate is not the goal
-//             // -> ... and look its at its neighbors
-//             for n in m.neighbors(tile, NonZeroU8::new(1).unwrap(), obstacles) {
-//                 let new_costs = current_costs + costs(&n, obstacles);
-//                 let costs = costs_so_far.get(&n);
+        // println!("  > explore {:?} (costs={})", current_pos, current_costs);
+        if current_pos == goal {
+            // the current candidat is the goal tile
+            // -> return result
+            return Some(path.clone());
+        } else {
+            // the current candidate is not the goal
+            // -> ... and look its at its neighbors
+            for neighbor_tile @ (neighor_pos, _, _) in m.neighbors(current_pos) {
+                let new_costs = current_costs + costs(&neighbor_tile);
+                // let new_costs = current_costs + 1.0; // TODO: consider tile type and obstacles
+                let costs = costs_so_far.get(&neighor_pos);
 
-//                 if costs.is_none() || costs.unwrap().0 > new_costs {
-//                     let mut new_path = path.clone();
-//                     let priority = new_costs + n.distance(&goal);
+                if costs.is_none() || costs.unwrap().0 > new_costs {
+                    let mut new_path = path.clone();
+                    let priority = new_costs + euclid_dis(&neighor_pos, &goal);
+                    // let priority = new_costs + neighor_pos.distance(&goal);
 
-//                     new_path.push(n);
+                    new_path.push(neighor_pos);
 
-//                     open.push(Node(n, priority));
-//                     costs_so_far.insert(n, (new_costs, new_path));
-//                 }
-//             }
-//         }
-//     }
+                    open.push(Node(neighor_pos, priority));
+                    costs_so_far.insert(neighor_pos, (new_costs, new_path));
+                }
+            }
+        }
+    }
 
-//     // there is no path
-//     None
-// }
+    // there is no path
+    None
+}
 
 // const DP: f32 = 1.0; // distance for perpendicular (non-diaginal) steps
 // const DD: f32 = 1.0; // distance for diaginal steps; sqrt(2)
@@ -781,13 +727,13 @@ pub enum TileType {
 //     DP * (dx + dy) + (DD - 2.0 * DP) * f32::min(dx, dy)
 // }
 
-// fn costs(t: &Tile, obstacles: &ObstacleSet) -> f32 {
-//     obstacles
-//         .0
-//         .get(&t.map_pos())
-//         .map(|obs| match obs {
-//             Obstacle::Impediment(c, _) => c.get() as f32,
-//             Obstacle::Blocker => f32::MAX,
-//         })
-//         .unwrap_or(1.0)
-// }
+fn costs((_, _, obs): &Tile) -> f32 {
+    obs.map(|Obstacle(c)| c).unwrap_or(1.0)
+}
+
+fn euclid_dis(a: &MapPos, b: &MapPos) -> f32 {
+    let dq = (b.q - a.q) as f32;
+    let dr = (b.r - a.r) as f32;
+
+    f32::sqrt(dq * dq + dr * dr + dq * dr)
+}

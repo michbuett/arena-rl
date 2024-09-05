@@ -3,7 +3,8 @@ use bevy::{input::mouse::MouseMotion, prelude::*, window::PrimaryWindow};
 use crate::style::WINDOW_BACKGROUND;
 
 use super::{
-    map::{HexMap, MapPosHex},
+    actor::Action,
+    map::{HexMap, MapPos},
     OnCombatState, ScrollBounds, Visual,
 };
 
@@ -13,11 +14,49 @@ pub struct DetailsWindowText;
 #[derive(Component)]
 pub struct SelectedTile;
 
+#[derive(Component)]
+pub struct PlayerActionIndicator;
+
 #[derive(Resource)]
 pub struct ScrollState(bool);
 
+#[derive(Resource)]
+pub struct PlayerActions {
+    map_pos: Option<MapPos>,
+    available_actions: Vec<Action>,
+    selected_action: usize,
+}
+
+impl PlayerActions {
+    pub fn empty() -> Self {
+        Self {
+            map_pos: None,
+            available_actions: Vec::new(),
+            selected_action: 0,
+        }
+    }
+
+    pub fn set_available_actions(&mut self, mp: MapPos, actions: Vec<Action>) {
+        self.map_pos = Some(mp);
+        self.available_actions = actions;
+        self.selected_action = 0;
+    }
+
+    pub fn get_selected_action(&self) -> Option<&Action> {
+        self.available_actions.get(self.selected_action)
+    }
+
+    pub fn get_selected_action_when_at(&self, other_pos: &MapPos) -> Option<&Action> {
+        self.get_selected_action()
+            .and_then(|action| match self.map_pos {
+                Some(prev_selected_hex) if *other_pos == prev_selected_hex => Some(action),
+                _ => None,
+            })
+    }
+}
+
 #[derive(Debug, Event)]
-pub struct SelectMapPosEvent(MapPosHex);
+pub struct MapPosSelectedEvent(pub MapPos);
 
 pub fn setup_ui(mut commands: Commands) {
     commands
@@ -60,6 +99,7 @@ pub fn setup_ui(mut commands: Commands) {
     ));
 
     commands.insert_resource(ScrollState(false));
+    commands.insert_resource(PlayerActions::empty());
 }
 
 pub fn update_user_input(
@@ -70,7 +110,7 @@ pub fn update_user_input(
     camera_query: Query<(&Camera, &GlobalTransform)>,
     mut mouse_motion_evr: EventReader<MouseMotion>,
     mut camera_transform_query: Query<&mut Transform, With<Camera>>,
-    mut user_input_evw: EventWriter<SelectMapPosEvent>,
+    mut map_pos_selected_ew: EventWriter<MapPosSelectedEvent>,
     mut scroll_state: ResMut<ScrollState>,
 ) {
     let mut camera_transform = camera_transform_query.single_mut();
@@ -103,7 +143,7 @@ pub fn update_user_input(
             if let Some(mouse_pos) = window_query.single().cursor_position() {
                 let (camera, camera_global_transform) = camera_query.single();
                 if let Some(wp) = camera.viewport_to_world_2d(camera_global_transform, mouse_pos) {
-                    user_input_evw.send(SelectMapPosEvent(MapPosHex::from(wp)));
+                    map_pos_selected_ew.send(MapPosSelectedEvent(MapPos::from(wp)));
                 }
             }
         }
@@ -123,22 +163,77 @@ fn move_camera(camera_transform: &mut Transform, dx: f32, dy: f32, scroll_bounds
 
 pub fn handle_select_map_pos(
     map: Res<HexMap>,
-    mut user_input_evr: EventReader<SelectMapPosEvent>,
+    mut user_input_evr: EventReader<MapPosSelectedEvent>,
     mut details_window_text: Query<&mut Text, With<DetailsWindowText>>,
     mut selected_tile_q: Query<(&mut Transform, &mut Visibility), With<SelectedTile>>,
 ) {
-    for SelectMapPosEvent(hex) in user_input_evr.read() {
-        let mut txt = details_window_text.single_mut();
-        let (mut selected_tile_transform, mut selected_tile_visibility) =
-            selected_tile_q.single_mut();
+    let Some(MapPosSelectedEvent(hex)) = user_input_evr.read().last() else {
+        return;
+    };
 
-        if let Some((pos, _)) = map.find_tile(hex) {
-            txt.sections[0].value = format!("You look at {:?}, there is nothing", pos);
-            selected_tile_transform.translation = hex.into_vec3().with_z(1.0);
-            *selected_tile_visibility = Visibility::Inherited;
-        } else {
-            txt.sections[0].value = "No tile selected".to_string();
-            *selected_tile_visibility = Visibility::Hidden;
+    let mut txt = details_window_text.single_mut();
+    let (mut selected_tile_transform, mut selected_tile_visibility) = selected_tile_q.single_mut();
+
+    if let Some((pos, ..)) = map.find_tile(hex) {
+        txt.sections[0].value = format!("You look at {:?}, there is nothing", pos);
+        selected_tile_transform.translation = hex.into_vec3().with_z(1.0);
+        *selected_tile_visibility = Visibility::Inherited;
+    } else {
+        txt.sections[0].value = "No tile selected".to_string();
+        *selected_tile_visibility = Visibility::Hidden;
+    }
+}
+
+#[derive(Debug, Resource)]
+pub struct WaitUntil(Timer);
+
+// pub fn update_ui_state(time: Res<Time>, mut ui_state: ResMut<UIState>) {
+pub fn update_waiting_state(
+    mut commands: Commands,
+    time: Res<Time>,
+    wait_until: Option<ResMut<WaitUntil>>,
+) {
+    if let Some(mut wait_until) = wait_until {
+        wait_until.0.tick(time.delta());
+
+        if wait_until.0.finished() {
+            commands.remove_resource::<WaitUntil>();
+        }
+    }
+}
+
+pub fn update_available_playeractions(
+    mut commands: Commands,
+    player_actions: Res<PlayerActions>,
+    indicatorq: Query<(Entity, &PlayerActionIndicator)>,
+) {
+    for (e, _) in indicatorq.iter() {
+        commands.entity(e).despawn();
+    }
+
+    let Some(selected_action) = player_actions
+        .available_actions
+        .get(player_actions.selected_action)
+    else {
+        return;
+    };
+
+    match selected_action {
+        Action::MoveAlong { path, .. } => {
+            println!("Move along: {:?}", path);
+            for pos in path {
+                commands.spawn((
+                    // SpriteBundle {
+                    //     visibility: Visibility::Hidden,
+                    //     ..Default::default()
+                    // },
+                    // Visibility::Visible,
+                    Transform::from_translation(pos.into_vec3().with_z(1.0)),
+                    Visual::Single("floor-selected".to_string()),
+                    PlayerActionIndicator,
+                    OnCombatState,
+                ));
+            }
         }
     }
 }
