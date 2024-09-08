@@ -187,7 +187,6 @@ pub fn handle_select_map_pos(
 #[derive(Debug, Resource)]
 pub struct WaitUntil(Timer);
 
-// pub fn update_ui_state(time: Res<Time>, mut ui_state: ResMut<UIState>) {
 pub fn update_waiting_state(
     mut commands: Commands,
     time: Res<Time>,
@@ -220,14 +219,8 @@ pub fn update_available_playeractions(
 
     match selected_action {
         Action::MoveAlong { path, .. } => {
-            println!("Move along: {:?}", path);
             for pos in path {
                 commands.spawn((
-                    // SpriteBundle {
-                    //     visibility: Visibility::Hidden,
-                    //     ..Default::default()
-                    // },
-                    // Visibility::Visible,
                     Transform::from_translation(pos.into_vec3().with_z(1.0)),
                     Visual::Single("floor-selected".to_string()),
                     PlayerActionIndicator,

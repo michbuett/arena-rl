@@ -1,11 +1,16 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 
 use super::{
-    cards::{Card, Suite},
+    animation::{MovementAnimation, MovementModification},
+    cards::Card,
     map::{HexMap, MapPos, Obstacle},
     ui::{MapPosSelectedEvent, PlayerActions},
     Visual,
 };
+
+const ACTOR_ZLAYER: f32 = 100.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ActorId(u64);
@@ -67,7 +72,12 @@ pub struct Activations {
     pub remaining: Vec<Activation>,
 }
 
-// pub struct Activation();
+// #[derive(Resource)]
+// pub struct ActorEntityMap(HashMap<ActorId, Entity>);
+
+// pub fn setup_actor_entity_map(mut commands: Commands) {
+//     commands.insert_resource(ActorEntityMap(HashMap::new()));
+// }
 
 #[derive(Bundle)]
 pub struct ActorBundle {
@@ -93,7 +103,7 @@ impl ActorBundle {
                 remaining: vec![],
             },
             obstacle: Obstacle(f32::MAX),
-            transform: Transform::from_translation(map_pos.into_vec3().with_z(100.0)),
+            transform: Transform::from_translation(map_pos.into_vec3().with_z(ACTOR_ZLAYER)),
             global_transform: GlobalTransform::default(),
             visibility: Visibility::Visible,
             inherited_visibility: InheritedVisibility::default(),
@@ -110,6 +120,9 @@ pub struct AiActorBundle {
 #[derive(Debug, Event)]
 pub struct ActionSelectedEvent(Action);
 
+#[derive(Debug, Event)]
+pub struct MoveToCommand(ActorId, Vec<MapPos>);
+
 #[derive(Debug, Clone)]
 pub enum Action {
     MoveAlong {
@@ -117,11 +130,12 @@ pub enum Action {
         path: Vec<MapPos>,
     },
 }
+
 pub fn handle_select_map_pos(
     map: Res<HexMap>,
     actorq: Query<(&Actor, &Activations, &MapPos), Without<AiBehaviour>>,
+    mut commands: Commands,
     mut map_pos_selected_er: EventReader<MapPosSelectedEvent>,
-    mut action_selected_ew: EventWriter<ActionSelectedEvent>,
     mut player_actions: ResMut<PlayerActions>,
 ) {
     let Some(MapPosSelectedEvent(hex)) = map_pos_selected_er.read().last() else {
@@ -130,7 +144,8 @@ pub fn handle_select_map_pos(
 
     if let Some((actor_id, actor_pos)) = find_active_player_actor(&actorq) {
         if let Some(action) = player_actions.get_selected_action_when_at(hex) {
-            action_selected_ew.send(ActionSelectedEvent(action.clone()));
+            commands.trigger(ActionSelectedEvent(action.clone()));
+            player_actions.set_available_actions(*hex, vec![]);
         } else {
             if let Some(path) = map.find_path(actor_pos, *hex) {
                 player_actions
@@ -142,16 +157,34 @@ pub fn handle_select_map_pos(
     }
 }
 
-pub fn handle_action_selected(
-    map: Res<HexMap>,
-    actorq: Query<(&Actor, &Activations, &MapPos), Without<AiBehaviour>>,
-    mut action_selected_er: EventReader<ActionSelectedEvent>,
-) {
-    let Some(ActionSelectedEvent(action)) = action_selected_er.read().last() else {
-        return;
-    };
+pub fn handle_action_selected_event(trigger: Trigger<ActionSelectedEvent>, mut commands: Commands) {
+    let ActionSelectedEvent(action) = trigger.event();
+    match action {
+        Action::MoveAlong { actor_id, path } => {
+            commands.trigger(MoveToCommand(*actor_id, path.clone()));
+        }
+    }
+}
 
-    println!("[DEBUG] handle_action_selected: {:?}", action);
+pub fn handle_move_to_command(
+    trigger: Trigger<MoveToCommand>,
+    mut commands: Commands,
+    actorq: Query<(Entity, &Actor)>,
+) {
+    let MoveToCommand(actor_id, path) = trigger.event();
+
+    if let Some(e) = find_entity_by_actor_id(*actor_id, &actorq) {
+        commands.entity(e).insert((
+            MovementAnimation::new(
+                Duration::from_millis(200),
+                path.iter()
+                    .map(|mpos| mpos.into_vec3().with_z(ACTOR_ZLAYER))
+                    .collect(),
+            )
+            .set_modification(MovementModification::ParabolaJump(100)),
+            *path.last().unwrap(),
+        ));
+    }
 }
 
 fn find_active_player_actor(
@@ -162,5 +195,18 @@ fn find_active_player_actor(
             return Some((actor.id, *map_pos));
         }
     }
+    None
+}
+
+fn find_entity_by_actor_id(
+    actor_id: ActorId,
+    entity_actor_query: &Query<(Entity, &Actor)>,
+) -> Option<Entity> {
+    for (e, a) in entity_actor_query.iter() {
+        if a.id == actor_id {
+            return Some(e);
+        }
+    }
+
     None
 }

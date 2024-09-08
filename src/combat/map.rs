@@ -678,7 +678,7 @@ fn find_path_astar(start: MapPos, goal: MapPos, m: &HexMap) -> Option<Path> {
     let start_node = Node(start, 0.0);
 
     open.push(start_node);
-    costs_so_far.insert(start, (0.0, Vec::new()));
+    costs_so_far.insert(start, (0.0, vec![start]));
 
     while let Some(Node(current_pos, _)) = open.pop() {
         let (current_costs, path) = costs_so_far.get(&current_pos).unwrap().clone();

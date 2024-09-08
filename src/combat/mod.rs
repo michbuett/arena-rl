@@ -1,4 +1,5 @@
 mod actor;
+mod animation;
 mod cards;
 mod flow;
 mod map;
@@ -19,7 +20,11 @@ use crate::{
 };
 
 use self::{
-    actor::{ActionSelectedEvent, Activations, ActorBundle},
+    actor::{
+        handle_action_selected_event, handle_move_to_command, ActionSelectedEvent, Activations,
+        ActorBundle, AiBehaviour, MoveToCommand,
+    },
+    animation::update_movement_animation,
     flow::{setup_combat_flow, update_combat_flow, CombatFlowEvent},
     map::{update_obstacles_in_map, HexMap, MapPos},
     ui::{setup_ui, update_user_input, update_waiting_state, MapPosSelectedEvent, PlayerActions},
@@ -34,7 +39,10 @@ struct ScrollBounds(Rect);
 pub fn combat_plugin(app: &mut App) {
     app.add_event::<MapPosSelectedEvent>()
         .add_event::<ActionSelectedEvent>()
+        .add_event::<MoveToCommand>()
         .add_event::<CombatFlowEvent>()
+        .observe(handle_action_selected_event)
+        .observe(handle_move_to_command)
         .add_systems(
             OnEnter(GameState::Combat),
             (
@@ -48,11 +56,7 @@ pub fn combat_plugin(app: &mut App) {
             (
                 (
                     update_user_input,
-                    (
-                        ui::handle_select_map_pos,
-                        actor::handle_select_map_pos,
-                        actor::handle_action_selected,
-                    ),
+                    (ui::handle_select_map_pos, actor::handle_select_map_pos),
                 )
                     .chain(),
                 ui::update_available_playeractions
@@ -60,6 +64,7 @@ pub fn combat_plugin(app: &mut App) {
                 update_obstacles_in_map,
                 update_waiting_state,
                 update_combat_flow,
+                update_movement_animation,
                 update_sprites_from_visuals,
                 update_sprite_animation,
             )
@@ -130,14 +135,20 @@ fn setup_actors(mut commands: Commands) {
     //     ]),
     // ));
 
-    commands.spawn(ActorBundle::new(
-        MapPos::from_oddr(2, 2),
-        Visual::Single("monster-sucker_1".to_string()),
+    commands.spawn((
+        ActorBundle::new(
+            MapPos::from_oddr(2, 2),
+            Visual::Single("monster-sucker_1".to_string()),
+        ),
+        AiBehaviour::Zombi,
     ));
 
-    commands.spawn(ActorBundle::new(
-        MapPos::from_oddr(8, 2),
-        Visual::Single("monster-sucker_1".to_string()),
+    commands.spawn((
+        ActorBundle::new(
+            MapPos::from_oddr(8, 2),
+            Visual::Single("monster-sucker_1".to_string()),
+        ),
+        AiBehaviour::Zombi,
     ));
 }
 
