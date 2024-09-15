@@ -21,13 +21,16 @@ use crate::{
 
 use self::{
     actor::{
-        handle_action_selected_event, handle_move_to_command, ActionSelectedEvent, Activations,
-        ActorBundle, AiBehaviour, MoveToCommand,
+        handle_action_selected_event, handle_move_to_command, ActionSelectedEvent, ActivateActor,
+        ActorBundle, AiBehaviour, MoveToCommand, Team, TeamBundle,
     },
     animation::update_movement_animation,
-    flow::{setup_combat_flow, update_combat_flow, CombatFlowEvent},
+    flow::{handle_activate_actor, setup_combat_flow, update_combat_flow, CombatFlowEvent, Turn},
     map::{update_obstacles_in_map, HexMap, MapPos},
-    ui::{setup_ui, update_user_input, update_waiting_state, MapPosSelectedEvent, PlayerActions},
+    ui::{
+        setup_turn_info, setup_ui, update_user_input, update_waiting_state, MapPosSelectedEvent,
+        PlayerActions, WaitForUser, WaitUntil,
+    },
 };
 
 #[derive(Component)]
@@ -39,16 +42,19 @@ struct ScrollBounds(Rect);
 pub fn combat_plugin(app: &mut App) {
     app.add_event::<MapPosSelectedEvent>()
         .add_event::<ActionSelectedEvent>()
+        .add_event::<ActivateActor>()
         .add_event::<MoveToCommand>()
         .add_event::<CombatFlowEvent>()
         .observe(handle_action_selected_event)
         .observe(handle_move_to_command)
+        .observe(handle_activate_actor)
         .add_systems(
             OnEnter(GameState::Combat),
             (
                 (setup_map, setup_camera, setup_actors).chain(),
                 setup_combat_flow,
                 setup_ui,
+                setup_turn_info,
             ),
         )
         .add_systems(
@@ -61,9 +67,10 @@ pub fn combat_plugin(app: &mut App) {
                     .chain(),
                 ui::update_available_playeractions
                     .run_if(resource_exists_and_changed::<PlayerActions>),
+                ui::update_turn_info.run_if(resource_exists_and_changed::<Turn>),
                 update_obstacles_in_map,
                 update_waiting_state,
-                update_combat_flow,
+                update_combat_flow.run_if(not_waiting),
                 update_movement_animation,
                 update_sprites_from_visuals,
                 update_sprite_animation,
@@ -107,36 +114,24 @@ fn setup_camera(
 }
 
 fn setup_actors(mut commands: Commands) {
-    let mut player = ActorBundle::new(
+    let player_team = Team(commands.spawn(TeamBundle::new("Player", true)).id());
+    let cpu_team = Team(commands.spawn(TeamBundle::new("CPU", false)).id());
+
+    commands.spawn(ActorBundle::new(
+        player_team,
+        true,
         MapPos::from_oddr(5, 5),
         Visual::Multi(vec![
             "body-heavy_1".to_string(),
             "head-heavy_1".to_string(),
             "melee-1h_2".to_string(),
         ]),
-    );
-
-    player.activations = Activations {
-        active: Some(actor::Activation::Single(cards::Card {
-            value: 5,
-            suite: cards::Suite::PhysicalStr,
-        })),
-        remaining: vec![],
-    };
-
-    commands.spawn(player);
-
-    // commands.spawn(ActorBundle::new(
-    //     MapPos::from_oddr(5, 5),
-    //     Visual::Multi(vec![
-    //         "body-heavy_1".to_string(),
-    //         "head-heavy_1".to_string(),
-    //         "melee-1h_2".to_string(),
-    //     ]),
-    // ));
+    ));
 
     commands.spawn((
         ActorBundle::new(
+            cpu_team,
+            false,
             MapPos::from_oddr(2, 2),
             Visual::Single("monster-sucker_1".to_string()),
         ),
@@ -145,6 +140,8 @@ fn setup_actors(mut commands: Commands) {
 
     commands.spawn((
         ActorBundle::new(
+            cpu_team,
+            false,
             MapPos::from_oddr(8, 2),
             Visual::Single("monster-sucker_1".to_string()),
         ),
@@ -302,4 +299,11 @@ fn insert_sprite(
 
         _ => {}
     }
+}
+
+fn not_waiting(
+    wait_until: Option<Res<WaitUntil>>,
+    wait_for_user: Option<Res<WaitForUser>>,
+) -> bool {
+    wait_for_user.is_none() && wait_until.is_none()
 }

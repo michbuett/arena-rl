@@ -4,11 +4,41 @@ use bevy::prelude::*;
 
 use super::{
     animation::{MovementAnimation, MovementModification},
-    cards::Card,
+    cards::{Card, Deck},
     map::{HexMap, MapPos, Obstacle},
-    ui::{MapPosSelectedEvent, PlayerActions},
+    ui::{MapPosSelectedEvent, PlayerActions, WaitForUser},
     Visual,
 };
+
+#[derive(Component, PartialEq, Clone, Copy)]
+pub struct Team(pub Entity);
+
+#[derive(Component, Debug)]
+pub struct TeamDeck(pub Deck);
+
+#[derive(Component, Debug)]
+pub struct TeamHand(Vec<Card>);
+
+#[derive(Bundle)]
+pub struct TeamBundle {
+    name: Name,
+    deck: TeamDeck,
+    hand: TeamHand,
+    player_controlled: PlayerControlled,
+}
+impl TeamBundle {
+    pub fn new(name: impl Into<Name>, is_pc: bool) -> Self {
+        Self {
+            name: name.into(),
+            deck: TeamDeck(Deck::new_rnd()),
+            hand: TeamHand(vec![]),
+            player_controlled: PlayerControlled(is_pc),
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct PlayerControlled(pub bool);
 
 const ACTOR_ZLAYER: f32 = 100.0;
 
@@ -44,32 +74,41 @@ pub enum Activation {
     // Hindered(Card, Card),
 }
 
-// impl Activation {
-//     pub fn initiative_value(&self) -> u8 {
-//         match self {
-//             Activation::Single(c) => c.value,
-//             Activation::Boosted(c1, c2) => std::cmp::min(c1.value, c2.value),
-//         }
-//     }
+impl Activation {
+    pub fn initiative_value(&self) -> u8 {
+        match self {
+            Activation::Single(c) => c.value,
+            // Activation::Boosted(c1, c2) => std::cmp::min(c1.value, c2.value),
+        }
+    }
 
-//     pub fn effort_value(&self, suite: Suite) -> Card {
-//         match self {
-//             Activation::Single(c) => *c,
-//             Activation::Boosted(c1, c2) => {
-//                 if c1.value(suite) >= c2.value(suite) {
-//                     *c1
-//                 } else {
-//                     *c2
-//                 }
-//             }
-//         }
-//     }
-// }
+    //     pub fn effort_value(&self, suite: Suite) -> Card {
+    //         match self {
+    //             Activation::Single(c) => *c,
+    //             Activation::Boosted(c1, c2) => {
+    //                 if c1.value(suite) >= c2.value(suite) {
+    //                     *c1
+    //                 } else {
+    //                     *c2
+    //                 }
+    //             }
+    //         }
+    //     }
+}
 
 #[derive(Component)]
 pub struct Activations {
     pub active: Option<Activation>,
     pub remaining: Vec<Activation>,
+}
+
+impl Activations {
+    pub fn next_activation_initiative(&self) -> Option<u8> {
+        self.remaining
+            .iter()
+            .map(Activation::initiative_value)
+            .min()
+    }
 }
 
 // #[derive(Resource)]
@@ -82,6 +121,8 @@ pub struct Activations {
 #[derive(Bundle)]
 pub struct ActorBundle {
     pub actor: Actor,
+    pub team: Team,
+    pub play_controlled: PlayerControlled,
     pub map_pos: MapPos,
     pub visual: Visual,
     pub activations: Activations,
@@ -93,9 +134,11 @@ pub struct ActorBundle {
 }
 
 impl ActorBundle {
-    pub fn new(map_pos: MapPos, visual: Visual) -> Self {
+    pub fn new(team: Team, is_pc: bool, map_pos: MapPos, visual: Visual) -> Self {
         Self {
             actor: Actor::new(),
+            team,
+            play_controlled: PlayerControlled(is_pc),
             map_pos,
             visual,
             activations: Activations {
@@ -118,13 +161,17 @@ pub struct AiActorBundle {
 }
 
 #[derive(Debug, Event)]
-pub struct ActionSelectedEvent(Action);
+pub struct ActionSelectedEvent(pub Action);
+
+#[derive(Debug, Event)]
+pub struct ActivateActor(pub Entity);
 
 #[derive(Debug, Event)]
 pub struct MoveToCommand(ActorId, Vec<MapPos>);
 
 #[derive(Debug, Clone)]
 pub enum Action {
+    NoOp,
     MoveAlong {
         actor_id: ActorId,
         path: Vec<MapPos>,
@@ -163,7 +210,13 @@ pub fn handle_action_selected_event(trigger: Trigger<ActionSelectedEvent>, mut c
         Action::MoveAlong { actor_id, path } => {
             commands.trigger(MoveToCommand(*actor_id, path.clone()));
         }
+
+        Action::NoOp => {
+            // Just do nothing
+        }
     }
+
+    commands.remove_resource::<WaitForUser>();
 }
 
 pub fn handle_move_to_command(

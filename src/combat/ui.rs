@@ -4,6 +4,7 @@ use crate::style::WINDOW_BACKGROUND;
 
 use super::{
     actor::Action,
+    flow::{Turn, TurnPhase},
     map::{HexMap, MapPos},
     OnCombatState, ScrollBounds, Visual,
 };
@@ -187,6 +188,9 @@ pub fn handle_select_map_pos(
 #[derive(Debug, Resource)]
 pub struct WaitUntil(Timer);
 
+#[derive(Debug, Resource)]
+pub struct WaitForUser();
+
 pub fn update_waiting_state(
     mut commands: Commands,
     time: Res<Time>,
@@ -228,5 +232,51 @@ pub fn update_available_playeractions(
                 ));
             }
         }
+
+        _ => {}
     }
+}
+
+#[derive(Component)]
+pub struct TurnInfo;
+
+pub fn setup_turn_info(mut commands: Commands) {
+    commands
+        .spawn((
+            NodeBundle {
+                background_color: WINDOW_BACKGROUND.into(),
+                style: Style {
+                    position_type: PositionType::Absolute,
+                    top: Val::Px(20.0),
+                    left: Val::Px(20.0),
+                    width: Val::Px(200.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            OnCombatState,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                TextBundle::from_section(
+                    "Turn: -",
+                    TextStyle {
+                        color: Color::BLACK,
+                        font_size: 12.0,
+                        ..Default::default()
+                    },
+                ),
+                TurnInfo,
+            ));
+        });
+}
+
+pub fn update_turn_info(turn: Res<Turn>, mut turn_info_q: Query<Mut<Text>, With<TurnInfo>>) {
+    let mut text = turn_info_q.single_mut();
+    let phase = match turn.turn_phase {
+        TurnPhase::StartTurn => "Beginning new turn",
+        TurnPhase::BoostActivations => "Boosting activations",
+        TurnPhase::PerformActions => "Performing actions",
+    };
+    text.sections[0].value = format!("Turn: {} - {}", turn.turn_number, phase);
 }
