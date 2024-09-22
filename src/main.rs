@@ -1,3 +1,4 @@
+mod animations;
 mod assets;
 mod combat;
 mod start;
@@ -18,6 +19,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             assets::assets_plugin,
+            animations::animation_plugin,
             start::start_plugin,
             combat::combat_plugin,
         ))

@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 
+use crate::animations::{MovementAnimation, MovementModification};
+
 use super::{
-    animation::{MovementAnimation, MovementModification},
     cards::{Card, Deck},
     map::{HexMap, MapPos, Obstacle},
     ui::{MapPosSelectedEvent, PlayerActions, WaitForUser},

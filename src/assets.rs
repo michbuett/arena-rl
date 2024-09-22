@@ -1,16 +1,18 @@
+use crate::{animations::SpriteAnimation, GameState};
 use bevy::{
     asset::{io::Reader, ron, AssetLoader, AsyncReadExt, LoadContext, LoadedFolder},
+    ecs::system::EntityCommands,
     prelude::*,
     reflect::TypePath,
     utils::HashMap,
 };
-
-use std::marker::PhantomData;
-use thiserror::Error;
-
+use rand::{
+    distributions::uniform::{SampleRange, SampleUniform},
+    prelude::*,
+};
 use serde::Deserialize;
-
-use crate::GameState;
+use std::{marker::PhantomData, time::Duration};
+use thiserror::Error;
 
 /// An generic asset loader for data stored in RON files
 pub struct DataAssetLoader<T> {
@@ -93,11 +95,17 @@ struct CombatSpritesFolder(Handle<LoadedFolder>);
 pub fn assets_plugin(app: &mut App) {
     app.init_asset::<RawSpriteConfig>()
         .register_asset_loader(DataAssetLoader::<RawSpriteConfig> { _t: PhantomData })
-        .add_systems(OnEnter(GameState::Start), load_combat_sprites)
-        .add_systems(Update, check_textures.run_if(in_state(GameState::Start)));
+        .add_systems(OnEnter(GameState::Start), load_sprites)
+        .add_systems(
+            Update,
+            (
+                check_textures.run_if(in_state(GameState::Start)),
+                update_sprites_from_visuals.run_if(resource_exists::<SpriteConfigMap>),
+            ),
+        );
 }
 
-fn load_combat_sprites(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn load_sprites(mut commands: Commands, asset_server: Res<AssetServer>) {
     // load multiple, individual sprites from a folder
     commands.insert_resource(CombatSpritesFolder(
         asset_server.load_folder("images/combat"),
@@ -213,4 +221,130 @@ fn create_texture_atlas(
         texture: atlas_texture_handle,
         map: sprite_configs,
     }
+}
+
+#[derive(Component)]
+pub enum Visual {
+    Single(String),
+    Multi(Vec<String>),
+}
+
+fn update_sprites_from_visuals(
+    mut commands: Commands,
+    sprite_cfg_map: Res<SpriteConfigMap>,
+    layouts: Res<Assets<TextureAtlasLayout>>,
+    visual_q: Query<(Entity, &Visual, &Transform), Changed<Visual>>,
+) {
+    if visual_q.is_empty() {
+        return;
+    }
+
+    let Some(layout) = layouts.get(sprite_cfg_map.layout.id()) else {
+        panic!("Could not find layout in assets for sprite map")
+    };
+
+    for (entity, visual, transform) in visual_q.iter() {
+        let mut entity_commands = commands.entity(entity);
+
+        entity_commands.clear_children();
+
+        match visual {
+            Visual::Single(v) => {
+                insert_sprite(
+                    entity_commands,
+                    &sprite_cfg_map,
+                    layout,
+                    v,
+                    transform.translation,
+                );
+            }
+
+            Visual::Multi(visuals) => {
+                for (idx, v) in visuals.iter().enumerate() {
+                    entity_commands.with_children(|parent| {
+                        let c = parent.spawn_empty();
+                        insert_sprite(c, &sprite_cfg_map, layout, v, Vec3::ZERO.with_y(idx as f32));
+                    });
+                }
+            }
+        }
+    }
+}
+
+fn insert_sprite(
+    mut commands: EntityCommands,
+    sprite_cfg_map: &Res<SpriteConfigMap>,
+    layout: &TextureAtlasLayout,
+    visual: &str,
+    translation: Vec3,
+) {
+    match sprite_cfg_map.map.get(visual) {
+        Some(SpriteConfig::Single {
+            image_id,
+            offset: (dx, dy),
+        }) => {
+            let index = layout.get_texture_index(*image_id).unwrap_or(0);
+
+            commands.insert((
+                SpriteBundle {
+                    texture: sprite_cfg_map.texture.clone(),
+                    transform: Transform::from_translation(translation + Vec3::new(*dx, *dy, 0.0)),
+                    ..Default::default()
+                },
+                TextureAtlas {
+                    layout: sprite_cfg_map.layout.clone(),
+                    index,
+                },
+            ));
+        }
+
+        Some(SpriteConfig::Animated {
+            image_ids,
+            offset: (dx, dy),
+            frame_duration,
+        }) => {
+            let indices = image_ids
+                .iter()
+                .map(|image_id| layout.get_texture_index(*image_id).unwrap_or(0))
+                .collect::<Vec<_>>();
+
+            let current_idx: usize = rand_between(0..indices.len());
+            let mut timer = Timer::new(
+                Duration::from_millis(*frame_duration as u64),
+                TimerMode::Repeating,
+            );
+
+            timer.tick(Duration::from_millis(
+                rand_between(0..*frame_duration) as u64
+            ));
+
+            commands.insert((
+                SpriteBundle {
+                    texture: sprite_cfg_map.texture.clone(),
+                    transform: Transform::from_translation(translation + Vec3::new(*dx, *dy, 0.0)),
+                    ..Default::default()
+                },
+                TextureAtlas {
+                    layout: sprite_cfg_map.layout.clone(),
+                    index: *indices.first().unwrap(),
+                },
+                SpriteAnimation {
+                    indices,
+                    current_idx,
+                    timer,
+                },
+            ));
+        }
+
+        _ => {}
+    }
+}
+
+fn rand_between<R, T>(r: R) -> T
+where
+    T: SampleUniform,
+    R: SampleRange<T>,
+{
+    let mut rng = thread_rng();
+    rng.gen_range(r)
 }

@@ -14,6 +14,8 @@ rand = "0.8"
 debug = 0
 strip = "debuginfo"
 opt-level = 1
+split-debuginfo = "unpacked"
+
 
 # Enable high optimizations for dependencies (incl. Bevy), but not for our code:
 [profile.dev.package."*"]

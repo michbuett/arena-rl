@@ -1,8 +1,35 @@
+use bevy::prelude::*;
 use std::time::Duration;
 
-use bevy::{prelude::*, reflect::List};
+pub fn animation_plugin(app: &mut App) {
+    app.add_systems(Update, (update_sprite_animation, update_movement_animation));
+}
 
-use super::map::MapPos;
+#[derive(Debug, Component)]
+pub struct SpriteAnimation {
+    pub indices: Vec<usize>,
+    pub current_idx: usize,
+    pub timer: Timer,
+}
+
+fn update_sprite_animation(
+    mut animations: Query<(&mut TextureAtlas, &mut SpriteAnimation)>,
+    time: Res<Time>,
+) {
+    for (mut atlas, mut anim) in animations.iter_mut() {
+        anim.timer.tick(time.delta());
+
+        if anim.timer.finished() {
+            if anim.current_idx < anim.indices.len() - 1 {
+                anim.current_idx += 1;
+            } else {
+                anim.current_idx = 0;
+            }
+
+            atlas.index = anim.indices[anim.current_idx];
+        }
+    }
+}
 
 #[derive(Component, Debug, Clone)]
 pub struct MovementAnimation {
@@ -36,7 +63,7 @@ pub enum MovementModification {
     ParabolaJump(u32),
 }
 
-pub fn update_movement_animation(
+fn update_movement_animation(
     mut commands: Commands,
     time: Res<Time>,
     mut query: Query<(Entity, Mut<MovementAnimation>, Mut<Transform>)>,

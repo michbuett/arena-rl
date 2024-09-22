@@ -1,30 +1,18 @@
 mod actor;
-mod animation;
 mod cards;
 mod flow;
 mod map;
 mod ui;
 
-use std::time::Duration;
+use bevy::prelude::*;
 
-use bevy::{ecs::system::EntityCommands, prelude::*};
-
-use rand::{
-    distributions::uniform::{SampleRange, SampleUniform},
-    prelude::*,
-};
-
-use crate::{
-    assets::{SpriteConfig, SpriteConfigMap},
-    despawn_screen, GameState,
-};
+use crate::{assets::Visual, despawn_screen, GameState};
 
 use self::{
     actor::{
         handle_action_selected_event, handle_move_to_command, ActionSelectedEvent, ActivateActor,
         ActorBundle, AiBehaviour, MoveToCommand, Team, TeamBundle,
     },
-    animation::update_movement_animation,
     flow::{handle_activate_actor, setup_combat_flow, update_combat_flow, CombatFlowEvent, Turn},
     map::{update_obstacles_in_map, HexMap, MapPos},
     ui::{
@@ -71,9 +59,6 @@ pub fn combat_plugin(app: &mut App) {
                 update_obstacles_in_map,
                 update_waiting_state,
                 update_combat_flow.run_if(not_waiting),
-                update_movement_animation,
-                update_sprites_from_visuals,
-                update_sprite_animation,
             )
                 .run_if(in_state(GameState::Combat)),
         )
@@ -147,158 +132,6 @@ fn setup_actors(mut commands: Commands) {
         ),
         AiBehaviour::Zombi,
     ));
-}
-
-#[derive(Debug, Component)]
-struct SpriteAnimation {
-    indices: Vec<usize>,
-    current_idx: usize,
-    timer: Timer,
-}
-
-fn update_sprite_animation(
-    mut animations: Query<(&mut TextureAtlas, &mut SpriteAnimation)>,
-    time: Res<Time>,
-) {
-    for (mut atlas, mut anim) in animations.iter_mut() {
-        anim.timer.tick(time.delta());
-
-        if anim.timer.finished() {
-            if anim.current_idx < anim.indices.len() - 1 {
-                anim.current_idx += 1;
-            } else {
-                anim.current_idx = 0;
-            }
-
-            atlas.index = anim.indices[anim.current_idx];
-        }
-    }
-}
-
-fn rand_between<R, T>(r: R) -> T
-where
-    T: SampleUniform,
-    R: SampleRange<T>,
-{
-    let mut rng = thread_rng();
-    rng.gen_range(r)
-}
-
-#[derive(Component)]
-pub enum Visual {
-    Single(String),
-    Multi(Vec<String>),
-}
-
-fn update_sprites_from_visuals(
-    mut commands: Commands,
-    sprite_cfg_map: Res<SpriteConfigMap>,
-    layouts: Res<Assets<TextureAtlasLayout>>,
-    visual_q: Query<(Entity, &Visual, &Transform), Changed<Visual>>,
-) {
-    if visual_q.is_empty() {
-        return;
-    }
-
-    let Some(layout) = layouts.get(sprite_cfg_map.layout.id()) else {
-        panic!("Could not find layout in assets for sprite map")
-    };
-
-    for (entity, visual, transform) in visual_q.iter() {
-        let mut entity_commands = commands.entity(entity);
-
-        entity_commands.clear_children();
-
-        match visual {
-            Visual::Single(v) => {
-                insert_sprite(
-                    entity_commands,
-                    &sprite_cfg_map,
-                    layout,
-                    v,
-                    transform.translation,
-                );
-            }
-
-            Visual::Multi(visuals) => {
-                for (idx, v) in visuals.iter().enumerate() {
-                    entity_commands.with_children(|parent| {
-                        let c = parent.spawn_empty();
-                        insert_sprite(c, &sprite_cfg_map, layout, v, Vec3::ZERO.with_y(idx as f32));
-                    });
-                }
-            }
-        }
-    }
-}
-
-fn insert_sprite(
-    mut commands: EntityCommands,
-    sprite_cfg_map: &Res<SpriteConfigMap>,
-    layout: &TextureAtlasLayout,
-    visual: &str,
-    translation: Vec3,
-) {
-    match sprite_cfg_map.map.get(visual) {
-        Some(SpriteConfig::Single {
-            image_id,
-            offset: (dx, dy),
-        }) => {
-            let index = layout.get_texture_index(*image_id).unwrap_or(0);
-
-            commands.insert((
-                SpriteBundle {
-                    texture: sprite_cfg_map.texture.clone(),
-                    transform: Transform::from_translation(translation + Vec3::new(*dx, *dy, 0.0)),
-                    ..Default::default()
-                },
-                TextureAtlas {
-                    layout: sprite_cfg_map.layout.clone(),
-                    index,
-                },
-            ));
-        }
-
-        Some(SpriteConfig::Animated {
-            image_ids,
-            offset: (dx, dy),
-            frame_duration,
-        }) => {
-            let indices = image_ids
-                .iter()
-                .map(|image_id| layout.get_texture_index(*image_id).unwrap_or(0))
-                .collect::<Vec<_>>();
-
-            let current_idx: usize = rand_between(0..indices.len());
-            let mut timer = Timer::new(
-                Duration::from_millis(*frame_duration as u64),
-                TimerMode::Repeating,
-            );
-
-            timer.tick(Duration::from_millis(
-                rand_between(0..*frame_duration) as u64
-            ));
-
-            commands.insert((
-                SpriteBundle {
-                    texture: sprite_cfg_map.texture.clone(),
-                    transform: Transform::from_translation(translation + Vec3::new(*dx, *dy, 0.0)),
-                    ..Default::default()
-                },
-                TextureAtlas {
-                    layout: sprite_cfg_map.layout.clone(),
-                    index: *indices.first().unwrap(),
-                },
-                SpriteAnimation {
-                    indices,
-                    current_idx,
-                    timer,
-                },
-            ));
-        }
-
-        _ => {}
-    }
 }
 
 fn not_waiting(
