@@ -201,16 +201,16 @@
         )),
 
     // === BEGIN SECTION team backgrounds ================================
-    ("bg_team_1", ProtoSpriteConfig(
-            files: ["chars/backgrounds/team-1.png"],
-        )),
-    ("bg_team_2", ProtoSpriteConfig(
-            files: ["chars/backgrounds/team-2.png"],
-        )),
-    ("bg_active", ProtoSpriteConfig(
-            files: ["chars/backgrounds/active_1.png", "chars/backgrounds/active_2.png", "chars/backgrounds/active_3.png"],
-            frame_durration: Some(100),
-        )),
+    // ("bg_team_1", ProtoSpriteConfig(
+    //         files: ["chars/backgrounds/team-1.png"],
+    //     )),
+    // ("bg_team_2", ProtoSpriteConfig(
+    //         files: ["chars/backgrounds/team-2.png"],
+    //     )),
+    // ("bg_active", ProtoSpriteConfig(
+    //         files: ["chars/backgrounds/active_1.png", "chars/backgrounds/active_2.png", "chars/backgrounds/active_3.png"],
+    //         frame_durration: Some(100),
+    //     )),
 
     // === BEGIN SECTION floor backgrounds ================================
     ("floor", ProtoSpriteConfig(
@@ -232,6 +232,59 @@
         )),
 
     // === BEGIN SECTION icons ================================
+    ("icon-ai-ma-A", ProtoSpriteConfig( files: ["ui/cards/cards-small-1.png"])),
+    ("icon-ai-ms-A", ProtoSpriteConfig( files: ["ui/cards/cards-small-2.png"])),
+    ("icon-ai-pa-A", ProtoSpriteConfig( files: ["ui/cards/cards-small-3.png"])),
+    ("icon-ai-ps-A", ProtoSpriteConfig( files: ["ui/cards/cards-small-4.png"])),
+    ("icon-ai-ma-2", ProtoSpriteConfig( files: ["ui/cards/cards-small-5.png"])),
+    ("icon-ai-ms-2", ProtoSpriteConfig( files: ["ui/cards/cards-small-6.png"])),
+    ("icon-ai-pa-2", ProtoSpriteConfig( files: ["ui/cards/cards-small-7.png"])),
+    ("icon-ai-ps-2", ProtoSpriteConfig( files: ["ui/cards/cards-small-8.png"])),
+    ("icon-ai-ma-3", ProtoSpriteConfig( files: ["ui/cards/cards-small-9.png"])),
+    ("icon-ai-ms-3", ProtoSpriteConfig( files: ["ui/cards/cards-small-10.png"])),
+    ("icon-ai-pa-3", ProtoSpriteConfig( files: ["ui/cards/cards-small-11.png"])),
+    ("icon-ai-ps-3", ProtoSpriteConfig( files: ["ui/cards/cards-small-12.png"])),
+    ("icon-ai-ma-4", ProtoSpriteConfig( files: ["ui/cards/cards-small-13.png"])),
+    ("icon-ai-ms-4", ProtoSpriteConfig( files: ["ui/cards/cards-small-14.png"])),
+    ("icon-ai-pa-4", ProtoSpriteConfig( files: ["ui/cards/cards-small-15.png"])),
+    ("icon-ai-ps-4", ProtoSpriteConfig( files: ["ui/cards/cards-small-16.png"])),
+    ("icon-ai-ma-5", ProtoSpriteConfig( files: ["ui/cards/cards-small-17.png"])),
+    ("icon-ai-ms-5", ProtoSpriteConfig( files: ["ui/cards/cards-small-18.png"])),
+    ("icon-ai-pa-5", ProtoSpriteConfig( files: ["ui/cards/cards-small-19.png"])),
+    ("icon-ai-ps-5", ProtoSpriteConfig( files: ["ui/cards/cards-small-20.png"])),
+    ("icon-ai-ma-6", ProtoSpriteConfig( files: ["ui/cards/cards-small-21.png"])),
+    ("icon-ai-ms-6", ProtoSpriteConfig( files: ["ui/cards/cards-small-22.png"])),
+    ("icon-ai-pa-6", ProtoSpriteConfig( files: ["ui/cards/cards-small-23.png"])),
+    ("icon-ai-ps-6", ProtoSpriteConfig( files: ["ui/cards/cards-small-24.png"])),
+    ("icon-ai-ma-7", ProtoSpriteConfig( files: ["ui/cards/cards-small-25.png"])),
+    ("icon-ai-ms-7", ProtoSpriteConfig( files: ["ui/cards/cards-small-26.png"])),
+    ("icon-ai-pa-7", ProtoSpriteConfig( files: ["ui/cards/cards-small-27.png"])),
+    ("icon-ai-ps-7", ProtoSpriteConfig( files: ["ui/cards/cards-small-28.png"])),
+    ("icon-ai-ma-8", ProtoSpriteConfig( files: ["ui/cards/cards-small-29.png"])),
+    ("icon-ai-ms-8", ProtoSpriteConfig( files: ["ui/cards/cards-small-30.png"])),
+    ("icon-ai-pa-8", ProtoSpriteConfig( files: ["ui/cards/cards-small-31.png"])),
+    ("icon-ai-ps-8", ProtoSpriteConfig( files: ["ui/cards/cards-small-32.png"])),
+    ("icon-ai-ma-9", ProtoSpriteConfig( files: ["ui/cards/cards-small-33.png"])),
+    ("icon-ai-ms-9", ProtoSpriteConfig( files: ["ui/cards/cards-small-34.png"])),
+    ("icon-ai-pa-9", ProtoSpriteConfig( files: ["ui/cards/cards-small-35.png"])),
+    ("icon-ai-ps-9", ProtoSpriteConfig( files: ["ui/cards/cards-small-36.png"])),
+    ("icon-ai-ma-10", ProtoSpriteConfig( files: ["ui/cards/cards-small-37.png"])),
+    ("icon-ai-ms-10", ProtoSpriteConfig( files: ["ui/cards/cards-small-38.png"])),
+    ("icon-ai-pa-10", ProtoSpriteConfig( files: ["ui/cards/cards-small-39.png"])),
+    ("icon-ai-ps-10", ProtoSpriteConfig( files: ["ui/cards/cards-small-40.png"])),
+    ("icon-ai-ma-J", ProtoSpriteConfig( files: ["ui/cards/cards-small-41.png"])),
+    ("icon-ai-ms-J", ProtoSpriteConfig( files: ["ui/cards/cards-small-12.png"])),
+    ("icon-ai-pa-J", ProtoSpriteConfig( files: ["ui/cards/cards-small-13.png"])),
+    ("icon-ai-ps-J", ProtoSpriteConfig( files: ["ui/cards/cards-small-24.png"])),
+    ("icon-ai-ma-Q", ProtoSpriteConfig( files: ["ui/cards/cards-small-25.png"])),
+    ("icon-ai-ms-Q", ProtoSpriteConfig( files: ["ui/cards/cards-small-26.png"])),
+    ("icon-ai-pa-Q", ProtoSpriteConfig( files: ["ui/cards/cards-small-27.png"])),
+    ("icon-ai-ps-Q", ProtoSpriteConfig( files: ["ui/cards/cards-small-28.png"])),
+    ("icon-ai-ma-K", ProtoSpriteConfig( files: ["ui/cards/cards-small-29.png"])),
+    ("icon-ai-ms-K", ProtoSpriteConfig( files: ["ui/cards/cards-small-50.png"])),
+    ("icon-ai-pa-K", ProtoSpriteConfig( files: ["ui/cards/cards-small-51.png"])),
+    ("icon-ai-ps-K", ProtoSpriteConfig( files: ["ui/cards/cards-small-52.png"])),
+    
     ("icon-action-Done", ProtoSpriteConfig(
             files: ["ui/action/done.png"],
             offset: Some((32, 16)),

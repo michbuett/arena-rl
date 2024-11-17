@@ -10,14 +10,16 @@ use crate::{assets::Visual, despawn_screen, GameState};
 
 use self::{
     actor::{
-        handle_action_selected_event, handle_move_to_command, ActionSelectedEvent, ActivateActor,
-        ActorBundle, AiBehaviour, MoveToCommand, Team, TeamBundle,
+        handle_action_selected_event, handle_begin_activation_command,
+        handle_end_activation_command, handle_move_to_command, ActionSelectedEvent,
+        ActivationChanged, ActorBundle, AiBehaviour, BeginActivationCommand, EndActivationCommand,
+        MoveToCommand, Team, TeamBundle,
     },
-    flow::{handle_activate_actor, setup_combat_flow, update_combat_flow, CombatFlowEvent, Turn},
+    flow::{setup_combat_flow, update_combat_flow, CombatFlowEvent, Turn},
     map::{update_obstacles_in_map, HexMap, MapPos},
     ui::{
         setup_turn_info, setup_ui, update_user_input, update_waiting_state, MapPosSelectedEvent,
-        PlayerActions, WaitForUser, WaitUntil,
+        PlayerActions, TransitionUiState, UiState,
     },
 };
 
@@ -30,12 +32,18 @@ struct ScrollBounds(Rect);
 pub fn combat_plugin(app: &mut App) {
     app.add_event::<MapPosSelectedEvent>()
         .add_event::<ActionSelectedEvent>()
-        .add_event::<ActivateActor>()
+        .add_event::<BeginActivationCommand>()
+        .add_event::<EndActivationCommand>()
         .add_event::<MoveToCommand>()
         .add_event::<CombatFlowEvent>()
+        .add_event::<ActivationChanged>()
+        .add_event::<TransitionUiState>()
         .observe(handle_action_selected_event)
+        .observe(handle_begin_activation_command)
+        .observe(handle_end_activation_command)
         .observe(handle_move_to_command)
-        .observe(handle_activate_actor)
+        .observe(ui::update_description_on_activation_changed)
+        .observe(ui::update_ui_on_state_change)
         .add_systems(
             OnEnter(GameState::Combat),
             (
@@ -56,9 +64,10 @@ pub fn combat_plugin(app: &mut App) {
                 ui::update_available_playeractions
                     .run_if(resource_exists_and_changed::<PlayerActions>),
                 ui::update_turn_info.run_if(resource_exists_and_changed::<Turn>),
+                actor::check_actor_changes,
                 update_obstacles_in_map,
                 update_waiting_state,
-                update_combat_flow.run_if(not_waiting),
+                update_combat_flow.run_if(progress_game),
             )
                 .run_if(in_state(GameState::Combat)),
         )
@@ -70,7 +79,8 @@ fn setup_map(mut commands: Commands) {
 
     for (hex_pos, _tile_type) in map.tiles() {
         commands.spawn((
-            SpriteBundle {
+            Name::from(format!("Tile_{:?}", hex_pos)),
+            SpatialBundle {
                 transform: Transform::from_translation(hex_pos.into_vec3()),
                 ..Default::default()
             },
@@ -103,6 +113,7 @@ fn setup_actors(mut commands: Commands) {
     let cpu_team = Team(commands.spawn(TeamBundle::new("CPU", false)).id());
 
     commands.spawn(ActorBundle::new(
+        Name::new("Player"),
         player_team,
         true,
         MapPos::from_oddr(5, 5),
@@ -115,6 +126,7 @@ fn setup_actors(mut commands: Commands) {
 
     commands.spawn((
         ActorBundle::new(
+            Name::new("Sucker #1"),
             cpu_team,
             false,
             MapPos::from_oddr(2, 2),
@@ -125,6 +137,7 @@ fn setup_actors(mut commands: Commands) {
 
     commands.spawn((
         ActorBundle::new(
+            Name::new("Sucker #2"),
             cpu_team,
             false,
             MapPos::from_oddr(8, 2),
@@ -134,9 +147,11 @@ fn setup_actors(mut commands: Commands) {
     ));
 }
 
-fn not_waiting(
-    wait_until: Option<Res<WaitUntil>>,
-    wait_for_user: Option<Res<WaitForUser>>,
-) -> bool {
-    wait_for_user.is_none() && wait_until.is_none()
+fn progress_game(ui_state: Option<Res<UiState>>) -> bool {
+    ui_state
+        .map(|ui_state| match ui_state.as_ref() {
+            UiState::Processing => true,
+            _ => false,
+        })
+        .unwrap_or(false)
 }

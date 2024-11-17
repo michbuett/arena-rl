@@ -45,7 +45,6 @@ where
         _settings: &'a (),
         _load_context: &'a mut LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
-        // ) -> BoxedFuture<'a, Result<Self::Asset, Self::Error>> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
         let custom_asset = ron::de::from_bytes::<T>(&bytes)?;
@@ -64,7 +63,7 @@ pub struct RawSpriteConfig(Vec<(String, ProtoSpriteConfig)>);
 pub struct ProtoSpriteConfig {
     pub files: Vec<String>,
     pub offset: Option<(i32, i32)>,
-    pub alpha: Option<u8>,
+    // pub alpha: Option<u8>,
     pub frame_durration: Option<u32>,
 }
 
@@ -158,27 +157,34 @@ fn create_texture_atlas(
 
             if proto_sprite_cfg.files.len() == 1 {
                 let file_name = proto_sprite_cfg.files.first().unwrap();
-                if let Some(handle) =
+                let Some(handle) =
                     asset_server.get_handle::<Image>(format!("images/combat/{}", file_name))
-                {
-                    let Some(texture) = textures.get(handle.id()) else {
-                        warn!(
-                            "{:?} did not resolve to an `Image` asset.",
-                            handle.path().unwrap()
-                        );
-                        continue;
-                    };
-
-                    texture_atlas_builder.add_texture(Some(handle.id()), texture);
-
-                    sprite_configs.insert(
-                        key.clone(),
-                        SpriteConfig::Single {
-                            image_id: handle.id(),
-                            offset,
-                        },
+                else {
+                    warn!(
+                        "Cannot find handle for path \"{}\". (sprite_key=\"{}\")",
+                        file_name, key,
                     );
-                }
+                    continue;
+                };
+
+                let Some(texture) = textures.get(handle.id()) else {
+                    warn!(
+                        "{:?} did not resolve to an `Image` asset. (sprite_key=\"{}\")",
+                        handle.path().unwrap(),
+                        key,
+                    );
+                    continue;
+                };
+
+                texture_atlas_builder.add_texture(Some(handle.id()), texture);
+
+                sprite_configs.insert(
+                    key.clone(),
+                    SpriteConfig::Single {
+                        image_id: handle.id(),
+                        offset,
+                    },
+                );
             } else {
                 let image_ids = proto_sprite_cfg
                     .files
@@ -210,9 +216,6 @@ fn create_texture_atlas(
     }
 
     let (texture_atlas_layout, texture) = texture_atlas_builder.build().unwrap();
-
-    // texture.sampler = ImageSampler::nearest();
-
     let atlas_layout_handle = atlas_layouts.add(texture_atlas_layout);
     let atlas_texture_handle = textures.add(texture);
 
@@ -229,11 +232,15 @@ pub enum Visual {
     Multi(Vec<String>),
 }
 
+#[derive(Component)]
+pub struct SpriteContainer;
+
 fn update_sprites_from_visuals(
     mut commands: Commands,
     sprite_cfg_map: Res<SpriteConfigMap>,
     layouts: Res<Assets<TextureAtlasLayout>>,
-    visual_q: Query<(Entity, &Visual, &Transform), Changed<Visual>>,
+    visual_q: Query<(Entity, &Visual), Changed<Visual>>,
+    sprite_container_q: Query<(&Parent, Entity, &SpriteContainer)>,
 ) {
     if visual_q.is_empty() {
         return;
@@ -243,27 +250,34 @@ fn update_sprites_from_visuals(
         panic!("Could not find layout in assets for sprite map")
     };
 
-    for (entity, visual, transform) in visual_q.iter() {
-        let mut entity_commands = commands.entity(entity);
+    for (entity, visual) in visual_q.iter() {
+        // clear "old" sprites
+        for (parent, child_entity, _) in sprite_container_q.iter() {
+            if parent.get() == entity {
+                commands.entity(child_entity).despawn_recursive();
+            }
+        }
 
-        entity_commands.clear_children();
+        // the container entity exists to help removeing all changed visuals
+        let mut container_entity_cmd = commands.spawn((
+            Name::new("SpriteContainer"),
+            SpatialBundle {
+                ..Default::default()
+            },
+            SpriteContainer,
+        ));
+        container_entity_cmd.set_parent(entity);
 
         match visual {
             Visual::Single(v) => {
-                insert_sprite(
-                    entity_commands,
-                    &sprite_cfg_map,
-                    layout,
-                    v,
-                    transform.translation,
-                );
+                insert_sprite(container_entity_cmd, &sprite_cfg_map, layout, v, 0.0);
             }
 
             Visual::Multi(visuals) => {
                 for (idx, v) in visuals.iter().enumerate() {
-                    entity_commands.with_children(|parent| {
+                    container_entity_cmd.with_children(|parent| {
                         let c = parent.spawn_empty();
-                        insert_sprite(c, &sprite_cfg_map, layout, v, Vec3::ZERO.with_y(idx as f32));
+                        insert_sprite(c, &sprite_cfg_map, layout, v, idx as f32);
                     });
                 }
             }
@@ -276,7 +290,7 @@ fn insert_sprite(
     sprite_cfg_map: &Res<SpriteConfigMap>,
     layout: &TextureAtlasLayout,
     visual: &str,
-    translation: Vec3,
+    zlayer: f32,
 ) {
     match sprite_cfg_map.map.get(visual) {
         Some(SpriteConfig::Single {
@@ -288,7 +302,7 @@ fn insert_sprite(
             commands.insert((
                 SpriteBundle {
                     texture: sprite_cfg_map.texture.clone(),
-                    transform: Transform::from_translation(translation + Vec3::new(*dx, *dy, 0.0)),
+                    transform: Transform::from_translation(Vec3::new(*dx, *dy, zlayer)),
                     ..Default::default()
                 },
                 TextureAtlas {
@@ -321,7 +335,7 @@ fn insert_sprite(
             commands.insert((
                 SpriteBundle {
                     texture: sprite_cfg_map.texture.clone(),
-                    transform: Transform::from_translation(translation + Vec3::new(*dx, *dy, 0.0)),
+                    transform: Transform::from_translation(Vec3::new(*dx, *dy, zlayer)),
                     ..Default::default()
                 },
                 TextureAtlas {
@@ -336,7 +350,9 @@ fn insert_sprite(
             ));
         }
 
-        _ => {}
+        None => {
+            warn!("Unknown visual '{}'", visual);
+        }
     }
 }
 

@@ -1,9 +1,12 @@
+use std::time::Duration;
+
 use bevy::{input::mouse::MouseMotion, prelude::*, window::PrimaryWindow};
 
-use crate::style::WINDOW_BACKGROUND;
+use crate::{combat::cards::Suite, style::WINDOW_BACKGROUND};
 
 use super::{
-    actor::Action,
+    actor::{Action, Activation, ActivationChanged, Activations, Actor},
+    cards::Card,
     flow::{Turn, TurnPhase},
     map::{HexMap, MapPos},
     OnCombatState, ScrollBounds, Visual,
@@ -59,48 +62,13 @@ impl PlayerActions {
 #[derive(Debug, Event)]
 pub struct MapPosSelectedEvent(pub MapPos);
 
+#[derive(Component)]
+pub struct UiElement;
+
 pub fn setup_ui(mut commands: Commands) {
-    commands
-        .spawn((
-            NodeBundle {
-                background_color: WINDOW_BACKGROUND.into(),
-                style: Style {
-                    position_type: PositionType::Absolute,
-                    top: Val::Px(20.0),
-                    right: Val::Px(20.0),
-                    width: Val::Px(200.0),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            OnCombatState,
-        ))
-        .with_children(|parent| {
-            parent.spawn((
-                TextBundle::from_section(
-                    "Test",
-                    TextStyle {
-                        color: Color::BLACK,
-                        font_size: 12.0,
-                        ..Default::default()
-                    },
-                ),
-                DetailsWindowText,
-            ));
-        });
-
-    commands.spawn((
-        SpriteBundle {
-            visibility: Visibility::Hidden,
-            ..Default::default()
-        },
-        Visual::Single("floor-selected".to_string()),
-        SelectedTile,
-        OnCombatState,
-    ));
-
     commands.insert_resource(ScrollState(false));
     commands.insert_resource(PlayerActions::empty());
+    commands.insert_resource(UiState::prossing());
 }
 
 pub fn update_user_input(
@@ -109,6 +77,7 @@ pub fn update_user_input(
     dim: Res<ScrollBounds>,
     window_query: Query<&Window, With<PrimaryWindow>>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
+    ui_state: Res<UiState>,
     mut mouse_motion_evr: EventReader<MouseMotion>,
     mut camera_transform_query: Query<&mut Transform, With<Camera>>,
     mut map_pos_selected_ew: EventWriter<MapPosSelectedEvent>,
@@ -141,6 +110,12 @@ pub fn update_user_input(
             // => .. than reset the scroll state until next time
             scroll_state.0 = false;
         } else {
+            if !ui_state.is_awaiting_input() {
+                // there is other stuff going on
+                // => just ignore user other input then scrolling
+                return;
+            }
+
             if let Some(mouse_pos) = window_query.single().cursor_position() {
                 let (camera, camera_global_transform) = camera_query.single();
                 if let Some(wp) = camera.viewport_to_world_2d(camera_global_transform, mouse_pos) {
@@ -164,6 +139,7 @@ fn move_camera(camera_transform: &mut Transform, dx: f32, dy: f32, scroll_bounds
 
 pub fn handle_select_map_pos(
     map: Res<HexMap>,
+    description_q: Query<(&MapPos, &Description)>,
     mut user_input_evr: EventReader<MapPosSelectedEvent>,
     mut details_window_text: Query<&mut Text, With<DetailsWindowText>>,
     mut selected_tile_q: Query<(&mut Transform, &mut Visibility), With<SelectedTile>>,
@@ -172,35 +148,84 @@ pub fn handle_select_map_pos(
         return;
     };
 
-    let mut txt = details_window_text.single_mut();
-    let (mut selected_tile_transform, mut selected_tile_visibility) = selected_tile_q.single_mut();
+    let details_window = details_window_text.get_single_mut();
+    let selected_tile = selected_tile_q.get_single_mut();
 
-    if let Some((pos, ..)) = map.find_tile(hex) {
-        txt.sections[0].value = format!("You look at {:?}, there is nothing", pos);
-        selected_tile_transform.translation = hex.into_vec3().with_z(1.0);
-        *selected_tile_visibility = Visibility::Inherited;
-    } else {
-        txt.sections[0].value = "No tile selected".to_string();
-        *selected_tile_visibility = Visibility::Hidden;
+    match (details_window, selected_tile) {
+        (Ok(mut txt), Ok((mut selected_tile_transform, mut selected_tile_visibility))) => {
+            if let Some((pos, ..)) = map.find_tile(hex) {
+                if let Some(descr) = find_descr_at(&pos, &description_q) {
+                    txt.sections[0].value =
+                        format!("You look at {:?}, you see...\n{}", pos, descr.as_str());
+                } else {
+                    txt.sections[0].value = format!("You look at {:?}, there is nothing", pos);
+                }
+                selected_tile_transform.translation = hex.into_vec3().with_z(1.0);
+                *selected_tile_visibility = Visibility::Inherited;
+            } else {
+                txt.sections[0].value = "No tile selected".to_string();
+                *selected_tile_visibility = Visibility::Hidden;
+            }
+        }
+        _ => {}
     }
 }
 
-#[derive(Debug, Resource)]
-pub struct WaitUntil(Timer);
+fn find_descr_at<'a>(
+    mpos: &MapPos,
+    description_q: &'a Query<(&MapPos, &Description)>,
+) -> Option<&'a Description> {
+    for (p, desc) in description_q {
+        if mpos == p {
+            return Some(desc);
+        }
+    }
+    None
+}
 
-#[derive(Debug, Resource)]
-pub struct WaitForUser();
+#[derive(Debug, Event)]
+pub struct TransitionUiState(pub UiState);
+
+#[derive(Debug, Clone, Resource)]
+pub enum UiState {
+    Processing,
+    Wait(Timer),
+    AwaitInput(MapPos),
+}
+
+impl UiState {
+    pub fn prossing() -> Self {
+        Self::Processing
+    }
+
+    pub fn wait(millis: u64) -> Self {
+        Self::Wait(Timer::new(Duration::from_millis(millis), TimerMode::Once))
+    }
+
+    pub fn await_input(mpos: MapPos) -> Self {
+        Self::AwaitInput(mpos)
+    }
+
+    pub fn is_awaiting_input(&self) -> bool {
+        match self {
+            Self::AwaitInput(..) => true,
+            _ => false,
+        }
+    }
+}
 
 pub fn update_waiting_state(
     mut commands: Commands,
     time: Res<Time>,
-    wait_until: Option<ResMut<WaitUntil>>,
+    // wait_until: Option<ResMut<WaitUntil>>,
+    mut ui_state: ResMut<UiState>,
 ) {
-    if let Some(mut wait_until) = wait_until {
-        wait_until.0.tick(time.delta());
+    let ui_state = ui_state.as_mut();
+    if let UiState::Wait(timer) = ui_state {
+        timer.tick(time.delta());
 
-        if wait_until.0.finished() {
-            commands.remove_resource::<WaitUntil>();
+        if timer.finished() {
+            commands.trigger(TransitionUiState(UiState::prossing()));
         }
     }
 }
@@ -211,7 +236,7 @@ pub fn update_available_playeractions(
     indicatorq: Query<(Entity, &PlayerActionIndicator)>,
 ) {
     for (e, _) in indicatorq.iter() {
-        commands.entity(e).despawn();
+        commands.entity(e).despawn_descendants();
     }
 
     let Some(selected_action) = player_actions
@@ -225,7 +250,11 @@ pub fn update_available_playeractions(
         Action::MoveAlong { path, .. } => {
             for pos in path {
                 commands.spawn((
-                    Transform::from_translation(pos.into_vec3().with_z(1.0)),
+                    Name::from("Path-Indicator"),
+                    SpatialBundle {
+                        transform: Transform::from_translation(pos.into_vec3().with_z(1.0)),
+                        ..Default::default()
+                    },
                     Visual::Single("floor-selected".to_string()),
                     PlayerActionIndicator,
                     OnCombatState,
@@ -279,4 +308,185 @@ pub fn update_turn_info(turn: Res<Turn>, mut turn_info_q: Query<Mut<Text>, With<
         TurnPhase::PerformActions => "Performing actions",
     };
     text.sections[0].value = format!("Turn: {} - {}", turn.turn_number, phase);
+}
+
+#[derive(Component)]
+pub struct Description(pub String);
+
+impl Description {
+    pub fn new(str: impl ToString) -> Self {
+        Self(str.to_string())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+pub fn update_description_on_activation_changed(
+    trigger: Trigger<ActivationChanged>,
+    mut actor_q: Query<(&Actor, &Activations, &Name, Mut<Description>)>,
+) {
+    if let Ok((_, activations, name, mut description)) = actor_q.get_mut(trigger.entity()) {
+        description.0 = describe_actor(name, activations);
+    }
+}
+
+fn describe_actor(name: &Name, activations: &Activations) -> String {
+    let active_activations_txt = if let Some(activation) = &activations.active {
+        card_descr(&activation.0)
+    } else {
+        " - ".to_string()
+    };
+
+    let remaining_activations_txt = if activations.remaining.is_empty() {
+        " - ".to_string()
+    } else {
+        activations
+            .remaining
+            .iter()
+            .map(|a| card_descr(&a.0))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
+    format!(
+        "{}\nActivations:\n - active: {}\n - remaining: {}",
+        name, active_activations_txt, remaining_activations_txt
+    )
+}
+
+fn card_descr(card: &Card) -> String {
+    let val = match card.value {
+        1 => "Ace".to_string(),
+        11 => "Jack".to_string(),
+        12 => "Queen".to_string(),
+        13 => "King".to_string(),
+        _ => format!("{}", card.value),
+    };
+
+    let suite = match card.suite {
+        Suite::PhysicalStr => "Clubs",
+        Suite::PhysicalAg => "Spades",
+        Suite::MentalStr => "Hearts",
+        Suite::MentalAg => "Diamonds",
+        _ => "(Unknown)",
+    };
+
+    format!("{} of {}", val, suite)
+}
+
+fn spawn_activation_indicators(parent: &mut ChildBuilder, card: &Card, pos: usize) {
+    let offset_x = -24.0 + 16.0 * (pos as f32);
+    let pos = Vec3::new(offset_x, -32.0, 200.0);
+
+    parent.spawn((
+        Visual::Single(card_visual_name(card)),
+        SpatialBundle {
+            transform: Transform::from_translation(pos),
+            ..Default::default()
+        },
+        UiElement,
+    ));
+}
+
+fn card_visual_name(card: &Card) -> String {
+    let suite = match card.suite {
+        Suite::PhysicalStr => "ps",
+        Suite::PhysicalAg => "pa",
+        Suite::MentalStr => "ms",
+        Suite::MentalAg => "ma",
+        _ => "?",
+    };
+
+    let value = match card.value {
+        1 => "A".to_string(),
+        11 => "J".to_string(),
+        12 => "Q".to_string(),
+        13 => "K".to_string(),
+        _ => format!("{}", card.value),
+    };
+
+    format!("icon-ai-{}-{}", suite, value)
+}
+
+pub fn update_ui_on_state_change(
+    trigger: Trigger<TransitionUiState>,
+    ui_elements_q: Query<Entity, With<UiElement>>,
+    actor_q: Query<(Entity, &Activations), With<Actor>>,
+    mut commands: Commands,
+    mut map_pos_selected_ew: EventWriter<MapPosSelectedEvent>,
+    mut ui_state: ResMut<UiState>,
+) {
+    let TransitionUiState(new_ui_state) = trigger.event();
+
+    if let UiState::AwaitInput(mpos) = new_ui_state {
+        commands
+            .spawn((
+                Name::from("DetailsWindow"),
+                NodeBundle {
+                    background_color: WINDOW_BACKGROUND.into(),
+                    style: Style {
+                        position_type: PositionType::Absolute,
+                        top: Val::Px(20.0),
+                        right: Val::Px(20.0),
+                        width: Val::Px(200.0),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                OnCombatState,
+                UiElement,
+            ))
+            .with_children(|parent| {
+                parent.spawn((
+                    TextBundle::from_section(
+                        "Test",
+                        TextStyle {
+                            color: Color::BLACK,
+                            font_size: 14.0,
+                            ..Default::default()
+                        },
+                    )
+                    .with_style(Style {
+                        margin: UiRect::all(Val::Px(10.0)),
+                        ..Default::default()
+                    }),
+                    DetailsWindowText,
+                ));
+            });
+
+        commands.spawn((
+            Name::from("SelectedTile"),
+            SpatialBundle {
+                visibility: Visibility::Hidden,
+                ..Default::default()
+            },
+            Visual::Single("floor-selected".to_string()),
+            SelectedTile,
+            OnCombatState,
+            UiElement,
+        ));
+
+        for (e, activations) in actor_q.iter() {
+            commands.entity(e).with_children(|parent| {
+                if let Some(Activation(card)) = activations.active {
+                    spawn_activation_indicators(parent, &card, 0);
+                }
+
+                for (idx, Activation(card)) in activations.remaining.iter().enumerate() {
+                    spawn_activation_indicators(parent, &card, idx + 2);
+                }
+            });
+        }
+
+        map_pos_selected_ew.send(MapPosSelectedEvent(*mpos));
+    } else {
+        if let UiState::AwaitInput(..) = ui_state.as_ref() {
+            for e in ui_elements_q.iter() {
+                commands.entity(e).despawn_recursive();
+            }
+        }
+    }
+    *ui_state.as_mut() = new_ui_state.clone();
 }

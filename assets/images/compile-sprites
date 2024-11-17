@@ -5,20 +5,9 @@ PATH_IN="assets/images/raw"
 PATH_OUT="assets/images/combat"
 PARAMS="filter Box -interpolate Integer"
 
-resize () {
-    mkdir -p "$PATH_OUT/$2"
-    mogrify -resize $1 -unsharp 0x1 +antialias -path $PATH_OUT/$2 $PATH_IN/$2/*.png
-}
-
-resize2 () {
-    mkdir -p "$PATH_OUT/$2"
-    cp $PATH_IN/$2/*.png $PATH_OUT/$2
-
-    for ((i=0; i<$1; i++)) 
-    do
-        # echo "resize $i"
-        mogrify -resize 50% -unsharp 0x1 +antialias $PATH_OUT/$2/*.png
-    done
+resize() {
+  mkdir -p "$PATH_OUT/$2"
+  mogrify -resize $1 -unsharp 0x1 +antialias -path $PATH_OUT/$2 $PATH_IN/$2/*.png
 }
 
 echo -n "cleaning target directory ..."
@@ -26,22 +15,9 @@ rm -rf $PATH_OUT/**/*.png
 rm -rf $PATH_OUT/**/.DS_Store
 echo "done"
 
-
-# mogrify -resize "64x64" -write $PATH_OUT/chars/bodies/test-no-change.png -path $PATH_OUT/chars/bodies $PATH_IN/chars/bodies/heavy-1.png
-# mogrify -resize "64x64" -adaptive-sharpen 3x0.8 -write $PATH_OUT/chars/bodies/test-1.png -path $PATH_OUT/chars/bodies $PATH_IN/chars/bodies/heavy-1.png
-# mogrify -resize "64x64" -filter Box -adaptive-sharpen 3x0.8 -write $PATH_OUT/chars/bodies/test-2.png -path $PATH_OUT/chars/bodies $PATH_IN/chars/bodies/heavy-1.png
-# mogrify -resize "64x64" -filter Box -interpolate nearest-neighbor -adaptive-sharpen 3x0.8 -write $PATH_OUT/chars/bodies/test-3.png -path $PATH_OUT/chars/bodies $PATH_IN/chars/bodies/heavy-1.png
-# mogrify -resize "64x64" -filter Box -interpolate mesh -adaptive-sharpen 3x0.8 -write $PATH_OUT/chars/bodies/test-4.png -path $PATH_OUT/chars/bodies $PATH_IN/chars/bodies/heavy-1.png
-# mogrify -resize "64x64" -filter Box -interpolate spline -adaptive-sharpen 3x0.8 -write $PATH_OUT/chars/bodies/test-5.png -path $PATH_OUT/chars/bodies $PATH_IN/chars/bodies/heavy-1.png
-# mogrify -resize "64x64" -filter Box -interpolate blend -adaptive-sharpen 3x0.8 -write $PATH_OUT/chars/bodies/test-6.png -path $PATH_OUT/chars/bodies $PATH_IN/chars/bodies/heavy-1.png
-# mogrify -interpolative-resize "64x64" -filter Box -interpolate Integer -adaptive-sharpen 3x0.8 -write $PATH_OUT/chars/bodies/test-4.png -path $PATH_OUT/chars/bodies $PATH_IN/chars/bodies/heavy-1.png
-
 echo -n "resizing sprites..."
+cp -r $PATH_IN/ui/cards $PATH_OUT/ui/
 
-# resize2 2 "chars/bodies"
-# resize2 2 "chars/equipment"
-# resize2 2 "chars/fx"
-# resize2 2 "chars/heads"
 resize "128x128" "chars/bodies"
 resize "128x128" "chars/equipment"
 resize "128x128" "chars/fx"
@@ -53,9 +29,8 @@ resize "128x128" "map"
 
 resize "100%" "ui/floor"
 
-resize "128x128"   "fx/gore"
-resize "64x64"   "fx/projectiles"
+resize "128x128" "fx/gore"
+resize "64x64" "fx/projectiles"
 resize "256x256" "fx/hit"
 
 echo "done"
-

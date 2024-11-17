@@ -1,11 +1,8 @@
 use bevy::prelude::*;
 
-use super::{
-    actor::{
-        Action, ActionSelectedEvent, ActivateActor, Activation, Activations, Actor,
-        PlayerControlled, Team, TeamDeck, TeamHand,
-    },
-    ui::WaitForUser,
+use super::actor::{
+    Activation, Activations, Actor, BeginActivationCommand, PlayerControlled, Team, TeamDeck,
+    TeamHand,
 };
 
 #[derive(Debug, Resource)]
@@ -20,22 +17,6 @@ pub enum TurnPhase {
     BoostActivations,
     PerformActions,
 }
-
-// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// pub struct FactionId(u32);
-
-// #[derive(Debug)]
-// pub struct Faction {
-//     id: FactionId,
-//     is_pc: bool,
-//     name: String,
-// }
-
-// #[derive(Debug)]
-// pub struct Factions {
-//     factions: Vec<Faction>,
-//     current: usize,
-// }
 
 pub fn setup_combat_flow(mut commands: Commands) {
     commands.insert_resource(Turn {
@@ -52,7 +33,6 @@ pub fn update_combat_flow(
     mut turn: ResMut<Turn>,
     mut teams_q: Query<(Mut<TeamDeck>, Mut<TeamHand>, &PlayerControlled)>,
     mut activations_q: Query<(Entity, Mut<Activations>, &Team), With<Actor>>,
-    // mut activations_q: Query<(Entity, &Activations)>,
 ) {
     if let TurnPhase::StartTurn = turn.turn_phase {
         // TODO: update hand
@@ -63,7 +43,7 @@ pub fn update_combat_flow(
         // }
         for (_, mut activations, Team(team_id)) in activations_q.iter_mut() {
             if let Ok(mut team_deck) = teams_q.get_mut(*team_id) {
-                activations.remaining = vec![Activation::Single(team_deck.0 .0.deal())];
+                activations.remaining = vec![Activation(team_deck.0 .0.deal())];
             }
         }
 
@@ -77,7 +57,6 @@ pub fn update_combat_flow(
     if let TurnPhase::PerformActions = turn.turn_phase {
         // Activate actors in order if the initiative card
         let mut actor_to_activate: Option<(Entity, u8)> = None;
-        // activations_q.iter().min_by(|(a1, ..), (a2, ..)| a1.)
 
         for (entity, activations, ..) in activations_q.iter_mut() {
             if let Some(initiative_value) = activations.next_activation_initiative() {
@@ -94,8 +73,8 @@ pub fn update_combat_flow(
             }
         }
 
-        if let Some((actor_id, _)) = actor_to_activate {
-            commands.trigger(ActivateActor(actor_id));
+        if let Some((entity, _)) = actor_to_activate {
+            commands.trigger_targets(BeginActivationCommand, entity);
         } else {
             // There are no more actors to activate
             turn.turn_number += 1;
@@ -103,49 +82,3 @@ pub fn update_combat_flow(
         }
     }
 }
-
-pub fn handle_activate_actor(
-    trigger: Trigger<ActivateActor>,
-    mut commands: Commands,
-    // time: Res<Time>,
-    // mut wait_for_user: Option<ResMut<WaitForUser>>,
-    // mut turn: ResMut<Turn>,
-    // combat_state: Option<ResMut<WaitUntil>>,
-    // mut teams_q: Query<(Mut<TeamDeck>, Mut<TeamHand>, Option<&PlayerControlled>)>,
-    mut actor_activation_q: Query<(Mut<Activations>, &PlayerControlled)>,
-    // mut team_q: Query<&ControlledBy>,
-) {
-    println!("[DEBUG] handle_activate_actor");
-
-    let ActivateActor(e) = trigger.event();
-
-    if let Ok((mut activation, PlayerControlled(is_pc))) = actor_activation_q.get_mut(*e) {
-        activation.active = activation.remaining.pop();
-
-        if *is_pc {
-            println!("    handle_activate_actor - wait for user");
-            commands.insert_resource(WaitForUser());
-        } else {
-            println!("    handle_activate_actor - process AI actor");
-            commands.trigger(ActionSelectedEvent(Action::NoOp))
-        }
-    }
-}
-// fn progress_game(turn: &Turn) -> Option<Turn> {
-//     match turn.turn_phase {
-//         TurnPhase::StartTurn => {
-//             // TODO add action to reset actor state for each turn
-//             Some(Turn {
-//                 turn_number: turn.turn_number,
-//                 turn_phase: TurnPhase::AssignActivations,
-//             })
-//         }
-//         TurnPhase::AssignActivations => {
-//             // println!("assign activations");
-//             None
-//         }
-//         TurnPhase::PerformActions => None,
-//     }
-// }
-
-// pub fn perfrom_actions(action)
