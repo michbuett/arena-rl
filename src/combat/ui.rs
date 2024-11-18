@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use bevy::{input::mouse::MouseMotion, prelude::*, window::PrimaryWindow};
 
-use crate::{combat::cards::Suite, style::WINDOW_BACKGROUND};
+use crate::{combat::cards::Suite, style::WINDOW_BACKGROUND, GameState};
 
 use super::{
     actor::{Action, Activation, ActivationChanged, Activations, Actor},
@@ -11,6 +11,9 @@ use super::{
     map::{HexMap, MapPos},
     OnCombatState, ScrollBounds, Visual,
 };
+
+#[derive(Component)]
+pub struct TurnInfo;
 
 #[derive(Component)]
 pub struct DetailsWindowText;
@@ -65,13 +68,61 @@ pub struct MapPosSelectedEvent(pub MapPos);
 #[derive(Component)]
 pub struct UiElement;
 
-pub fn setup_ui(mut commands: Commands) {
+pub fn combat_ui_plugin(app: &mut App) {
+    app.add_event::<MapPosSelectedEvent>()
+        .add_event::<ActivationChanged>()
+        .add_event::<UiStateTransitionedEvent>()
+        .observe(update_description_on_activation_changed)
+        .observe(update_ui_on_state_change)
+        .add_systems(OnEnter(GameState::Combat), setup_ui)
+        .add_systems(
+            Update,
+            (
+                (update_user_input, handle_select_map_pos).chain(),
+                update_available_playeractions.run_if(resource_exists_and_changed::<PlayerActions>),
+                update_turn_info.run_if(resource_exists_and_changed::<Turn>),
+                update_waiting_state,
+            )
+                .run_if(in_state(GameState::Combat)),
+        );
+}
+
+fn setup_ui(mut commands: Commands) {
     commands.insert_resource(ScrollState(false));
     commands.insert_resource(PlayerActions::empty());
     commands.insert_resource(UiState::prossing());
+
+    commands
+        .spawn((
+            NodeBundle {
+                background_color: WINDOW_BACKGROUND.into(),
+                style: Style {
+                    position_type: PositionType::Absolute,
+                    top: Val::Px(20.0),
+                    left: Val::Px(20.0),
+                    width: Val::Px(200.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            OnCombatState,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                TextBundle::from_section(
+                    "Turn: -",
+                    TextStyle {
+                        color: Color::BLACK,
+                        font_size: 12.0,
+                        ..Default::default()
+                    },
+                ),
+                TurnInfo,
+            ));
+        });
 }
 
-pub fn update_user_input(
+fn update_user_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     dim: Res<ScrollBounds>,
@@ -137,7 +188,7 @@ fn move_camera(camera_transform: &mut Transform, dx: f32, dy: f32, scroll_bounds
         (camera_transform.translation.y + dy).clamp(bounds_min.y, bounds_max.y);
 }
 
-pub fn handle_select_map_pos(
+fn handle_select_map_pos(
     map: Res<HexMap>,
     description_q: Query<(&MapPos, &Description)>,
     mut user_input_evr: EventReader<MapPosSelectedEvent>,
@@ -184,7 +235,7 @@ fn find_descr_at<'a>(
 }
 
 #[derive(Debug, Event)]
-pub struct TransitionUiState(pub UiState);
+pub struct UiStateTransitionedEvent(pub UiState);
 
 #[derive(Debug, Clone, Resource)]
 pub enum UiState {
@@ -214,7 +265,7 @@ impl UiState {
     }
 }
 
-pub fn update_waiting_state(
+fn update_waiting_state(
     mut commands: Commands,
     time: Res<Time>,
     // wait_until: Option<ResMut<WaitUntil>>,
@@ -225,12 +276,12 @@ pub fn update_waiting_state(
         timer.tick(time.delta());
 
         if timer.finished() {
-            commands.trigger(TransitionUiState(UiState::prossing()));
+            commands.trigger(UiStateTransitionedEvent(UiState::prossing()));
         }
     }
 }
 
-pub fn update_available_playeractions(
+fn update_available_playeractions(
     mut commands: Commands,
     player_actions: Res<PlayerActions>,
     indicatorq: Query<(Entity, &PlayerActionIndicator)>,
@@ -266,41 +317,7 @@ pub fn update_available_playeractions(
     }
 }
 
-#[derive(Component)]
-pub struct TurnInfo;
-
-pub fn setup_turn_info(mut commands: Commands) {
-    commands
-        .spawn((
-            NodeBundle {
-                background_color: WINDOW_BACKGROUND.into(),
-                style: Style {
-                    position_type: PositionType::Absolute,
-                    top: Val::Px(20.0),
-                    left: Val::Px(20.0),
-                    width: Val::Px(200.0),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            OnCombatState,
-        ))
-        .with_children(|parent| {
-            parent.spawn((
-                TextBundle::from_section(
-                    "Turn: -",
-                    TextStyle {
-                        color: Color::BLACK,
-                        font_size: 12.0,
-                        ..Default::default()
-                    },
-                ),
-                TurnInfo,
-            ));
-        });
-}
-
-pub fn update_turn_info(turn: Res<Turn>, mut turn_info_q: Query<Mut<Text>, With<TurnInfo>>) {
+fn update_turn_info(turn: Res<Turn>, mut turn_info_q: Query<Mut<Text>, With<TurnInfo>>) {
     let mut text = turn_info_q.single_mut();
     let phase = match turn.turn_phase {
         TurnPhase::StartTurn => "Beginning new turn",
@@ -323,7 +340,7 @@ impl Description {
     }
 }
 
-pub fn update_description_on_activation_changed(
+fn update_description_on_activation_changed(
     trigger: Trigger<ActivationChanged>,
     mut actor_q: Query<(&Actor, &Activations, &Name, Mut<Description>)>,
 ) {
@@ -410,15 +427,15 @@ fn card_visual_name(card: &Card) -> String {
     format!("icon-ai-{}-{}", suite, value)
 }
 
-pub fn update_ui_on_state_change(
-    trigger: Trigger<TransitionUiState>,
+fn update_ui_on_state_change(
+    trigger: Trigger<UiStateTransitionedEvent>,
     ui_elements_q: Query<Entity, With<UiElement>>,
     actor_q: Query<(Entity, &Activations), With<Actor>>,
     mut commands: Commands,
     mut map_pos_selected_ew: EventWriter<MapPosSelectedEvent>,
     mut ui_state: ResMut<UiState>,
 ) {
-    let TransitionUiState(new_ui_state) = trigger.event();
+    let UiStateTransitionedEvent(new_ui_state) = trigger.event();
 
     if let UiState::AwaitInput(mpos) = new_ui_state {
         commands

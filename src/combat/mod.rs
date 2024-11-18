@@ -15,12 +15,9 @@ use self::{
         ActivationChanged, ActorBundle, AiBehaviour, BeginActivationCommand, EndActivationCommand,
         MoveToCommand, Team, TeamBundle,
     },
-    flow::{setup_combat_flow, update_combat_flow, CombatFlowEvent, Turn},
+    flow::{setup_combat_flow, update_combat_flow, CombatFlowEvent},
     map::{update_obstacles_in_map, HexMap, MapPos},
-    ui::{
-        setup_turn_info, setup_ui, update_user_input, update_waiting_state, MapPosSelectedEvent,
-        PlayerActions, TransitionUiState, UiState,
-    },
+    ui::{combat_ui_plugin, UiState},
 };
 
 #[derive(Component)]
@@ -30,43 +27,30 @@ struct OnCombatState;
 struct ScrollBounds(Rect);
 
 pub fn combat_plugin(app: &mut App) {
-    app.add_event::<MapPosSelectedEvent>()
+    app.add_plugins(combat_ui_plugin)
         .add_event::<ActionSelectedEvent>()
         .add_event::<BeginActivationCommand>()
         .add_event::<EndActivationCommand>()
         .add_event::<MoveToCommand>()
         .add_event::<CombatFlowEvent>()
         .add_event::<ActivationChanged>()
-        .add_event::<TransitionUiState>()
         .observe(handle_action_selected_event)
         .observe(handle_begin_activation_command)
         .observe(handle_end_activation_command)
         .observe(handle_move_to_command)
-        .observe(ui::update_description_on_activation_changed)
-        .observe(ui::update_ui_on_state_change)
         .add_systems(
             OnEnter(GameState::Combat),
             (
                 (setup_map, setup_camera, setup_actors).chain(),
                 setup_combat_flow,
-                setup_ui,
-                setup_turn_info,
             ),
         )
         .add_systems(
             Update,
             (
-                (
-                    update_user_input,
-                    (ui::handle_select_map_pos, actor::handle_select_map_pos),
-                )
-                    .chain(),
-                ui::update_available_playeractions
-                    .run_if(resource_exists_and_changed::<PlayerActions>),
-                ui::update_turn_info.run_if(resource_exists_and_changed::<Turn>),
+                ((actor::handle_select_map_pos),).chain(),
                 actor::check_actor_changes,
                 update_obstacles_in_map,
-                update_waiting_state,
                 update_combat_flow.run_if(progress_game),
             )
                 .run_if(in_state(GameState::Combat)),

@@ -7,7 +7,7 @@ use crate::animations::{MovementAnimation, MovementModification};
 use super::{
     cards::{Card, Deck},
     map::{HexMap, MapPos, Obstacle},
-    ui::{Description, MapPosSelectedEvent, PlayerActions, TransitionUiState, UiState},
+    ui::{Description, MapPosSelectedEvent, PlayerActions, UiState, UiStateTransitionedEvent},
     Visual,
 };
 
@@ -200,7 +200,7 @@ pub fn handle_begin_activation_command(
         activation.active = activation.remaining.pop();
 
         if *is_pc {
-            commands.trigger(TransitionUiState(UiState::await_input(*mpos)));
+            commands.trigger(UiStateTransitionedEvent(UiState::await_input(*mpos)));
         } else {
             commands.trigger_targets(ActionSelectedEvent(Action::NoOp), e)
         }
@@ -231,7 +231,7 @@ pub fn handle_move_to_command(trigger: Trigger<MoveToCommand>, mut commands: Com
         *path.last().unwrap(),
     ));
 
-    commands.trigger(TransitionUiState(UiState::wait(
+    commands.trigger(UiStateTransitionedEvent(UiState::wait(
         step_durr * path.len() as u64,
     )));
 }
