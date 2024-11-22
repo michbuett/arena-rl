@@ -118,6 +118,9 @@ pub struct AiActorBundle {
     ai_behaivour: AiBehaviour,
 }
 
+#[derive(Debug, Component)]
+pub struct PreparedAction(pub Action);
+
 #[derive(Debug, Event)]
 pub struct ActionSelectedEvent(pub Action);
 
@@ -176,6 +179,11 @@ pub fn handle_action_selected_event(trigger: Trigger<ActionSelectedEvent>, mut c
     let ActionSelectedEvent(action) = trigger.event();
     let entity = trigger.entity();
 
+    // info!(
+    //     "[handle_action_selected_event] entity={:?}, action={:?}",
+    //     entity, action,
+    // );
+
     match action {
         Action::MoveAlong { path } => {
             commands.trigger_targets(MoveToCommand(path.clone()), entity);
@@ -194,16 +202,20 @@ pub fn handle_begin_activation_command(
     mut commands: Commands,
     mut actor_activation_q: Query<(Mut<Activations>, &PlayerControlled, &MapPos)>,
 ) {
+    // info!(
+    //     "[handle_begin_activation_command] entity={:?}",
+    //     trigger.entity()
+    // );
+
     let e = trigger.entity();
+    let (mut activation, PlayerControlled(is_pc), mpos) = actor_activation_q.get_mut(e).unwrap();
 
-    if let Ok((mut activation, PlayerControlled(is_pc), mpos)) = actor_activation_q.get_mut(e) {
-        activation.active = activation.remaining.pop();
+    activation.active = activation.remaining.pop();
 
-        if *is_pc {
-            commands.trigger(UiStateTransitionedEvent(UiState::await_input(*mpos)));
-        } else {
-            commands.trigger_targets(ActionSelectedEvent(Action::NoOp), e)
-        }
+    if *is_pc {
+        commands.trigger(UiStateTransitionedEvent(UiState::await_input(*mpos)));
+    } else {
+        // commands.trigger_targets(ActionSelectedEvent(Action::NoOp), e)
     }
 }
 
@@ -211,6 +223,11 @@ pub fn handle_end_activation_command(
     trigger: Trigger<EndActivationCommand>,
     mut activations_q: Query<Mut<Activations>>,
 ) {
+    // info!(
+    //     "handle_end_activation_command - entity={:?}",
+    //     trigger.entity()
+    // );
+
     if let Ok(mut activations) = activations_q.get_mut(trigger.entity()) {
         activations.active = None;
     }
@@ -234,16 +251,4 @@ pub fn handle_move_to_command(trigger: Trigger<MoveToCommand>, mut commands: Com
     commands.trigger(UiStateTransitionedEvent(UiState::wait(
         step_durr * path.len() as u64,
     )));
-}
-
-#[derive(Event)]
-pub struct ActivationChanged;
-
-pub fn check_actor_changes(
-    mut commands: Commands,
-    changes_q: Query<(Entity, &Actor), Changed<Activations>>,
-) {
-    for (entity, _) in &changes_q {
-        commands.trigger_targets(ActivationChanged, entity);
-    }
 }

@@ -5,7 +5,7 @@ use bevy::{input::mouse::MouseMotion, prelude::*, window::PrimaryWindow};
 use crate::{combat::cards::Suite, style::WINDOW_BACKGROUND, GameState};
 
 use super::{
-    actor::{Action, Activation, ActivationChanged, Activations, Actor},
+    actor::{Action, Activation, Activations, Actor},
     cards::Card,
     flow::{Turn, TurnPhase},
     map::{HexMap, MapPos},
@@ -70,15 +70,14 @@ pub struct UiElement;
 
 pub fn combat_ui_plugin(app: &mut App) {
     app.add_event::<MapPosSelectedEvent>()
-        .add_event::<ActivationChanged>()
         .add_event::<UiStateTransitionedEvent>()
-        .observe(update_description_on_activation_changed)
         .observe(update_ui_on_state_change)
         .add_systems(OnEnter(GameState::Combat), setup_ui)
         .add_systems(
             Update,
             (
                 (update_user_input, handle_select_map_pos).chain(),
+                update_description_on_activation_changed,
                 update_available_playeractions.run_if(resource_exists_and_changed::<PlayerActions>),
                 update_turn_info.run_if(resource_exists_and_changed::<Turn>),
                 update_waiting_state,
@@ -341,10 +340,9 @@ impl Description {
 }
 
 fn update_description_on_activation_changed(
-    trigger: Trigger<ActivationChanged>,
-    mut actor_q: Query<(&Actor, &Activations, &Name, Mut<Description>)>,
+    mut actor_q: Query<(&Actor, &Activations, &Name, Mut<Description>), Changed<Activations>>,
 ) {
-    if let Ok((_, activations, name, mut description)) = actor_q.get_mut(trigger.entity()) {
+    for (_, activations, name, mut description) in actor_q.iter_mut() {
         description.0 = describe_actor(name, activations);
     }
 }

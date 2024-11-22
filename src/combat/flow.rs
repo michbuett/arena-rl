@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 
 use super::actor::{
-    Activation, Activations, Actor, BeginActivationCommand, PlayerControlled, Team, TeamDeck,
-    TeamHand,
+    ActionSelectedEvent, Activation, Activations, Actor, BeginActivationCommand, PlayerControlled,
+    PreparedAction, Team, TeamDeck, TeamHand,
 };
 
 #[derive(Debug, Resource)]
@@ -32,7 +32,10 @@ pub fn update_combat_flow(
     mut commands: Commands,
     mut turn: ResMut<Turn>,
     mut teams_q: Query<(Mut<TeamDeck>, Mut<TeamHand>, &PlayerControlled)>,
-    mut activations_q: Query<(Entity, Mut<Activations>, &Team), With<Actor>>,
+    mut activations_q: Query<
+        (Entity, Mut<Activations>, &Team, Option<&PreparedAction>),
+        With<Actor>,
+    >,
 ) {
     if let TurnPhase::StartTurn = turn.turn_phase {
         // TODO: update hand
@@ -41,7 +44,7 @@ pub fn update_combat_flow(
 
         //     }
         // }
-        for (_, mut activations, Team(team_id)) in activations_q.iter_mut() {
+        for (_, mut activations, Team(team_id), _) in activations_q.iter_mut() {
             if let Ok(mut team_deck) = teams_q.get_mut(*team_id) {
                 activations.remaining = vec![Activation(team_deck.0 .0.deal())];
             }
@@ -58,7 +61,22 @@ pub fn update_combat_flow(
         // Activate actors in order if the initiative card
         let mut actor_to_activate: Option<(Entity, u8)> = None;
 
-        for (entity, activations, ..) in activations_q.iter_mut() {
+        for (entity, activations, _, prep_action) in activations_q.iter() {
+            if activations.active.is_some() {
+                // info!(
+                //     "Found active entity (entity={:?}, action={:?}",
+                //     entity, prep_action
+                // );
+                if let Some(PreparedAction(action)) = prep_action {
+                    commands.entity(entity).remove::<PreparedAction>();
+                    commands.trigger_targets(ActionSelectedEvent(action.clone()), entity);
+                }
+
+                // an actor is already active
+                // => wait until an action is selected
+                return;
+            }
+
             if let Some(initiative_value) = activations.next_activation_initiative() {
                 actor_to_activate = actor_to_activate.map_or(
                     Some((entity, initiative_value)),
