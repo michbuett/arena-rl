@@ -3,9 +3,9 @@ use std::time::Duration;
 use bevy::prelude::*;
 
 use crate::animations::{MovementAnimation, MovementModification};
+use crate::core::{Card, Deck};
 
 use super::{
-    cards::{Card, Deck},
     map::{HexMap, MapPos, Obstacle},
     ui::{Description, MapPosSelectedEvent, PlayerActions, UiState, UiStateTransitionedEvent},
     Visual,
@@ -18,7 +18,7 @@ pub struct Team(pub Entity);
 pub struct TeamDeck(pub Deck);
 
 #[derive(Component, Debug)]
-pub struct TeamHand(Vec<Card>);
+pub struct TeamHand();
 
 #[derive(Bundle)]
 pub struct TeamBundle {
@@ -32,7 +32,7 @@ impl TeamBundle {
         Self {
             name: name.into(),
             deck: TeamDeck(Deck::new_rnd()),
-            hand: TeamHand(vec![]),
+            hand: TeamHand(),
             player_controlled: PlayerControlled(is_pc),
         }
     }

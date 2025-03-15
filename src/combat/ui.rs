@@ -2,11 +2,11 @@ use std::time::Duration;
 
 use bevy::{input::mouse::MouseMotion, prelude::*, window::PrimaryWindow};
 
-use crate::{combat::cards::Suite, style::WINDOW_BACKGROUND, GameState};
+use crate::core::{Card, Suite};
+use crate::{style::WINDOW_BACKGROUND, GameState};
 
 use super::{
     actor::{Action, Activation, Activations, Actor},
-    cards::Card,
     flow::{Turn, TurnPhase},
     map::{HexMap, MapPos},
     OnCombatState, ScrollBounds, Visual,

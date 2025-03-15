@@ -1,6 +1,7 @@
 mod animations;
 mod assets;
 mod combat;
+mod core;
 mod start;
 mod style;
 
