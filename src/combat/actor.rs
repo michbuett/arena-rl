@@ -1,10 +1,11 @@
-use std::time::Duration;
-
 use bevy::prelude::*;
 
-use crate::animations::{MovementAnimation, MovementModification};
-use crate::core::{Card, Deck};
+use crate::combat::combat_resolution::Defence;
+use crate::core::{Card, Challenge, Deck, Suite};
 
+use super::combat_resolution::{handle_attack, Attack, CombatResult};
+use super::fx::{FxEffect, FxSequence};
+use super::ui::Z_LAYER_ACTOR;
 use super::{
     map::{HexMap, MapPos, Obstacle},
     ui::{Description, MapPosSelectedEvent, PlayerActions, UiState, UiStateTransitionedEvent},
@@ -41,8 +42,6 @@ impl TeamBundle {
 #[derive(Component)]
 pub struct PlayerControlled(pub bool);
 
-const ACTOR_ZLAYER: f32 = 100.0;
-
 #[derive(Component)]
 pub struct Actor {}
 
@@ -72,6 +71,11 @@ impl Activations {
     }
 }
 
+#[derive(Component)]
+pub struct Health {
+    pub wounds: Vec<Card>,
+}
+
 #[derive(Bundle)]
 pub struct ActorBundle {
     pub actor: Actor,
@@ -82,6 +86,7 @@ pub struct ActorBundle {
     pub map_pos: MapPos,
     pub visual: Visual,
     pub activations: Activations,
+    pub health: Health,
     pub obstacle: Obstacle,
     pub transform: Transform,
     pub global_transform: GlobalTransform,
@@ -103,8 +108,9 @@ impl ActorBundle {
                 active: None,
                 remaining: vec![],
             },
+            health: Health { wounds: vec![] },
             obstacle: Obstacle(f32::MAX),
-            transform: Transform::from_translation(map_pos.into_vec3().with_z(ACTOR_ZLAYER)),
+            transform: Transform::from_translation(map_pos.into_vec3().with_z(Z_LAYER_ACTOR)),
             global_transform: GlobalTransform::default(),
             visibility: Visibility::Visible,
             inherited_visibility: InheritedVisibility::default(),
@@ -133,15 +139,26 @@ pub struct EndActivationCommand;
 #[derive(Debug, Event)]
 pub struct MoveToCommand(Vec<MapPos>);
 
+#[derive(Debug, Event)]
+pub struct AttackCommand(AttackData);
+
+#[derive(Debug, Clone)]
+pub enum AttackData {
+    MeleeAttack { target: Entity },
+}
+
 #[derive(Debug, Clone)]
 pub enum Action {
     NoOp,
     MoveAlong { path: Vec<MapPos> },
+    Attack(AttackData),
 }
 
 pub fn handle_select_map_pos(
     map: Res<HexMap>,
-    actorq: Query<(Entity, &Actor, &Activations, &MapPos), Without<AiBehaviour>>,
+    active_actor_q: Query<(Entity, &Actor, &Activations, &MapPos, &Team), Without<AiBehaviour>>,
+    target_actor_q: Query<(Entity, &MapPos, &Team), With<Actor>>,
+
     mut commands: Commands,
     mut map_pos_selected_er: EventReader<MapPosSelectedEvent>,
     mut player_actions: ResMut<PlayerActions>,
@@ -150,28 +167,47 @@ pub fn handle_select_map_pos(
         return;
     };
 
-    if let Some((entity, actor_pos)) = find_active_player_actor(&actorq) {
+    if let Some((entity, actor_pos, team)) = find_active_player_actor(&active_actor_q) {
         if let Some(action) = player_actions.get_selected_action_when_at(hex) {
+            // there is already a selected action for this hex
+            // => execute this action
             commands.trigger_targets(ActionSelectedEvent(action.clone()), entity);
             player_actions.set_available_actions(*hex, vec![]);
+        } else if let Some(attack) = find_eligible_target_at(&target_actor_q, &team, *hex) {
+            player_actions.set_available_actions(*hex, vec![Action::Attack(attack)]);
+        } else if let Some(path) = map.find_path(actor_pos, *hex) {
+            player_actions.set_available_actions(*hex, vec![Action::MoveAlong { path }]);
         } else {
-            if let Some(path) = map.find_path(actor_pos, *hex) {
-                player_actions.set_available_actions(*hex, vec![Action::MoveAlong { path }]);
-            } else {
-                player_actions.set_available_actions(*hex, vec![]);
-            }
+            player_actions.set_available_actions(*hex, vec![]);
         }
     }
 }
 
 fn find_active_player_actor(
-    q_active_actor: &Query<(Entity, &Actor, &Activations, &MapPos), Without<AiBehaviour>>,
-) -> Option<(Entity, MapPos)> {
-    for (entity, _actor, activations, map_pos) in q_active_actor.iter() {
+    q_active_actor: &Query<(Entity, &Actor, &Activations, &MapPos, &Team), Without<AiBehaviour>>,
+) -> Option<(Entity, MapPos, Team)> {
+    for (entity, _actor, activations, map_pos, team) in q_active_actor.iter() {
         if activations.active.is_some() {
-            return Some((entity, *map_pos));
+            return Some((entity, *map_pos, *team));
         }
     }
+    None
+}
+
+fn find_eligible_target_at(
+    q_actor_at: &Query<(Entity, &MapPos, &Team), With<Actor>>,
+    attacker_team: &Team,
+    target_pos: MapPos,
+) -> Option<AttackData> {
+    // println!("[find_eligible_target_at] hex={:?}", target_pos);
+
+    for (target, map_pos, target_team) in q_actor_at.iter() {
+        if target_team.0 != attacker_team.0 && *map_pos == target_pos {
+            // println!("  Found target: {:?}", target);
+            return Some(AttackData::MeleeAttack { target });
+        }
+    }
+    // println!("  No target found");
     None
 }
 
@@ -187,6 +223,10 @@ pub fn handle_action_selected_event(trigger: Trigger<ActionSelectedEvent>, mut c
     match action {
         Action::MoveAlong { path } => {
             commands.trigger_targets(MoveToCommand(path.clone()), entity);
+        }
+
+        Action::Attack(attack) => {
+            commands.trigger_targets(AttackCommand(attack.clone()), entity);
         }
 
         Action::NoOp => {
@@ -235,20 +275,117 @@ pub fn handle_end_activation_command(
 
 pub fn handle_move_to_command(trigger: Trigger<MoveToCommand>, mut commands: Commands) {
     let MoveToCommand(path) = trigger.event();
-    let step_durr = 200;
+    let end_pos = *path.last().unwrap();
+    let moving_entity = trigger.entity();
 
-    commands.entity(trigger.entity()).insert((
-        MovementAnimation::new(
-            Duration::from_millis(step_durr),
-            path.iter()
-                .map(|mpos| mpos.into_vec3().with_z(ACTOR_ZLAYER))
-                .collect(),
-        )
-        .set_modification(MovementModification::ParabolaJump(100)),
-        *path.last().unwrap(),
-    ));
+    commands.entity(moving_entity).insert(end_pos);
 
-    commands.trigger(UiStateTransitionedEvent(UiState::wait(
-        step_durr * path.len() as u64,
-    )));
+    FxSequence::new()
+        .then(FxEffect::walk_along(moving_entity, path))
+        .wait_until_finished()
+        .run(&mut commands);
+}
+
+pub fn handle_attack_command(
+    trigger: Trigger<AttackCommand>,
+    mut combat_data_q: Query<(&MapPos, &Team, &Activations, Mut<Health>)>,
+    mut deck_q: Query<Mut<TeamDeck>>,
+    mut commands: Commands,
+) {
+    let AttackCommand(attack) = trigger.event();
+    let attacking_entity = trigger.entity();
+
+    match attack {
+        AttackData::MeleeAttack { target } => {
+            let [(attacker_pos, attacker_team, activation, _), (target_pos, target_team, _, mut health)] =
+                combat_data_q
+                    .get_many_mut([attacking_entity, *target])
+                    .unwrap();
+            // combat_data_q.get(attacking_entity).unwrap();
+            // let (target_pos, target_team, _) = combat_data_q.get(*target).unwrap();
+            let effort_card = activation.active.as_ref().cloned().unwrap().0;
+            let [mut attack_deck, mut defence_deck] = deck_q
+                .get_many_mut([attacker_team.0, target_team.0])
+                .unwrap();
+
+            let attack = Attack {
+                damage: 5,
+                challenge: Challenge {
+                    advantage: 0,
+                    target_suite: Suite::PhysicalAg,
+                    target_value: 10,
+                },
+            };
+
+            let defence = Defence {
+                armor: 0,
+                challenge: Challenge {
+                    advantage: 0,
+                    target_suite: Suite::PhysicalAg,
+                    target_value: 10,
+                },
+            };
+
+            let combat_result = handle_attack(
+                attack,
+                effort_card,
+                &mut attack_deck.0,
+                defence,
+                &mut defence_deck.0,
+            );
+
+            match &combat_result {
+                CombatResult::Wounded(card) => {
+                    health.wounds.push(*card);
+                }
+                _ => {}
+            }
+
+            create_melee_attack_fx_sequence(
+                attacking_entity,
+                *attacker_pos,
+                *target,
+                *target_pos,
+                combat_result,
+            )
+            .run(&mut commands);
+        }
+    }
+}
+
+fn create_melee_attack_fx_sequence(
+    attacking_entity: Entity,
+    attacker_pos: MapPos,
+    target_entity: Entity,
+    target_pos: MapPos,
+    combat_result: CombatResult,
+) -> FxSequence {
+    let step_durration = 100;
+    let attacker_pos = attacker_pos.into_vec3().with_z(Z_LAYER_ACTOR);
+    let target_pos = target_pos.into_vec3().with_z(Z_LAYER_ACTOR);
+    let path = vec![attacker_pos, target_pos, attacker_pos];
+
+    let mut fx_seq = FxSequence::new()
+        .then(FxEffect::MoveTo {
+            entity: attacking_entity,
+            path,
+            movement_modification: crate::animations::MovementModification::None,
+            step_durration,
+        })
+        .wait(step_durration);
+
+    fx_seq = match combat_result {
+        CombatResult::Wounded(..) => fx_seq.then(FxEffect::BloodSplatter(target_pos)),
+        CombatResult::OutOfAction => fx_seq
+            .then(FxEffect::Remove(target_entity))
+            .then(FxEffect::BloodSplatter(target_pos))
+            .wait(50)
+            .then(FxEffect::BloodSplatter(target_pos))
+            .wait(50)
+            .then(FxEffect::BloodSplatter(target_pos)),
+
+        _ => fx_seq,
+    };
+
+    fx_seq.wait_until_finished()
 }

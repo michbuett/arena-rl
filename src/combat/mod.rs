@@ -2,9 +2,11 @@ mod actor;
 mod ai;
 mod combat_resolution;
 mod flow;
+mod fx;
 mod map;
 mod ui;
 
+use actor::{handle_attack_command, AttackCommand};
 use ai::combat_ai_plugin;
 use bevy::prelude::*;
 
@@ -33,11 +35,13 @@ pub fn combat_plugin(app: &mut App) {
         .add_event::<BeginActivationCommand>()
         .add_event::<EndActivationCommand>()
         .add_event::<MoveToCommand>()
+        .add_event::<AttackCommand>()
         .add_event::<CombatFlowEvent>()
         .observe(handle_action_selected_event)
         .observe(handle_begin_activation_command)
         .observe(handle_end_activation_command)
         .observe(handle_move_to_command)
+        .observe(handle_attack_command)
         .add_systems(
             OnEnter(GameState::Combat),
             (
@@ -48,8 +52,9 @@ pub fn combat_plugin(app: &mut App) {
         .add_systems(
             Update,
             (
-                ((actor::handle_select_map_pos),).chain(),
+                actor::handle_select_map_pos,
                 update_obstacles_in_map,
+                fx::update_check_fx_ready,
                 update_combat_flow.run_if(progress_game),
             )
                 .run_if(in_state(GameState::Combat)),
@@ -132,9 +137,6 @@ fn setup_actors(mut commands: Commands) {
 
 fn progress_game(ui_state: Option<Res<UiState>>) -> bool {
     ui_state
-        .map(|ui_state| match ui_state.as_ref() {
-            UiState::Processing => true,
-            _ => false,
-        })
+        .map(|ui_state| matches!(ui_state.as_ref(), UiState::Processing))
         .unwrap_or(false)
 }

@@ -1,4 +1,7 @@
-use crate::{animations::SpriteAnimation, GameState};
+use crate::{
+    animations::{FadeAnimation, SpriteAnimation},
+    GameState,
+};
 use bevy::{
     asset::{io::Reader, ron, AssetLoader, AsyncReadExt, LoadContext, LoadedFolder},
     ecs::system::EntityCommands,
@@ -226,7 +229,7 @@ fn create_texture_atlas(
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Clone, Debug)]
 pub enum Visual {
     Single(String),
     Multi(Vec<String>),
@@ -239,7 +242,7 @@ fn update_sprites_from_visuals(
     mut commands: Commands,
     sprite_cfg_map: Res<SpriteConfigMap>,
     layouts: Res<Assets<TextureAtlasLayout>>,
-    visual_q: Query<(Entity, &Visual), Changed<Visual>>,
+    visual_q: Query<(Entity, &Visual, Option<&FadeAnimation>), Changed<Visual>>,
     sprite_container_q: Query<(&Parent, Entity, &SpriteContainer)>,
 ) {
     if visual_q.is_empty() {
@@ -250,7 +253,7 @@ fn update_sprites_from_visuals(
         panic!("Could not find layout in assets for sprite map")
     };
 
-    for (entity, visual) in visual_q.iter() {
+    for (entity, visual, fade_animation) in visual_q.iter() {
         // clear "old" sprites
         for (parent, child_entity, _) in sprite_container_q.iter() {
             if parent.get() == entity {
@@ -266,18 +269,26 @@ fn update_sprites_from_visuals(
             },
             SpriteContainer,
         ));
+
         container_entity_cmd.set_parent(entity);
 
         match visual {
             Visual::Single(v) => {
-                insert_sprite(container_entity_cmd, &sprite_cfg_map, layout, v, 0.0);
+                insert_sprite(
+                    container_entity_cmd,
+                    &sprite_cfg_map,
+                    layout,
+                    v,
+                    0.0,
+                    fade_animation,
+                );
             }
 
             Visual::Multi(visuals) => {
                 for (idx, v) in visuals.iter().enumerate() {
                     container_entity_cmd.with_children(|parent| {
                         let c = parent.spawn_empty();
-                        insert_sprite(c, &sprite_cfg_map, layout, v, idx as f32);
+                        insert_sprite(c, &sprite_cfg_map, layout, v, idx as f32, fade_animation);
                     });
                 }
             }
@@ -291,6 +302,7 @@ fn insert_sprite(
     layout: &TextureAtlasLayout,
     visual: &str,
     zlayer: f32,
+    fade_animation: Option<&FadeAnimation>,
 ) {
     match sprite_cfg_map.map.get(visual) {
         Some(SpriteConfig::Single {
@@ -310,6 +322,10 @@ fn insert_sprite(
                     index,
                 },
             ));
+
+            if let Some(fa) = fade_animation {
+                commands.insert(fa.clone());
+            }
         }
 
         Some(SpriteConfig::Animated {

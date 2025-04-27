@@ -1,8 +1,16 @@
 use bevy::prelude::*;
+
 use std::time::Duration;
 
 pub fn animation_plugin(app: &mut App) {
-    app.add_systems(Update, (update_sprite_animation, update_movement_animation));
+    app.add_systems(
+        Update,
+        (
+            update_sprite_animation,
+            update_movement_animation,
+            update_fade_animation,
+        ),
+    );
 }
 
 #[derive(Debug, Component)]
@@ -122,4 +130,41 @@ fn parabola_jump(target: Vec3, start: Vec3, end: Vec3, max_height: f32) -> Vec3 
     let dy = damper * (hl * hl - (hl - li) * (hl - li));
 
     target + Vec3::new(0.0, dy, 0.0)
+}
+
+#[derive(Component, Clone)]
+pub struct FadeAnimation {
+    timer: Timer,
+    start_alpha: f32,
+    end_alpha: f32,
+}
+
+impl FadeAnimation {
+    pub fn fade_out(duration: Duration) -> Self {
+        Self {
+            timer: Timer::new(duration, TimerMode::Once),
+            start_alpha: 1.0,
+            end_alpha: 0.0,
+        }
+    }
+}
+
+fn update_fade_animation(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut query: Query<(Entity, Mut<FadeAnimation>, Mut<Sprite>)>,
+) {
+    for (entity, mut anim, mut sprite) in query.iter_mut() {
+        anim.timer.tick(time.delta());
+
+        let dt = anim.timer.fraction();
+        let da = dt * dt * (anim.end_alpha - anim.start_alpha); // sqrt for easing effect
+        let new_alpha = (anim.start_alpha + da).clamp(0.0, 1.0);
+
+        sprite.color.set_alpha(new_alpha);
+
+        if anim.timer.finished() {
+            commands.entity(entity).remove::<FadeAnimation>();
+        }
+    }
 }

@@ -1,7 +1,10 @@
 #!/bin/bash
 set -e
 
-PATH_IN="assets/images/raw"
+echo "Source directory: $1/images"
+
+# PATH_IN="assets/images/raw"
+PATH_IN=$1/images
 PATH_OUT="assets/images/combat"
 PARAMS="filter Box -interpolate Integer"
 
@@ -16,6 +19,7 @@ rm -rf $PATH_OUT/**/.DS_Store
 echo "done"
 
 echo -n "resizing sprites..."
+mkdir -p $PATH_OUT/ui/
 cp -r $PATH_IN/ui/cards $PATH_OUT/ui/
 
 resize "128x128" "chars/bodies"

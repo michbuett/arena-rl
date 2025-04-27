@@ -12,6 +12,10 @@ use super::{
     OnCombatState, ScrollBounds, Visual,
 };
 
+pub const Z_LAYER_FLOOR: f32 = 1.0;
+pub const Z_LAYER_UI_MAP_MARKER: f32 = 10.0;
+pub const Z_LAYER_ACTOR: f32 = 100.0;
+
 #[derive(Component)]
 pub struct TurnInfo;
 
@@ -210,7 +214,7 @@ fn handle_select_map_pos(
                 } else {
                     txt.sections[0].value = format!("You look at {:?}, there is nothing", pos);
                 }
-                selected_tile_transform.translation = hex.into_vec3().with_z(1.0);
+                selected_tile_transform.translation = hex.into_vec3().with_z(Z_LAYER_UI_MAP_MARKER);
                 *selected_tile_visibility = Visibility::Inherited;
             } else {
                 txt.sections[0].value = "No tile selected".to_string();

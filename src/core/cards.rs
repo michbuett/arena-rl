@@ -2,7 +2,6 @@ extern crate rand;
 
 use rand::prelude::*;
 use serde::Deserialize;
-use std::cmp::max;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize)]
 pub enum Suite {
@@ -76,10 +75,20 @@ impl Card {
     pub fn value(&self, target_suite: Suite) -> u8 {
         match self.suite.matches(target_suite) {
             SuiteMatch::Full => self.value,
-            SuiteMatch::Partial => (self.value + 1) / 2,
-            SuiteMatch::No => 0,
+            SuiteMatch::Partial => self.value.checked_sub(2).unwrap_or(1),
+            SuiteMatch::No => self.value.checked_sub(5).unwrap_or(1),
         }
     }
+
+    // pub fn exceeds(&self, target_suite: Suite, target_value: u8) -> bool {
+    //     let target_value = match self.suite.matches(target_suite) {
+    //         SuiteMatch::Full => target_value,
+    //         SuiteMatch::Partial => target_value + 2,
+    //         SuiteMatch::No => target_value + 4,
+    //     };
+
+    //     self.value >= target_value
+    // }
 }
 
 #[derive(Clone)]
@@ -174,28 +183,33 @@ fn test_allow_deterministic_cards() {
     assert_eq!(deck.deal(), Card::new(7, MentalAg));
 }
 
-#[derive(Debug)]
+const SUCCESS_LVL_STEP: i16 = 5;
+
+#[derive(Debug, Clone)]
 pub struct Challenge {
     pub advantage: i8,
-    pub challenge_type: Suite,
-    pub skill_val: u8,
-    pub target_num: u8,
+    pub target_suite: Suite,
+    pub target_value: u8,
 }
+
+pub type CardDraw = (Card, Vec<Card>);
 
 #[derive(Debug, Clone)]
 pub struct ChallengeResult {
-    pub draw: (Card, Vec<Card>),
+    pub draw: CardDraw,
     pub success_lvl: i8,
 }
 
-pub fn resolve_challenge(c: Challenge, deck: &mut Deck) -> ChallengeResult {
-    let draw = draw(deck, c.advantage, c.challenge_type);
-    let val = c.skill_val + &draw.0.value(c.challenge_type);
-    let success_lvl = if val >= c.target_num {
-        (val / max(1, c.target_num)) as i8
+pub fn resolve_challenge(c: &Challenge, deck: &mut Deck) -> ChallengeResult {
+    let draw = draw(deck, c.advantage, c.target_suite);
+    let val = draw.0.value(c.target_suite);
+    let diff = val as i16 - c.target_value as i16;
+    let success_lvl = if diff == 0 {
+        1
     } else {
-        -1 * (c.target_num / max(1, val)) as i8
-    };
+        diff / SUCCESS_LVL_STEP + diff.signum()
+    }
+    .clamp(-3, 3) as i8;
 
     ChallengeResult { draw, success_lvl }
 }
@@ -207,30 +221,23 @@ fn test_can_resolve_simple_challenge() {
     let mut deck = Deck::new(&fixed_deck);
     let challenge = Challenge {
         advantage: 0,
-        challenge_type: Suite::PhysicalAg,
-        skill_val: 5,
-        target_num: 10,
+        target_suite: Suite::PhysicalStr,
+        target_value: 10,
     };
 
-    let result = resolve_challenge(challenge, &mut deck);
+    let result1 = resolve_challenge(&challenge, &mut deck);
+    let result2 = resolve_challenge(&challenge, &mut deck);
 
     assert_eq!(
-        result.draw,
+        result1.draw,
         (Card::new(10, PhysicalStr), vec![Card::new(10, PhysicalStr)])
     );
-    assert_eq!(result.success_lvl, 1); // 5 (skill) + 5 (half value for 10oC) VS 10 (TN)
-
-    let mut deck = Deck::new(&fixed_deck);
-    let challenge = Challenge {
-        advantage: 0,
-        challenge_type: Suite::MentalAg,
-        skill_val: 5,
-        target_num: 10,
-    };
-
-    let result = resolve_challenge(challenge, &mut deck);
-
-    assert_eq!(result.success_lvl, -2); // 5 (skill) + 0 (zero for 10oC) VS 10
+    assert_eq!(result1.success_lvl, 1); // 10oC (full match, value 10) VS 10oC (TN)
+    assert_eq!(
+        result2.draw,
+        (Card::new(9, PhysicalAg), vec![Card::new(9, PhysicalAg)])
+    );
+    assert_eq!(result2.success_lvl, -1); // 9oS (partial match, value 7) VS 10oC (TN)
 }
 
 fn draw(deck: &mut Deck, advantage: i8, s: Suite) -> (Card, Vec<Card>) {
@@ -286,7 +293,9 @@ fn test_draw_with_advantage() {
 
     let mut deck = Deck::new(&fixed_deck);
     let (c, d) = draw(&mut deck, 2, Suite::MentalStr);
-    assert_eq!(c, Card::new(8, MentalStr));
+
+    // 10oC and 8oH have the same value of 8 vs H
+    assert!(vec![Card::new(10, PhysicalStr), Card::new(8, MentalStr)].contains(&c));
     assert_eq!(
         d,
         vec![

@@ -5,6 +5,8 @@ mod core;
 mod start;
 mod style;
 
+use std::time::Duration;
+
 use bevy::{prelude::*, render::camera::ScalingMode, window::PrimaryWindow};
 
 #[derive(Clone, Copy, Default, Eq, PartialEq, Debug, Hash, States)]
@@ -26,6 +28,7 @@ fn main() {
         ))
         .init_state::<GameState>()
         .add_systems(Startup, setup)
+        .add_systems(Update, update_end_of_live_removal)
         .run();
 }
 
@@ -43,5 +46,28 @@ fn setup(mut commands: Commands, windows: Query<&Window, With<PrimaryWindow>>) {
 fn despawn_screen<T: Component>(to_despawn: Query<Entity, With<T>>, mut commands: Commands) {
     for entity in &to_despawn {
         commands.entity(entity).despawn_recursive();
+    }
+}
+
+#[derive(Component, Debug, Clone)]
+pub struct EndOfLive(pub Timer);
+
+impl EndOfLive {
+    pub fn after(d: Duration) -> Self {
+        EndOfLive(Timer::new(d, TimerMode::Once))
+    }
+}
+
+fn update_end_of_live_removal(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut eol_q: Query<(Entity, &mut EndOfLive)>,
+) {
+    for (e, mut eol) in eol_q.iter_mut() {
+        eol.0.tick(time.delta());
+
+        if eol.0.finished() {
+            commands.entity(e).despawn_recursive();
+        }
     }
 }
