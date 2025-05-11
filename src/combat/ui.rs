@@ -15,6 +15,7 @@ use super::{
 pub const Z_LAYER_FLOOR: f32 = 1.0;
 pub const Z_LAYER_UI_MAP_MARKER: f32 = 10.0;
 pub const Z_LAYER_ACTOR: f32 = 100.0;
+pub const Z_LAYER_VFX: f32 = 200.0;
 
 #[derive(Component)]
 pub struct TurnInfo;

@@ -285,51 +285,51 @@
     ("icon-ai-pa-K", ProtoSpriteConfig( files: ["ui/cards/cards-small-51.png"])),
     ("icon-ai-ps-K", ProtoSpriteConfig( files: ["ui/cards/cards-small-52.png"])),
     
-    ("icon-action-Done", ProtoSpriteConfig(
-            files: ["ui/action/done.png"],
-            offset: Some((32, 16)),
-        )),
-    ("icon-action-Charge", ProtoSpriteConfig(
-            files: ["ui/action/charge.png"],
-            offset: Some((32, 16)),
-        )),
-    ("icon-action-MeleeAttack", ProtoSpriteConfig(
-            files: ["ui/action/fight.png"],
-            offset: Some((32, 16)),
-        )),
-    ("icon-action-RangedAttack", ProtoSpriteConfig(
-            files: ["ui/action/aim.png"],
-            offset: Some((32, 16)),
-        )),
+    // ("icon-action-Done", ProtoSpriteConfig(
+    //         files: ["ui/action/done.png"],
+    //         offset: Some((32, 16)),
+    //     )),
+    // ("icon-action-Charge", ProtoSpriteConfig(
+    //         files: ["ui/action/charge.png"],
+    //         offset: Some((32, 16)),
+    //     )),
+    // ("icon-action-MeleeAttack", ProtoSpriteConfig(
+    //         files: ["ui/action/fight.png"],
+    //         offset: Some((32, 16)),
+    //     )),
+    // ("icon-action-RangedAttack", ProtoSpriteConfig(
+    //         files: ["ui/action/aim.png"],
+    //         offset: Some((32, 16)),
+    //     )),
 
-    ("icon-action-Defend", ProtoSpriteConfig(
-            files: ["ui/icons/shield.png"],
-        )),
-    ("icon-action-Attack", ProtoSpriteConfig(
-            files: ["ui/icons/sword.png"],
-        )),
-    ("icon-dot-blue", ProtoSpriteConfig(
-            files: ["ui/icons/dot-blue.png"],
-        )),
-    ("icon-dot-yellow", ProtoSpriteConfig(
-            files: ["ui/icons/dot-yellow.png"],
-        )),
-    ("icon-dot-red", ProtoSpriteConfig(
-            files: ["ui/icons/dot-red.png"],
-        )),
+    // ("icon-action-Defend", ProtoSpriteConfig(
+    //         files: ["ui/icons/shield.png"],
+    //     )),
+    // ("icon-action-Attack", ProtoSpriteConfig(
+    //         files: ["ui/icons/sword.png"],
+    //     )),
+    // ("icon-dot-blue", ProtoSpriteConfig(
+    //         files: ["ui/icons/dot-blue.png"],
+    //     )),
+    // ("icon-dot-yellow", ProtoSpriteConfig(
+    //         files: ["ui/icons/dot-yellow.png"],
+    //     )),
+    // ("icon-dot-red", ProtoSpriteConfig(
+    //         files: ["ui/icons/dot-red.png"],
+    //     )),
 
     ("selected", ProtoSpriteConfig(
             files: ["ui/floor/selected.png"],
         )),
-    ("action-indicator-Ambush", ProtoSpriteConfig(
-            files: ["ui/floor/indicator-ambush.png"], 
-        )),
-    ("action-indicator-MeleeAttack", ProtoSpriteConfig(
-            files: ["ui/directed/melee.png"],
-        )),
-    ("action-indicator-RangedAttack", ProtoSpriteConfig(
-            files: ["ui/directed/range.png"],
-        )),
+    // ("action-indicator-Ambush", ProtoSpriteConfig(
+    //         files: ["ui/floor/indicator-ambush.png"], 
+    //     )),
+    // ("action-indicator-MeleeAttack", ProtoSpriteConfig(
+    //         files: ["ui/directed/melee.png"],
+    //     )),
+    // ("action-indicator-RangedAttack", ProtoSpriteConfig(
+    //         files: ["ui/directed/range.png"],
+    //     )),
     // ("action-indicator-Defence", ProtoSpriteConfig(
     //         files: ["ui/floor/indicator-defence.png"],
     //     )),

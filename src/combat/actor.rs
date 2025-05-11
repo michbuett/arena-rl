@@ -173,7 +173,9 @@ pub fn handle_select_map_pos(
             // => execute this action
             commands.trigger_targets(ActionSelectedEvent(action.clone()), entity);
             player_actions.set_available_actions(*hex, vec![]);
-        } else if let Some(attack) = find_eligible_target_at(&target_actor_q, &team, *hex) {
+        } else if let Some(attack) =
+            find_eligible_target_at(&target_actor_q, &team, actor_pos, *hex)
+        {
             player_actions.set_available_actions(*hex, vec![Action::Attack(attack)]);
         } else if let Some(path) = map.find_path(actor_pos, *hex) {
             player_actions.set_available_actions(*hex, vec![Action::MoveAlong { path }]);
@@ -197,13 +199,14 @@ fn find_active_player_actor(
 fn find_eligible_target_at(
     q_actor_at: &Query<(Entity, &MapPos, &Team), With<Actor>>,
     attacker_team: &Team,
+    _attacker_pos: MapPos,
     target_pos: MapPos,
 ) -> Option<AttackData> {
     // println!("[find_eligible_target_at] hex={:?}", target_pos);
 
     for (target, map_pos, target_team) in q_actor_at.iter() {
         if target_team.0 != attacker_team.0 && *map_pos == target_pos {
-            // println!("  Found target: {:?}", target);
+            // TODO use distance
             return Some(AttackData::MeleeAttack { target });
         }
     }
@@ -301,8 +304,7 @@ pub fn handle_attack_command(
                 combat_data_q
                     .get_many_mut([attacking_entity, *target])
                     .unwrap();
-            // combat_data_q.get(attacking_entity).unwrap();
-            // let (target_pos, target_team, _) = combat_data_q.get(*target).unwrap();
+
             let effort_card = activation.active.as_ref().cloned().unwrap().0;
             let [mut attack_deck, mut defence_deck] = deck_q
                 .get_many_mut([attacker_team.0, target_team.0])
@@ -312,17 +314,23 @@ pub fn handle_attack_command(
                 damage: 5,
                 challenge: Challenge {
                     advantage: 0,
-                    target_suite: Suite::PhysicalAg,
-                    target_value: 10,
+                    target_suite: Suite::PhysicalStr,
+                    skill_value: 3, // TODO: use actor attributes
                 },
             };
 
+            let wounds: i16 = health
+                .wounds
+                .iter()
+                .map(|c| if c.value < 10 { 1 } else { 2 })
+                .sum();
+
             let defence = Defence {
-                armor: 0,
+                armor: 3 - wounds,
                 challenge: Challenge {
                     advantage: 0,
                     target_suite: Suite::PhysicalAg,
-                    target_value: 10,
+                    skill_value: 3, // TODO: use actor attributes
                 },
             };
 
@@ -355,14 +363,14 @@ pub fn handle_attack_command(
 
 fn create_melee_attack_fx_sequence(
     attacking_entity: Entity,
-    attacker_pos: MapPos,
+    attacker_mpos: MapPos,
     target_entity: Entity,
-    target_pos: MapPos,
+    target_mpos: MapPos,
     combat_result: CombatResult,
 ) -> FxSequence {
     let step_durration = 100;
-    let attacker_pos = attacker_pos.into_vec3().with_z(Z_LAYER_ACTOR);
-    let target_pos = target_pos.into_vec3().with_z(Z_LAYER_ACTOR);
+    let attacker_pos = attacker_mpos.into_vec3().with_z(Z_LAYER_ACTOR);
+    let target_pos = target_mpos.into_vec3().with_z(Z_LAYER_ACTOR);
     let path = vec![attacker_pos, target_pos, attacker_pos];
 
     let mut fx_seq = FxSequence::new()
@@ -375,6 +383,9 @@ fn create_melee_attack_fx_sequence(
         .wait(step_durration);
 
     fx_seq = match combat_result {
+        CombatResult::Fumble => fx_seq.then(FxEffect::say("Fuck!", attacker_mpos)),
+        CombatResult::Bounced => fx_seq.then(FxEffect::say("Boing!", target_mpos)),
+        CombatResult::Defence => fx_seq.then(FxEffect::say("Blocked!", target_mpos)),
         CombatResult::Wounded(..) => fx_seq.then(FxEffect::BloodSplatter(target_pos)),
         CombatResult::OutOfAction => fx_seq
             .then(FxEffect::Remove(target_entity))
@@ -383,9 +394,7 @@ fn create_melee_attack_fx_sequence(
             .then(FxEffect::BloodSplatter(target_pos))
             .wait(50)
             .then(FxEffect::BloodSplatter(target_pos)),
-
-        _ => fx_seq,
     };
 
-    fx_seq.wait_until_finished()
+    fx_seq.wait(100)
 }

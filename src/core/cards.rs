@@ -183,27 +183,28 @@ fn test_allow_deterministic_cards() {
     assert_eq!(deck.deal(), Card::new(7, MentalAg));
 }
 
+pub const SUCCESS_THRESHOLD: i16 = 10;
 const SUCCESS_LVL_STEP: i16 = 5;
 
 #[derive(Debug, Clone)]
 pub struct Challenge {
     pub advantage: i8,
     pub target_suite: Suite,
-    pub target_value: u8,
+    pub skill_value: u8,
 }
 
 pub type CardDraw = (Card, Vec<Card>);
 
 #[derive(Debug, Clone)]
 pub struct ChallengeResult {
-    pub draw: CardDraw,
+    // pub draw: CardDraw,
     pub success_lvl: i8,
 }
 
 pub fn resolve_challenge(c: &Challenge, deck: &mut Deck) -> ChallengeResult {
     let draw = draw(deck, c.advantage, c.target_suite);
-    let val = draw.0.value(c.target_suite);
-    let diff = val as i16 - c.target_value as i16;
+    let val = c.skill_value + draw.0.value(c.target_suite);
+    let diff = val as i16 - SUCCESS_THRESHOLD;
     let success_lvl = if diff == 0 {
         1
     } else {
@@ -211,36 +212,40 @@ pub fn resolve_challenge(c: &Challenge, deck: &mut Deck) -> ChallengeResult {
     }
     .clamp(-3, 3) as i8;
 
-    ChallengeResult { draw, success_lvl }
+    ChallengeResult {
+        //     draw,
+        success_lvl,
+    }
 }
 
 #[test]
 fn test_can_resolve_simple_challenge() {
-    use Suite::*;
+    // use Suite::*;
 
     let mut deck = Deck::new(&fixed_deck);
     let challenge = Challenge {
         advantage: 0,
         target_suite: Suite::PhysicalStr,
-        target_value: 10,
+        skill_value: 10,
     };
 
     let result1 = resolve_challenge(&challenge, &mut deck);
     let result2 = resolve_challenge(&challenge, &mut deck);
 
-    assert_eq!(
-        result1.draw,
-        (Card::new(10, PhysicalStr), vec![Card::new(10, PhysicalStr)])
-    );
+    // assert_eq!(
+    //     result1.draw,
+    //     (Card::new(10, PhysicalStr), vec![Card::new(10, PhysicalStr)])
+    // );
     assert_eq!(result1.success_lvl, 1); // 10oC (full match, value 10) VS 10oC (TN)
-    assert_eq!(
-        result2.draw,
-        (Card::new(9, PhysicalAg), vec![Card::new(9, PhysicalAg)])
-    );
+
+    // assert_eq!(
+    //     result2.draw,
+    //     (Card::new(9, PhysicalAg), vec![Card::new(9, PhysicalAg)])
+    // );
     assert_eq!(result2.success_lvl, -1); // 9oS (partial match, value 7) VS 10oC (TN)
 }
 
-fn draw(deck: &mut Deck, advantage: i8, s: Suite) -> (Card, Vec<Card>) {
+fn draw(deck: &mut Deck, advantage: i8, s: Suite) -> CardDraw {
     if advantage == 0 {
         let card = deck.deal();
         (card, vec![card])

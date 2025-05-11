@@ -4,14 +4,14 @@ use bevy::prelude::*;
 use rand::prelude::Distribution;
 
 use crate::{
-    animations::{FadeAnimation, MovementAnimation, MovementModification},
+    animations::{FadeAnimation, MovementAnimation, MovementModification, ScaleAnimation},
     assets::Visual,
     EndOfLive,
 };
 
 use super::{
     map::MapPos,
-    ui::{UiState, UiStateTransitionedEvent, Z_LAYER_ACTOR, Z_LAYER_FLOOR},
+    ui::{UiState, UiStateTransitionedEvent, Z_LAYER_ACTOR, Z_LAYER_FLOOR, Z_LAYER_VFX},
 };
 
 const MOVE_STEP_DURATION: u64 = 200;
@@ -48,19 +48,19 @@ impl FxSequence {
         self
     }
 
-    pub fn then_insert(mut self, mut other: FxSequence) -> Self {
-        for (wait, eff) in other.1.drain(..) {
-            self.1.push((self.0 + wait, eff));
-        }
-        self
-    }
+    // pub fn then_insert(mut self, mut other: FxSequence) -> Self {
+    //     for (wait, eff) in other.1.drain(..) {
+    //         self.1.push((self.0 + wait, eff));
+    //     }
+    //     self
+    // }
 
-    pub fn then_append(self, other: FxSequence) -> Self {
-        let other_wait = other.0;
-        let mut result = self.then_insert(other);
-        result.0 += other_wait;
-        result
-    }
+    // pub fn then_append(self, other: FxSequence) -> Self {
+    //     let other_wait = other.0;
+    //     let mut result = self.then_insert(other);
+    //     result.0 += other_wait;
+    //     result
+    // }
 
     pub fn run(mut self, commands: &mut Commands) {
         for (duration, effect) in self.1.drain(..) {
@@ -124,6 +124,21 @@ pub fn update_check_fx_ready(
                         .set_modification(*movement_modification),
                     );
                 }
+
+                FxEffect::CustomText {
+                    pos,
+                    duration,
+                    text,
+                    movement_anim,
+                } => {
+                    handle_custom_text(
+                        &mut commands,
+                        *pos,
+                        *duration,
+                        text,
+                        movement_anim.as_ref(),
+                    );
+                }
             }
 
             // Effect is triggered
@@ -156,15 +171,16 @@ pub enum FxEffect {
         visual: Visual,
         fade_out_after: u64,
     },
-    // Custom {
-    //     pos: WorldPos,
-    //     duration: u64,
-    //     sprite: Option<String>,
-    //     text: Option<Text>,
-    //     scale_anim: Option<(f32, f32)>,
-    //     movement_anim: Option<Vec<WorldPos>>,
-    //     fade_anim: bool,
-    // },
+
+    CustomText {
+        pos: Vec3,
+        duration: u64,
+        // sprite: Option<String>,
+        text: Text,
+        // scale_anim: Option<(f32, f32)>,
+        movement_anim: Option<Vec<Vec3>>,
+        // fade_anim: bool,
+    },
 }
 
 impl FxEffect {
@@ -182,6 +198,24 @@ impl FxEffect {
         }
     }
 
+    pub fn say(txt: impl Into<String>, pos: MapPos) -> Self {
+        let pos = pos.into_vec3().with_z(Z_LAYER_VFX) + Vec3::new(0.0, 50.0, 0.0);
+
+        Self::CustomText {
+            pos,
+            duration: 2000,
+            text: Text::from_section(
+                txt.into(),
+                TextStyle {
+                    color: Color::LinearRgba(LinearRgba::rgb(0.8, 0.2, 0.1)),
+                    font_size: 48.0,
+                    ..Default::default()
+                },
+            ),
+            movement_anim: None,
+        }
+    }
+
     pub fn duration(&self) -> Duration {
         let millis = match self {
             FxEffect::BloodSplatter(..) => BLOOD_SPLATTER_DURATION,
@@ -196,8 +230,9 @@ impl FxEffect {
                 step_durration,
                 ..
             } => path.len().checked_sub(1).unwrap_or(0) as u64 * step_durration,
-            //
-            // FxEffect::Custom { duration, .. } => *duration,
+
+            FxEffect::CustomText { duration, .. } => *duration,
+
             _ => 0,
         };
 
@@ -252,7 +287,32 @@ fn handle_stains(commands: &mut Commands, pos: Vec3, visual: Visual, fade_out_af
         },
         visual,
         FadeAnimation::fade_out(duration),
+        ScaleAnimation::new(1.0, 3.0, duration),
     ));
+}
+
+fn handle_custom_text(
+    commands: &mut Commands,
+    pos: Vec3,
+    duration: u64,
+    text: &Text,
+    movement_anim: Option<&Vec<Vec3>>,
+) {
+    let duration = Duration::from_millis(duration);
+    let mut text_entity = commands.spawn((
+        Text2dBundle {
+            text: text.clone(),
+            transform: Transform::from_translation(pos),
+            ..Default::default()
+        },
+        EndOfLive::after(duration),
+        FadeAnimation::fade_out(duration),
+        ScaleAnimation::new(1.0, 3.0, duration),
+    ));
+
+    if let Some(movement_anim) = movement_anim {
+        text_entity.insert(MovementAnimation::new(duration, movement_anim.clone()));
+    }
 }
 
 fn animation_path(source_pos: Vec3, length: (u32, u32)) -> Vec<Vec3> {
@@ -269,24 +329,6 @@ fn animation_path(source_pos: Vec3, length: (u32, u32)) -> Vec<Vec3> {
     let target_pos = source_pos + (dir * length).extend(0.0);
 
     vec![source_pos, target_pos]
-
-    // let dir = Vec2::new(1.0, 1.0);
-    // let factor = 1000.0;
-    // let dx_range = (
-    //     (dir.x * factor * length.0 as f32).round() as u32,
-    //     (dir.x * factor * length.1 as f32).round() as u32,
-    // );
-    // let dy_range = (
-    //     (dir.y * factor * length.0 as f32).round() as u32,
-    //     (dir.y * factor * length.1 as f32).round() as u32,
-    // );
-
-    // let distribution_x = rand::distributions::Uniform::from(dx_range.0..=dx_range.1);
-    // let distribution_y = rand::distributions::Uniform::from(dy_range.0..=dy_range.1);
-    // let dx = distribution_x.sample(&mut rng) as f32 / factor;
-    // let dy = distribution_y.sample(&mut rng) as f32 / factor;
-
-    // vec![source_pos, source_pos + Vec3::new(dx, dy, 0.0)]
 }
 
 fn between(num1: i32, num2: i32) -> i32 {

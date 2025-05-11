@@ -9,6 +9,7 @@ pub fn animation_plugin(app: &mut App) {
             update_sprite_animation,
             update_movement_animation,
             update_fade_animation,
+            update_scale_animation,
         ),
     );
 }
@@ -152,19 +153,68 @@ impl FadeAnimation {
 fn update_fade_animation(
     mut commands: Commands,
     time: Res<Time>,
-    mut query: Query<(Entity, Mut<FadeAnimation>, Mut<Sprite>)>,
+    mut query: Query<(
+        Entity,
+        Mut<FadeAnimation>,
+        Option<Mut<Sprite>>,
+        Option<Mut<Text>>,
+    )>,
 ) {
-    for (entity, mut anim, mut sprite) in query.iter_mut() {
+    for (entity, mut anim, sprite, text) in query.iter_mut() {
         anim.timer.tick(time.delta());
 
         let dt = anim.timer.fraction();
         let da = dt * dt * (anim.end_alpha - anim.start_alpha); // sqrt for easing effect
         let new_alpha = (anim.start_alpha + da).clamp(0.0, 1.0);
 
-        sprite.color.set_alpha(new_alpha);
+        if let Some(mut sprite) = sprite {
+            sprite.color.set_alpha(new_alpha);
+        }
+
+        if let Some(mut text) = text {
+            for section in text.sections.iter_mut() {
+                section.style.color.set_alpha(new_alpha);
+            }
+        }
 
         if anim.timer.finished() {
             commands.entity(entity).remove::<FadeAnimation>();
+        }
+    }
+}
+
+#[derive(Component, Clone)]
+pub struct ScaleAnimation {
+    timer: Timer,
+    start_scale: f32,
+    end_scale: f32,
+}
+
+impl ScaleAnimation {
+    pub fn new(start_scale: f32, end_scale: f32, duration: Duration) -> Self {
+        Self {
+            timer: Timer::new(duration, TimerMode::Once),
+            start_scale,
+            end_scale,
+        }
+    }
+}
+
+fn update_scale_animation(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut query: Query<(Entity, Mut<ScaleAnimation>, Mut<Transform>)>,
+) {
+    for (entity, mut anim, mut transform) in query.iter_mut() {
+        anim.timer.tick(time.delta());
+
+        let dt = anim.timer.fraction();
+        let new_scale = anim.start_scale + dt * (anim.end_scale - anim.start_scale);
+
+        transform.scale = new_scale * Vec3::ONE;
+
+        if anim.timer.finished() {
+            commands.entity(entity).remove::<ScaleAnimation>();
         }
     }
 }
