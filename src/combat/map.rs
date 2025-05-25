@@ -66,10 +66,9 @@ impl MapPos {
         }
     }
 
-    // fn distance(&self, other: &MapPos) -> f32 {
-    //     (((self.q - other.q).abs() + (self.r - other.r).abs() + (self.s - other.s).abs()) / 2)
-    //         as f32
-    // }
+    pub fn distance(&self, other: &MapPos) -> i32 {
+        ((self.q - other.q).abs() + (self.r - other.r).abs() + (self.s - other.s).abs()) / 2
+    }
 
     // fn lerp(&self, other: &MapPos, delta: f32) -> Self {
     //     let fraq_q = self.q as f32 + (other.q - self.q) as f32 * delta;

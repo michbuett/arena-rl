@@ -6,7 +6,7 @@ use rand::prelude::Distribution;
 use crate::{
     animations::{FadeAnimation, MovementAnimation, MovementModification, ScaleAnimation},
     assets::Visual,
-    EndOfLive,
+    EndOfLive, MarkedForDeath,
 };
 
 use super::{
@@ -95,7 +95,7 @@ pub fn update_check_fx_ready(
             // => trigger the effect by adding/updating the neccesary components
             match &fx.effect {
                 FxEffect::Remove(entity) => {
-                    commands.entity(*entity).despawn_recursive();
+                    commands.entity(*entity).insert(MarkedForDeath);
                 }
 
                 FxEffect::BloodSplatter(pos) => {
@@ -143,7 +143,7 @@ pub fn update_check_fx_ready(
 
             // Effect is triggered
             // => entity can be removed
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).insert(MarkedForDeath);
         }
     }
 }

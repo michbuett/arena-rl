@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use super::actor::{
-    ActionSelectedEvent, Activation, Activations, Actor, BeginActivationCommand, PlayerControlled,
+    ActionTriggeredEvent, Activation, Activations, Actor, BeginActivationCommand, PlayerControlled,
     PreparedAction, Team, TeamDeck, TeamHand,
 };
 
@@ -61,6 +61,7 @@ pub fn update_combat_flow(
         // Activate actors in order if the initiative card
         let mut actor_to_activate: Option<(Entity, u8)> = None;
 
+        println!("Processing ...");
         for (entity, activations, _, prep_action) in activations_q.iter() {
             if activations.active.is_some() {
                 // info!(
@@ -69,7 +70,7 @@ pub fn update_combat_flow(
                 // );
                 if let Some(PreparedAction(action)) = prep_action {
                     commands.entity(entity).remove::<PreparedAction>();
-                    commands.trigger_targets(ActionSelectedEvent(action.clone()), entity);
+                    commands.trigger_targets(ActionTriggeredEvent(action.clone()), entity);
                 }
 
                 // an actor is already active

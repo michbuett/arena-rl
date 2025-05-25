@@ -8,7 +8,7 @@ use super::fx::{FxEffect, FxSequence};
 use super::ui::Z_LAYER_ACTOR;
 use super::{
     map::{HexMap, MapPos, Obstacle},
-    ui::{Description, MapPosSelectedEvent, PlayerActions, UiState, UiStateTransitionedEvent},
+    ui::{Description, MapPosSelectedEvent, SelectedMapPos, UiState, UiStateTransitionedEvent},
     Visual,
 };
 
@@ -128,7 +128,10 @@ pub struct AiActorBundle {
 pub struct PreparedAction(pub Action);
 
 #[derive(Debug, Event)]
-pub struct ActionSelectedEvent(pub Action);
+pub struct ActionTriggeredEvent(pub Action);
+
+#[derive(Debug, Event)]
+pub struct ActionSelectedEvent(pub usize);
 
 #[derive(Debug, Event)]
 pub struct BeginActivationCommand;
@@ -161,26 +164,43 @@ pub fn handle_select_map_pos(
 
     mut commands: Commands,
     mut map_pos_selected_er: EventReader<MapPosSelectedEvent>,
-    mut player_actions: ResMut<PlayerActions>,
+    player_actions: Option<Res<SelectedMapPos>>,
 ) {
     let Some(MapPosSelectedEvent(hex)) = map_pos_selected_er.read().last() else {
         return;
     };
 
     if let Some((entity, actor_pos, team)) = find_active_player_actor(&active_actor_q) {
-        if let Some(action) = player_actions.get_selected_action_when_at(hex) {
+        if let Some(action) =
+            player_actions.and_then(|pa| pa.get_selected_action_when_at(hex).cloned())
+        {
             // there is already a selected action for this hex
             // => execute this action
-            commands.trigger_targets(ActionSelectedEvent(action.clone()), entity);
-            player_actions.set_available_actions(*hex, vec![]);
-        } else if let Some(attack) =
-            find_eligible_target_at(&target_actor_q, &team, actor_pos, *hex)
-        {
-            player_actions.set_available_actions(*hex, vec![Action::Attack(attack)]);
-        } else if let Some(path) = map.find_path(actor_pos, *hex) {
-            player_actions.set_available_actions(*hex, vec![Action::MoveAlong { path }]);
+            commands.remove_resource::<SelectedMapPos>();
+            commands.trigger_targets(ActionTriggeredEvent(action), entity);
         } else {
-            player_actions.set_available_actions(*hex, vec![]);
+            let mut available_actions = vec![];
+
+            if let Some(target) = find_enemy_at(&target_actor_q, &team, *hex) {
+                if actor_pos.distance(hex) == 1 {
+                    // There is an enemy next to us
+                    // => allow melee attack
+                    let attack = AttackData::MeleeAttack { target };
+                    available_actions.push(Action::Attack(attack));
+                } else if let Some(mut path) = map.find_path(actor_pos, *hex) {
+                    if path.len() > 1 {
+                        let max_steps = (path.len() - 1).max(3);
+                        let path = path.drain(..max_steps).collect();
+
+                        available_actions.push(Action::MoveAlong { path });
+                    }
+                }
+            } else if let Some(path) = map.find_path(actor_pos, *hex) {
+                available_actions.push(Action::MoveAlong { path });
+            }
+
+            // println!("[DEBUG] available actions: {:?}", available_actions);
+            commands.insert_resource(SelectedMapPos::new(entity, *hex, available_actions));
         }
     }
 }
@@ -196,26 +216,33 @@ fn find_active_player_actor(
     None
 }
 
-fn find_eligible_target_at(
+fn find_enemy_at(
     q_actor_at: &Query<(Entity, &MapPos, &Team), With<Actor>>,
     attacker_team: &Team,
-    _attacker_pos: MapPos,
     target_pos: MapPos,
-) -> Option<AttackData> {
-    // println!("[find_eligible_target_at] hex={:?}", target_pos);
-
+) -> Option<Entity> {
     for (target, map_pos, target_team) in q_actor_at.iter() {
         if target_team.0 != attacker_team.0 && *map_pos == target_pos {
-            // TODO use distance
-            return Some(AttackData::MeleeAttack { target });
+            return Some(target);
         }
     }
-    // println!("  No target found");
     None
 }
+pub fn handle_action_selected_event(
+    trigger: Trigger<ActionSelectedEvent>,
+    selected_map_pos: Option<ResMut<SelectedMapPos>>,
+) {
+    if let Some(mut sel_mp) = selected_map_pos {
+        let ActionSelectedEvent(new_index) = trigger.event();
+        sel_mp.select_action(*new_index);
+    }
+}
 
-pub fn handle_action_selected_event(trigger: Trigger<ActionSelectedEvent>, mut commands: Commands) {
-    let ActionSelectedEvent(action) = trigger.event();
+pub fn handle_action_triggered_event(
+    trigger: Trigger<ActionTriggeredEvent>,
+    mut commands: Commands,
+) {
+    let ActionTriggeredEvent(action) = trigger.event();
     let entity = trigger.entity();
 
     // info!(
@@ -245,10 +272,10 @@ pub fn handle_begin_activation_command(
     mut commands: Commands,
     mut actor_activation_q: Query<(Mut<Activations>, &PlayerControlled, &MapPos)>,
 ) {
-    // info!(
-    //     "[handle_begin_activation_command] entity={:?}",
-    //     trigger.entity()
-    // );
+    info!(
+        "[handle_begin_activation_command] entity={:?}",
+        trigger.entity()
+    );
 
     let e = trigger.entity();
     let (mut activation, PlayerControlled(is_pc), mpos) = actor_activation_q.get_mut(e).unwrap();
@@ -257,8 +284,6 @@ pub fn handle_begin_activation_command(
 
     if *is_pc {
         commands.trigger(UiStateTransitionedEvent(UiState::await_input(*mpos)));
-    } else {
-        // commands.trigger_targets(ActionSelectedEvent(Action::NoOp), e)
     }
 }
 
@@ -278,6 +303,12 @@ pub fn handle_end_activation_command(
 
 pub fn handle_move_to_command(trigger: Trigger<MoveToCommand>, mut commands: Commands) {
     let MoveToCommand(path) = trigger.event();
+
+    if path.is_empty() {
+        // No need to move along an empty Path
+        return;
+    }
+
     let end_pos = *path.last().unwrap();
     let moving_entity = trigger.entity();
 

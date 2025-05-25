@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use super::{
-    actor::{Action, BeginActivationCommand, PreparedAction, Team},
+    actor::{Action, AttackData, BeginActivationCommand, PreparedAction, Team},
     map::{HexMap, MapPos, Path},
 };
 
@@ -44,7 +44,16 @@ fn choose_ai_action(
         }
     }
 
-    if let Some((_, mut p)) = nearest_enemy {
+    if let Some((target, mut p)) = nearest_enemy {
+        if p.len() == 2 {
+            commands
+                .entity(e)
+                .insert(PreparedAction(Action::Attack(AttackData::MeleeAttack {
+                    target,
+                })));
+            return;
+        }
+
         let path = p.drain(0..p.len() - 1).collect();
         commands
             .entity(e)

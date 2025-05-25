@@ -1,6 +1,6 @@
 use crate::{
     animations::{FadeAnimation, SpriteAnimation},
-    GameState,
+    GameState, MarkedForDeath,
 };
 use bevy::{
     asset::{io::Reader, ron, AssetLoader, AsyncReadExt, LoadContext, LoadedFolder},
@@ -257,7 +257,7 @@ fn update_sprites_from_visuals(
         // clear "old" sprites
         for (parent, child_entity, _) in sprite_container_q.iter() {
             if parent.get() == entity {
-                commands.entity(child_entity).despawn_recursive();
+                commands.entity(child_entity).insert(MarkedForDeath);
             }
         }
 

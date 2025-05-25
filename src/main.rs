@@ -29,6 +29,7 @@ fn main() {
         .init_state::<GameState>()
         .add_systems(Startup, setup)
         .add_systems(Update, update_end_of_live_removal)
+        .add_systems(PostUpdate, despawn_screen::<MarkedForDeath>)
         .run();
 }
 
@@ -49,6 +50,9 @@ fn despawn_screen<T: Component>(to_despawn: Query<Entity, With<T>>, mut commands
     }
 }
 
+#[derive(Component)]
+pub struct MarkedForDeath;
+
 #[derive(Component, Debug, Clone)]
 pub struct EndOfLive(pub Timer);
 
@@ -67,7 +71,7 @@ fn update_end_of_live_removal(
         eol.0.tick(time.delta());
 
         if eol.0.finished() {
-            commands.entity(e).despawn_recursive();
+            commands.entity(e).insert(MarkedForDeath);
         }
     }
 }

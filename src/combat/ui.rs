@@ -1,8 +1,12 @@
 use std::time::Duration;
 
+use bevy::color::palettes::tailwind::RED_100;
 use bevy::{input::mouse::MouseMotion, prelude::*, window::PrimaryWindow};
 
+use crate::combat::actor::{ActionSelectedEvent, ActionTriggeredEvent};
 use crate::core::{Card, Suite};
+use crate::style::BUTTON_BG_HIGHLIGHT;
+use crate::MarkedForDeath;
 use crate::{style::WINDOW_BACKGROUND, GameState};
 
 use super::{
@@ -32,26 +36,33 @@ pub struct PlayerActionIndicator;
 #[derive(Resource)]
 pub struct ScrollState(bool);
 
+#[derive(Component)]
+pub struct ActionButtonContainer;
+
 #[derive(Resource)]
-pub struct PlayerActions {
-    map_pos: Option<MapPos>,
+pub struct SelectedMapPos {
+    active_actor: Entity,
+    map_pos: MapPos,
     available_actions: Vec<Action>,
     selected_action: usize,
 }
 
-impl PlayerActions {
-    pub fn empty() -> Self {
+impl SelectedMapPos {
+    pub fn new(active_actor: Entity, map_pos: MapPos, available_actions: Vec<Action>) -> Self {
         Self {
-            map_pos: None,
-            available_actions: Vec::new(),
+            active_actor,
+            map_pos,
+            available_actions,
             selected_action: 0,
         }
     }
 
-    pub fn set_available_actions(&mut self, mp: MapPos, actions: Vec<Action>) {
-        self.map_pos = Some(mp);
-        self.available_actions = actions;
-        self.selected_action = 0;
+    pub fn select_action(&mut self, new_index: usize) {
+        self.selected_action = new_index.clamp(0, self.available_actions.len() - 1);
+    }
+
+    pub fn get_selected_action_index(&self) -> usize {
+        self.selected_action
     }
 
     pub fn get_selected_action(&self) -> Option<&Action> {
@@ -59,11 +70,11 @@ impl PlayerActions {
     }
 
     pub fn get_selected_action_when_at(&self, other_pos: &MapPos) -> Option<&Action> {
-        self.get_selected_action()
-            .and_then(|action| match self.map_pos {
-                Some(prev_selected_hex) if *other_pos == prev_selected_hex => Some(action),
-                _ => None,
-            })
+        if self.map_pos == *other_pos {
+            self.get_selected_action()
+        } else {
+            None
+        }
     }
 }
 
@@ -71,7 +82,16 @@ impl PlayerActions {
 pub struct MapPosSelectedEvent(pub MapPos);
 
 #[derive(Component)]
-pub struct UiElement;
+pub struct UserInputElement;
+
+#[derive(Component)]
+pub struct ActionTrigger {
+    index: usize,
+    action: Action,
+}
+
+#[derive(Component)]
+pub struct ActivationIndicator;
 
 pub fn combat_ui_plugin(app: &mut App) {
     app.add_event::<MapPosSelectedEvent>()
@@ -81,9 +101,11 @@ pub fn combat_ui_plugin(app: &mut App) {
         .add_systems(
             Update,
             (
-                (update_user_input, handle_select_map_pos).chain(),
+                process_keyboard_input,
+                (process_mouse_input, handle_select_map_pos).chain(),
                 update_description_on_activation_changed,
-                update_available_playeractions.run_if(resource_exists_and_changed::<PlayerActions>),
+                update_available_playeractions
+                    .run_if(resource_exists_and_changed::<SelectedMapPos>),
                 update_turn_info.run_if(resource_exists_and_changed::<Turn>),
                 update_waiting_state,
             )
@@ -93,7 +115,6 @@ pub fn combat_ui_plugin(app: &mut App) {
 
 fn setup_ui(mut commands: Commands) {
     commands.insert_resource(ScrollState(false));
-    commands.insert_resource(PlayerActions::empty());
     commands.insert_resource(UiState::prossing());
 
     commands
@@ -124,12 +145,84 @@ fn setup_ui(mut commands: Commands) {
                 TurnInfo,
             ));
         });
+
+    commands
+        .spawn((
+            Name::from("DetailsWindow"),
+            NodeBundle {
+                visibility: Visibility::Hidden,
+                background_color: WINDOW_BACKGROUND.into(),
+                style: Style {
+                    position_type: PositionType::Absolute,
+                    top: Val::Px(20.0),
+                    right: Val::Px(20.0),
+                    width: Val::Px(200.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            OnCombatState,
+            UserInputElement,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                TextBundle::from_section(
+                    "Test",
+                    TextStyle {
+                        color: Color::BLACK,
+                        font_size: 14.0,
+                        ..Default::default()
+                    },
+                )
+                .with_style(Style {
+                    margin: UiRect::all(Val::Px(10.0)),
+                    ..Default::default()
+                }),
+                DetailsWindowText,
+            ));
+        });
+
+    commands.spawn((
+        Name::from("Action Button Container"),
+        NodeBundle {
+            visibility: Visibility::Hidden,
+            style: Style {
+                position_type: PositionType::Absolute,
+                flex_direction: FlexDirection::Column,
+                justify_items: JustifyItems::Start,
+                align_items: AlignItems::Stretch,
+                display: Display::Flex,
+                bottom: Val::Px(20.0),
+                right: Val::Px(20.0),
+                width: Val::Px(200.0),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        OnCombatState,
+        UserInputElement,
+        ActionButtonContainer,
+    ));
+
+    commands.spawn((
+        Name::from("SelectedTile"),
+        SpatialBundle {
+            visibility: Visibility::Hidden,
+            ..Default::default()
+        },
+        Visual::Single("floor-selected".to_string()),
+        SelectedTile,
+        OnCombatState,
+        UserInputElement,
+    ));
 }
 
-fn update_user_input(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mouse_button_input: Res<ButtonInput<MouseButton>>,
+fn process_mouse_input(
+    mut commands: Commands,
+    mut mouse_button_input: ResMut<ButtonInput<MouseButton>>,
+    selected_map_pos: Option<Res<SelectedMapPos>>,
     dim: Res<ScrollBounds>,
+    interaction_q: Query<(&Interaction, &ActionTrigger), Changed<Interaction>>,
     window_query: Query<&Window, With<PrimaryWindow>>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     ui_state: Res<UiState>,
@@ -138,17 +231,30 @@ fn update_user_input(
     mut map_pos_selected_ew: EventWriter<MapPosSelectedEvent>,
     mut scroll_state: ResMut<ScrollState>,
 ) {
-    let mut camera_transform = camera_transform_query.single_mut();
+    for (interaction, ActionTrigger { index, action }) in interaction_q.iter() {
+        match (&selected_map_pos, interaction) {
+            (Some(pa), Interaction::Pressed) => {
+                if pa.get_selected_action_index() == *index {
+                    commands.remove_resource::<SelectedMapPos>();
+                    commands.trigger_targets(ActionTriggeredEvent(action.clone()), pa.active_actor);
+                } else {
+                    commands.trigger(ActionSelectedEvent(*index));
+                }
 
-    if keyboard_input.pressed(KeyCode::KeyA) || keyboard_input.pressed(KeyCode::ArrowLeft) {
-        move_camera(&mut camera_transform, -10.0, 0.0, &dim);
-    } else if keyboard_input.pressed(KeyCode::KeyD) || keyboard_input.pressed(KeyCode::ArrowRight) {
-        move_camera(&mut camera_transform, 10.0, 0.0, &dim);
-    } else if keyboard_input.pressed(KeyCode::KeyW) || keyboard_input.pressed(KeyCode::ArrowUp) {
-        move_camera(&mut camera_transform, 0.0, 10.0, &dim);
-    } else if keyboard_input.pressed(KeyCode::KeyS) || keyboard_input.pressed(KeyCode::ArrowDown) {
-        move_camera(&mut camera_transform, 0.0, -10.0, &dim);
+                mouse_button_input.reset_all();
+                return;
+            }
+
+            (_, Interaction::Hovered) => {
+                // ignore all other mouse interactions while hovering over a button (e.g. no scrolling)
+                mouse_button_input.reset_all();
+                return;
+            }
+            _ => {}
+        }
     }
+
+    let mut camera_transform = camera_transform_query.single_mut();
 
     if mouse_button_input.pressed(MouseButton::Left) {
         for ev in mouse_motion_evr.read() {
@@ -178,6 +284,24 @@ fn update_user_input(
                 }
             }
         }
+    }
+}
+
+fn process_keyboard_input(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    dim: Res<ScrollBounds>,
+    mut camera_transform_query: Query<&mut Transform, With<Camera>>,
+) {
+    let mut camera_transform = camera_transform_query.single_mut();
+
+    if keyboard_input.pressed(KeyCode::KeyA) || keyboard_input.pressed(KeyCode::ArrowLeft) {
+        move_camera(&mut camera_transform, -10.0, 0.0, &dim);
+    } else if keyboard_input.pressed(KeyCode::KeyD) || keyboard_input.pressed(KeyCode::ArrowRight) {
+        move_camera(&mut camera_transform, 10.0, 0.0, &dim);
+    } else if keyboard_input.pressed(KeyCode::KeyW) || keyboard_input.pressed(KeyCode::ArrowUp) {
+        move_camera(&mut camera_transform, 0.0, 10.0, &dim);
+    } else if keyboard_input.pressed(KeyCode::KeyS) || keyboard_input.pressed(KeyCode::ArrowDown) {
+        move_camera(&mut camera_transform, 0.0, -10.0, &dim);
     }
 }
 
@@ -262,10 +386,7 @@ impl UiState {
     }
 
     pub fn is_awaiting_input(&self) -> bool {
-        match self {
-            Self::AwaitInput(..) => true,
-            _ => false,
-        }
+        matches!(self, Self::AwaitInput(..))
     }
 }
 
@@ -287,7 +408,7 @@ fn update_waiting_state(
 
 fn update_available_playeractions(
     mut commands: Commands,
-    player_actions: Res<PlayerActions>,
+    player_actions: Res<SelectedMapPos>,
     indicatorq: Query<(Entity, &PlayerActionIndicator)>,
 ) {
     for (e, _) in indicatorq.iter() {
@@ -406,7 +527,8 @@ fn spawn_activation_indicators(parent: &mut ChildBuilder, card: &Card, pos: usiz
             transform: Transform::from_translation(pos),
             ..Default::default()
         },
-        UiElement,
+        UserInputElement,
+        ActivationIndicator,
     ));
 }
 
@@ -432,61 +554,20 @@ fn card_visual_name(card: &Card) -> String {
 
 fn update_ui_on_state_change(
     trigger: Trigger<UiStateTransitionedEvent>,
-    ui_elements_q: Query<Entity, With<UiElement>>,
     actor_q: Query<(Entity, &Activations), With<Actor>>,
+    activation_indicator_q: Query<Entity, With<ActivationIndicator>>,
     mut commands: Commands,
+
+    mut ui_elements_q: Query<Mut<Visibility>, With<UserInputElement>>,
     mut map_pos_selected_ew: EventWriter<MapPosSelectedEvent>,
     mut ui_state: ResMut<UiState>,
 ) {
     let UiStateTransitionedEvent(new_ui_state) = trigger.event();
 
     if let UiState::AwaitInput(mpos) = new_ui_state {
-        commands
-            .spawn((
-                Name::from("DetailsWindow"),
-                NodeBundle {
-                    background_color: WINDOW_BACKGROUND.into(),
-                    style: Style {
-                        position_type: PositionType::Absolute,
-                        top: Val::Px(20.0),
-                        right: Val::Px(20.0),
-                        width: Val::Px(200.0),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-                OnCombatState,
-                UiElement,
-            ))
-            .with_children(|parent| {
-                parent.spawn((
-                    TextBundle::from_section(
-                        "Test",
-                        TextStyle {
-                            color: Color::BLACK,
-                            font_size: 14.0,
-                            ..Default::default()
-                        },
-                    )
-                    .with_style(Style {
-                        margin: UiRect::all(Val::Px(10.0)),
-                        ..Default::default()
-                    }),
-                    DetailsWindowText,
-                ));
-            });
-
-        commands.spawn((
-            Name::from("SelectedTile"),
-            SpatialBundle {
-                visibility: Visibility::Hidden,
-                ..Default::default()
-            },
-            Visual::Single("floor-selected".to_string()),
-            SelectedTile,
-            OnCombatState,
-            UiElement,
-        ));
+        for mut visibility in ui_elements_q.iter_mut() {
+            *visibility = Visibility::Visible;
+        }
 
         for (e, activations) in actor_q.iter() {
             commands.entity(e).with_children(|parent| {
@@ -495,7 +576,7 @@ fn update_ui_on_state_change(
                 }
 
                 for (idx, Activation(card)) in activations.remaining.iter().enumerate() {
-                    spawn_activation_indicators(parent, &card, idx + 2);
+                    spawn_activation_indicators(parent, card, idx + 2);
                 }
             });
         }
@@ -503,10 +584,83 @@ fn update_ui_on_state_change(
         map_pos_selected_ew.send(MapPosSelectedEvent(*mpos));
     } else {
         if let UiState::AwaitInput(..) = ui_state.as_ref() {
-            for e in ui_elements_q.iter() {
-                commands.entity(e).despawn_recursive();
+            for mut visibility in ui_elements_q.iter_mut() {
+                *visibility = Visibility::Hidden;
             }
         }
+        for e in activation_indicator_q.iter() {
+            commands.entity(e).insert(MarkedForDeath);
+        }
     }
+
     *ui_state.as_mut() = new_ui_state.clone();
+}
+
+pub fn update_action_buttons(
+    mut commands: Commands,
+    player_actions: Res<SelectedMapPos>,
+    button_container_q: Query<Entity, With<ActionButtonContainer>>,
+) {
+    let Ok(container_entity) = button_container_q.get_single() else {
+        // container does not exist
+        // => ignore change
+        return;
+    };
+
+    commands.entity(container_entity).despawn_descendants();
+    commands.entity(container_entity).with_children(|parent| {
+        for (idx, action) in player_actions.available_actions.iter().enumerate() {
+            let (background_color, border_color) = if idx == player_actions.selected_action {
+                (BUTTON_BG_HIGHLIGHT.into(), RED_100.into())
+            } else {
+                (WINDOW_BACKGROUND.into(), BorderColor(Color::BLACK))
+            };
+
+            parent
+                .spawn((
+                    ButtonBundle {
+                        background_color,
+                        border_color,
+                        style: Style {
+                            display: Display::Block,
+                            width: Val::Percent(100.0),
+                            border: UiRect::all(Val::Px(3.0)),
+                            margin: UiRect::vertical(Val::Px(5.0)),
+                            padding: UiRect::all(Val::Px(10.0)),
+
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                    OnCombatState,
+                    UserInputElement,
+                    ActionTrigger {
+                        index: idx,
+                        action: action.clone(),
+                    },
+                ))
+                .with_children(|button| {
+                    button.spawn(TextBundle {
+                        text: Text::from_section(
+                            button_text_for_action(action),
+                            TextStyle {
+                                color: Color::BLACK,
+                                font_size: 14.0,
+                                ..Default::default()
+                            },
+                        ),
+                        ..Default::default()
+                    });
+                });
+        }
+    });
+}
+
+fn button_text_for_action(action: &Action) -> String {
+    match action {
+        Action::MoveAlong { .. } => "Move",
+        Action::Attack { .. } => "Attack",
+        _ => "Unknown",
+    }
+    .to_string()
 }

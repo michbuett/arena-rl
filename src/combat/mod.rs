@@ -6,16 +6,19 @@ mod fx;
 mod map;
 mod ui;
 
-use actor::{handle_attack_command, AttackCommand};
+use actor::{
+    handle_action_triggered_event, handle_attack_command, ActionSelectedEvent, AttackCommand,
+};
 use ai::combat_ai_plugin;
 use bevy::prelude::*;
+use ui::{update_action_buttons, SelectedMapPos};
 
 use crate::{assets::Visual, despawn_screen, GameState};
 
 use self::{
     actor::{
         handle_action_selected_event, handle_begin_activation_command,
-        handle_end_activation_command, handle_move_to_command, ActionSelectedEvent, ActorBundle,
+        handle_end_activation_command, handle_move_to_command, ActionTriggeredEvent, ActorBundle,
         AiBehaviour, BeginActivationCommand, EndActivationCommand, MoveToCommand, Team, TeamBundle,
     },
     flow::{setup_combat_flow, update_combat_flow, CombatFlowEvent},
@@ -31,6 +34,7 @@ struct ScrollBounds(Rect);
 
 pub fn combat_plugin(app: &mut App) {
     app.add_plugins((combat_ui_plugin, combat_ai_plugin))
+        .add_event::<ActionTriggeredEvent>()
         .add_event::<ActionSelectedEvent>()
         .add_event::<BeginActivationCommand>()
         .add_event::<EndActivationCommand>()
@@ -38,6 +42,7 @@ pub fn combat_plugin(app: &mut App) {
         .add_event::<AttackCommand>()
         .add_event::<CombatFlowEvent>()
         .observe(handle_action_selected_event)
+        .observe(handle_action_triggered_event)
         .observe(handle_begin_activation_command)
         .observe(handle_end_activation_command)
         .observe(handle_move_to_command)
@@ -56,6 +61,7 @@ pub fn combat_plugin(app: &mut App) {
                 update_obstacles_in_map,
                 fx::update_check_fx_ready,
                 update_combat_flow.run_if(progress_game),
+                update_action_buttons.run_if(resource_exists_and_changed::<SelectedMapPos>),
             )
                 .run_if(in_state(GameState::Combat)),
         )
