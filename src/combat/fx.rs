@@ -6,6 +6,7 @@ use rand::prelude::Distribution;
 use crate::{
     animations::{FadeAnimation, MovementAnimation, MovementModification, ScaleAnimation},
     assets::Visual,
+    style::TextStyle,
     EndOfLive, MarkedForDeath,
 };
 
@@ -176,7 +177,7 @@ pub enum FxEffect {
         pos: Vec3,
         duration: u64,
         // sprite: Option<String>,
-        text: Text,
+        text: (String, TextStyle),
         // scale_anim: Option<(f32, f32)>,
         movement_anim: Option<Vec<Vec3>>,
         // fade_anim: bool,
@@ -204,14 +205,7 @@ impl FxEffect {
         Self::CustomText {
             pos,
             duration: 2000,
-            text: Text::from_section(
-                txt.into(),
-                TextStyle {
-                    color: Color::LinearRgba(LinearRgba::rgb(0.8, 0.2, 0.1)),
-                    font_size: 48.0,
-                    ..Default::default()
-                },
-            ),
+            text: (txt.into(), TextStyle::InGameScream),
             movement_anim: None,
         }
     }
@@ -255,10 +249,7 @@ fn handle_blood_splatter(commands: &mut Commands, pos: Vec3) {
         commands.spawn((
             EndOfLive::after(eol_dur),
             Name::new("blood-splatter"),
-            SpatialBundle {
-                transform: Transform::from_translation(pos),
-                ..Default::default()
-            },
+            Transform::from_translation(pos),
             visual.clone(),
             MovementAnimation::new(mv_dur, move_steps)
                 .set_modification(MovementModification::ParabolaJump(100)),
@@ -281,10 +272,7 @@ fn handle_stains(commands: &mut Commands, pos: Vec3, visual: Visual, fade_out_af
     commands.spawn((
         Name::new("stains"),
         EndOfLive::after(duration),
-        SpatialBundle {
-            transform: Transform::from_translation(pos),
-            ..Default::default()
-        },
+        Transform::from_translation(pos),
         visual,
         FadeAnimation::fade_out(duration),
         ScaleAnimation::new(1.0, 3.0, duration),
@@ -295,16 +283,15 @@ fn handle_custom_text(
     commands: &mut Commands,
     pos: Vec3,
     duration: u64,
-    text: &Text,
+    (text, text_style): &(String, TextStyle),
     movement_anim: Option<&Vec<Vec3>>,
 ) {
     let duration = Duration::from_millis(duration);
     let mut text_entity = commands.spawn((
-        Text2dBundle {
-            text: text.clone(),
-            transform: Transform::from_translation(pos),
-            ..Default::default()
-        },
+        Text2d(text.clone()),
+        text_style.as_text_font(),
+        text_style.as_text_color(),
+        Transform::from_translation(pos),
         EndOfLive::after(duration),
         FadeAnimation::fade_out(duration),
         ScaleAnimation::new(1.0, 3.0, duration),

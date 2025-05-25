@@ -35,12 +35,15 @@ fn main() {
 
 fn setup(mut commands: Commands, windows: Query<&Window, With<PrimaryWindow>>) {
     let win = windows.single();
-    let scaling_mode = ScalingMode::WindowSize(1.0 / win.resolution.scale_factor());
-    let mut camera_bundle = Camera2dBundle::default();
 
-    camera_bundle.projection.scaling_mode = scaling_mode;
-
-    commands.spawn(camera_bundle);
+    commands.spawn((
+        Camera2d::default(),
+        Projection::Orthographic(OrthographicProjection {
+            scaling_mode: ScalingMode::WindowSize,
+            scale: win.resolution.scale_factor(),
+            ..OrthographicProjection::default_2d()
+        }),
+    ));
 }
 
 /// Generic system that takes a component as a parameter, and will despawn all entities with that component

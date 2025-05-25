@@ -41,12 +41,12 @@ pub fn combat_plugin(app: &mut App) {
         .add_event::<MoveToCommand>()
         .add_event::<AttackCommand>()
         .add_event::<CombatFlowEvent>()
-        .observe(handle_action_selected_event)
-        .observe(handle_action_triggered_event)
-        .observe(handle_begin_activation_command)
-        .observe(handle_end_activation_command)
-        .observe(handle_move_to_command)
-        .observe(handle_attack_command)
+        .add_observer(handle_action_selected_event)
+        .add_observer(handle_action_triggered_event)
+        .add_observer(handle_begin_activation_command)
+        .add_observer(handle_end_activation_command)
+        .add_observer(handle_move_to_command)
+        .add_observer(handle_attack_command)
         .add_systems(
             OnEnter(GameState::Combat),
             (
@@ -74,10 +74,7 @@ fn setup_map(mut commands: Commands) {
     for (hex_pos, _tile_type) in map.tiles() {
         commands.spawn((
             Name::from(format!("Tile_{:?}", hex_pos)),
-            SpatialBundle {
-                transform: Transform::from_translation(hex_pos.into_vec3()),
-                ..Default::default()
-            },
+            Transform::from_translation(hex_pos.into_vec3()),
             Visual::Single("floor".to_string()),
             OnCombatState,
         ));

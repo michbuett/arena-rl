@@ -22,10 +22,11 @@ pub struct SpriteAnimation {
 }
 
 fn update_sprite_animation(
-    mut animations: Query<(&mut TextureAtlas, &mut SpriteAnimation)>,
+    // mut animations: Query<(&mut TextureAtlas, &mut SpriteAnimation)>,
+    mut animations: Query<(&mut Sprite, &mut SpriteAnimation)>,
     time: Res<Time>,
 ) {
-    for (mut atlas, mut anim) in animations.iter_mut() {
+    for (mut sprite, mut anim) in animations.iter_mut() {
         anim.timer.tick(time.delta());
 
         if anim.timer.finished() {
@@ -35,6 +36,7 @@ fn update_sprite_animation(
                 anim.current_idx = 0;
             }
 
+            let atlas = sprite.texture_atlas.as_mut().unwrap();
             atlas.index = anim.indices[anim.current_idx];
         }
     }
@@ -157,10 +159,10 @@ fn update_fade_animation(
         Entity,
         Mut<FadeAnimation>,
         Option<Mut<Sprite>>,
-        Option<Mut<Text>>,
+        Option<Mut<TextColor>>,
     )>,
 ) {
-    for (entity, mut anim, sprite, text) in query.iter_mut() {
+    for (entity, mut anim, sprite, text_color) in query.iter_mut() {
         anim.timer.tick(time.delta());
 
         let dt = anim.timer.fraction();
@@ -171,10 +173,8 @@ fn update_fade_animation(
             sprite.color.set_alpha(new_alpha);
         }
 
-        if let Some(mut text) = text {
-            for section in text.sections.iter_mut() {
-                section.style.color.set_alpha(new_alpha);
-            }
+        if let Some(mut text_color) = text_color {
+            text_color.set_alpha(new_alpha);
         }
 
         if anim.timer.finished() {

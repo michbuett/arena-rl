@@ -5,7 +5,7 @@ use bevy::{input::mouse::MouseMotion, prelude::*, window::PrimaryWindow};
 
 use crate::combat::actor::{ActionSelectedEvent, ActionTriggeredEvent};
 use crate::core::{Card, Suite};
-use crate::style::BUTTON_BG_HIGHLIGHT;
+use crate::style::{text, TextStyle, BUTTON_BG_HIGHLIGHT};
 use crate::MarkedForDeath;
 use crate::{style::WINDOW_BACKGROUND, GameState};
 
@@ -85,6 +85,7 @@ pub struct MapPosSelectedEvent(pub MapPos);
 pub struct UserInputElement;
 
 #[derive(Component)]
+#[require(Interaction)] // TODO: consider using new click API
 pub struct ActionTrigger {
     index: usize,
     action: Action,
@@ -96,7 +97,8 @@ pub struct ActivationIndicator;
 pub fn combat_ui_plugin(app: &mut App) {
     app.add_event::<MapPosSelectedEvent>()
         .add_event::<UiStateTransitionedEvent>()
-        .observe(update_ui_on_state_change)
+        .add_observer(update_ui_on_state_change)
+        // .add_observer(process_action_button_click)
         .add_systems(OnEnter(GameState::Combat), setup_ui)
         .add_systems(
             Update,
@@ -119,29 +121,21 @@ fn setup_ui(mut commands: Commands) {
 
     commands
         .spawn((
-            NodeBundle {
-                background_color: WINDOW_BACKGROUND.into(),
-                style: Style {
-                    position_type: PositionType::Absolute,
-                    top: Val::Px(20.0),
-                    left: Val::Px(20.0),
-                    width: Val::Px(200.0),
-                    ..Default::default()
-                },
+            BackgroundColor(WINDOW_BACKGROUND.into()),
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(20.0),
+                left: Val::Px(20.0),
+                padding: UiRect::all(Val::Px(3.)),
                 ..Default::default()
             },
             OnCombatState,
         ))
         .with_children(|parent| {
             parent.spawn((
-                TextBundle::from_section(
-                    "Turn: -",
-                    TextStyle {
-                        color: Color::BLACK,
-                        font_size: 12.0,
-                        ..Default::default()
-                    },
-                ),
+                Text::new("Turn: -".to_string()),
+                TextStyle::UiNormal.as_text_color(),
+                TextStyle::UiNormal.as_text_font(),
                 TurnInfo,
             ));
         });
@@ -149,54 +143,35 @@ fn setup_ui(mut commands: Commands) {
     commands
         .spawn((
             Name::from("DetailsWindow"),
-            NodeBundle {
-                visibility: Visibility::Hidden,
-                background_color: WINDOW_BACKGROUND.into(),
-                style: Style {
-                    position_type: PositionType::Absolute,
-                    top: Val::Px(20.0),
-                    right: Val::Px(20.0),
-                    width: Val::Px(200.0),
-                    ..Default::default()
-                },
+            BackgroundColor(WINDOW_BACKGROUND.into()),
+            Visibility::Hidden,
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(20.0),
+                right: Val::Px(20.0),
+                width: Val::Px(200.0),
+                padding: UiRect::all(Val::Px(10.0)),
                 ..Default::default()
             },
             OnCombatState,
             UserInputElement,
         ))
         .with_children(|parent| {
-            parent.spawn((
-                TextBundle::from_section(
-                    "Test",
-                    TextStyle {
-                        color: Color::BLACK,
-                        font_size: 14.0,
-                        ..Default::default()
-                    },
-                )
-                .with_style(Style {
-                    margin: UiRect::all(Val::Px(10.0)),
-                    ..Default::default()
-                }),
-                DetailsWindowText,
-            ));
+            parent.spawn((text("", TextStyle::UiNormal), DetailsWindowText));
         });
 
     commands.spawn((
         Name::from("Action Button Container"),
-        NodeBundle {
-            visibility: Visibility::Hidden,
-            style: Style {
-                position_type: PositionType::Absolute,
-                flex_direction: FlexDirection::Column,
-                justify_items: JustifyItems::Start,
-                align_items: AlignItems::Stretch,
-                display: Display::Flex,
-                bottom: Val::Px(20.0),
-                right: Val::Px(20.0),
-                width: Val::Px(200.0),
-                ..Default::default()
-            },
+        Visibility::Hidden,
+        Node {
+            position_type: PositionType::Absolute,
+            flex_direction: FlexDirection::Column,
+            justify_items: JustifyItems::Start,
+            align_items: AlignItems::Stretch,
+            display: Display::Flex,
+            bottom: Val::Px(20.0),
+            right: Val::Px(20.0),
+            width: Val::Px(200.0),
             ..Default::default()
         },
         OnCombatState,
@@ -206,16 +181,18 @@ fn setup_ui(mut commands: Commands) {
 
     commands.spawn((
         Name::from("SelectedTile"),
-        SpatialBundle {
-            visibility: Visibility::Hidden,
-            ..Default::default()
-        },
+        Visibility::Hidden,
+        Transform::default(),
         Visual::Single("floor-selected".to_string()),
         SelectedTile,
         OnCombatState,
         UserInputElement,
     ));
 }
+
+// fn process_action_button_click(click: Trigger<Pointer<Click>>) {
+//        println!("{} was clicked!", click.entity());
+// }
 
 fn process_mouse_input(
     mut commands: Commands,
@@ -279,7 +256,7 @@ fn process_mouse_input(
 
             if let Some(mouse_pos) = window_query.single().cursor_position() {
                 let (camera, camera_global_transform) = camera_query.single();
-                if let Some(wp) = camera.viewport_to_world_2d(camera_global_transform, mouse_pos) {
+                if let Ok(wp) = camera.viewport_to_world_2d(camera_global_transform, mouse_pos) {
                     map_pos_selected_ew.send(MapPosSelectedEvent(MapPos::from(wp)));
                 }
             }
@@ -334,19 +311,21 @@ fn handle_select_map_pos(
         (Ok(mut txt), Ok((mut selected_tile_transform, mut selected_tile_visibility))) => {
             if let Some((pos, ..)) = map.find_tile(hex) {
                 if let Some(descr) = find_descr_at(&pos, &description_q) {
-                    txt.sections[0].value =
-                        format!("You look at {:?}, you see...\n{}", pos, descr.as_str());
+                    txt.0 = format!("You look at {:?}, you see...\n{}", pos, descr.as_str());
                 } else {
-                    txt.sections[0].value = format!("You look at {:?}, there is nothing", pos);
+                    txt.0 = format!("You look at {:?}, there is nothing", pos);
                 }
                 selected_tile_transform.translation = hex.into_vec3().with_z(Z_LAYER_UI_MAP_MARKER);
                 *selected_tile_visibility = Visibility::Inherited;
             } else {
-                txt.sections[0].value = "No tile selected".to_string();
+                txt.0 = "No tile selected".to_string();
                 *selected_tile_visibility = Visibility::Hidden;
             }
         }
-        _ => {}
+
+        err @ _ => {
+            warn!("{:?}", err);
+        }
     }
 }
 
@@ -427,10 +406,7 @@ fn update_available_playeractions(
             for pos in path {
                 commands.spawn((
                     Name::from("Path-Indicator"),
-                    SpatialBundle {
-                        transform: Transform::from_translation(pos.into_vec3().with_z(1.0)),
-                        ..Default::default()
-                    },
+                    Transform::from_translation(pos.into_vec3().with_z(1.0)),
                     Visual::Single("floor-selected".to_string()),
                     PlayerActionIndicator,
                     OnCombatState,
@@ -443,13 +419,16 @@ fn update_available_playeractions(
 }
 
 fn update_turn_info(turn: Res<Turn>, mut turn_info_q: Query<Mut<Text>, With<TurnInfo>>) {
-    let mut text = turn_info_q.single_mut();
-    let phase = match turn.turn_phase {
-        TurnPhase::StartTurn => "Beginning new turn",
-        TurnPhase::BoostActivations => "Boosting activations",
-        TurnPhase::PerformActions => "Performing actions",
-    };
-    text.sections[0].value = format!("Turn: {} - {}", turn.turn_number, phase);
+    if let Ok(mut turn_info) = turn_info_q.get_single_mut() {
+        // let mut text = turn_info_q.single_mut();
+        let phase = match turn.turn_phase {
+            TurnPhase::StartTurn => "Beginning new turn",
+            TurnPhase::BoostActivations => "Boosting activations",
+            TurnPhase::PerformActions => "Performing actions",
+        };
+        turn_info.0 = format!("Turn: {} - {}", turn.turn_number, phase);
+        // text.0 = format!("Turn: {} - {}", turn.turn_number, phase);
+    }
 }
 
 #[derive(Component)]
@@ -523,10 +502,7 @@ fn spawn_activation_indicators(parent: &mut ChildBuilder, card: &Card, pos: usiz
 
     parent.spawn((
         Visual::Single(card_visual_name(card)),
-        SpatialBundle {
-            transform: Transform::from_translation(pos),
-            ..Default::default()
-        },
+        Transform::from_translation(pos),
         UserInputElement,
         ActivationIndicator,
     ));
@@ -611,25 +587,24 @@ pub fn update_action_buttons(
     commands.entity(container_entity).with_children(|parent| {
         for (idx, action) in player_actions.available_actions.iter().enumerate() {
             let (background_color, border_color) = if idx == player_actions.selected_action {
-                (BUTTON_BG_HIGHLIGHT.into(), RED_100.into())
+                (BUTTON_BG_HIGHLIGHT, RED_100.into())
             } else {
-                (WINDOW_BACKGROUND.into(), BorderColor(Color::BLACK))
+                (WINDOW_BACKGROUND, Color::BLACK)
             };
+
+            let txt = button_text_for_action(action);
 
             parent
                 .spawn((
-                    ButtonBundle {
-                        background_color,
-                        border_color,
-                        style: Style {
-                            display: Display::Block,
-                            width: Val::Percent(100.0),
-                            border: UiRect::all(Val::Px(3.0)),
-                            margin: UiRect::vertical(Val::Px(5.0)),
-                            padding: UiRect::all(Val::Px(10.0)),
-
-                            ..Default::default()
-                        },
+                    Name::new(format!("Button [{}]", txt)),
+                    BackgroundColor(background_color),
+                    BorderColor(border_color),
+                    Node {
+                        display: Display::Block,
+                        width: Val::Percent(100.0),
+                        border: UiRect::all(Val::Px(3.0)),
+                        margin: UiRect::vertical(Val::Px(5.0)),
+                        padding: UiRect::all(Val::Px(10.0)),
                         ..Default::default()
                     },
                     OnCombatState,
@@ -640,17 +615,7 @@ pub fn update_action_buttons(
                     },
                 ))
                 .with_children(|button| {
-                    button.spawn(TextBundle {
-                        text: Text::from_section(
-                            button_text_for_action(action),
-                            TextStyle {
-                                color: Color::BLACK,
-                                font_size: 14.0,
-                                ..Default::default()
-                            },
-                        ),
-                        ..Default::default()
-                    });
+                    button.spawn(text(txt, TextStyle::UiNormal));
                 });
         }
     });

@@ -6,7 +6,7 @@ use super::{
 };
 
 pub fn combat_ai_plugin(app: &mut App) {
-    app.observe(choose_ai_action);
+    app.add_observer(choose_ai_action);
 }
 
 fn choose_ai_action(

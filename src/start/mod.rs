@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     despawn_screen,
-    style::{TEXT_COLOR, WINDOW_BACKGROUND},
+    style::{text, TextStyle, WINDOW_BACKGROUND},
     GameState,
 };
 
@@ -24,41 +24,27 @@ fn start_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     commands
         .spawn((
-            NodeBundle {
-                style: Style {
-                    align_items: AlignItems::Center,
-                    justify_items: JustifyItems::Center,
-                    justify_content: JustifyContent::Center,
-                    width: Val::Percent(100.0),
-                    height: Val::Percent(100.0),
-                    display: Display::Grid,
-                    ..default()
-                },
-                background_color: WINDOW_BACKGROUND.into(),
+            Node {
+                align_items: AlignItems::Center,
+                justify_items: JustifyItems::Center,
+                justify_content: JustifyContent::Center,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                display: Display::Grid,
                 ..default()
             },
+            BackgroundColor(WINDOW_BACKGROUND),
             OnStartState,
         ))
         .with_children(|parent| {
-            parent.spawn(ImageBundle {
-                image: UiImage::new(icon),
-                style: Style {
+            parent.spawn((
+                ImageNode::new(icon),
+                Node {
                     width: Val::Px(400.0),
                     ..default()
                 },
-                ..default()
-            });
-            parent.spawn(TextBundle {
-                text: Text::from_section(
-                    "Press any key to continue",
-                    TextStyle {
-                        font_size: 20.0,
-                        color: TEXT_COLOR,
-                        ..default()
-                    },
-                ),
-                ..default()
-            });
+            ));
+            parent.spawn(text("Press any key to continue", TextStyle::UiNormal));
         });
 }
 

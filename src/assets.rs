@@ -3,10 +3,9 @@ use crate::{
     GameState, MarkedForDeath,
 };
 use bevy::{
-    asset::{io::Reader, ron, AssetLoader, AsyncReadExt, LoadContext, LoadedFolder},
+    asset::{io::Reader, ron, AssetLoader, LoadContext, LoadedFolder},
     ecs::system::EntityCommands,
     prelude::*,
-    reflect::TypePath,
     utils::HashMap,
 };
 use rand::{
@@ -42,11 +41,11 @@ where
     type Settings = ();
     type Error = DataAssetLoaderError;
 
-    async fn load<'a>(
-        &'a self,
-        reader: &'a mut Reader<'_>,
-        _settings: &'a (),
-        _load_context: &'a mut LoadContext<'_>,
+    async fn load(
+        &self,
+        reader: &mut dyn Reader,
+        _settings: &Self::Settings,
+        _load_context: &mut LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
@@ -73,6 +72,7 @@ pub struct ProtoSpriteConfig {
 #[derive(Debug, Resource)]
 pub struct SpriteConfigMap {
     pub layout: Handle<TextureAtlasLayout>,
+    pub sources: TextureAtlasSources,
     pub texture: Handle<Image>,
     pub map: HashMap<String, SpriteConfig>,
 }
@@ -218,18 +218,20 @@ fn create_texture_atlas(
         }
     }
 
-    let (texture_atlas_layout, texture) = texture_atlas_builder.build().unwrap();
-    let atlas_layout_handle = atlas_layouts.add(texture_atlas_layout);
+    let (atlas_layout, atlas_sources, texture) = texture_atlas_builder.build().unwrap();
+    let atlas_layout_handle = atlas_layouts.add(atlas_layout);
     let atlas_texture_handle = textures.add(texture);
 
     SpriteConfigMap {
         layout: atlas_layout_handle,
+        sources: atlas_sources,
         texture: atlas_texture_handle,
         map: sprite_configs,
     }
 }
 
 #[derive(Component, Clone, Debug)]
+#[require(Visibility, Transform)]
 pub enum Visual {
     Single(String),
     Multi(Vec<String>),
@@ -241,17 +243,13 @@ pub struct SpriteContainer;
 fn update_sprites_from_visuals(
     mut commands: Commands,
     sprite_cfg_map: Res<SpriteConfigMap>,
-    layouts: Res<Assets<TextureAtlasLayout>>,
+    // layouts: Res<Assets<TextureAtlasLayout>>,
     visual_q: Query<(Entity, &Visual, Option<&FadeAnimation>), Changed<Visual>>,
     sprite_container_q: Query<(&Parent, Entity, &SpriteContainer)>,
 ) {
     if visual_q.is_empty() {
         return;
     }
-
-    let Some(layout) = layouts.get(sprite_cfg_map.layout.id()) else {
-        panic!("Could not find layout in assets for sprite map")
-    };
 
     for (entity, visual, fade_animation) in visual_q.iter() {
         // clear "old" sprites
@@ -264,9 +262,8 @@ fn update_sprites_from_visuals(
         // the container entity exists to help removeing all changed visuals
         let mut container_entity_cmd = commands.spawn((
             Name::new("SpriteContainer"),
-            SpatialBundle {
-                ..Default::default()
-            },
+            Transform::default(),
+            Visibility::Inherited,
             SpriteContainer,
         ));
 
@@ -277,7 +274,6 @@ fn update_sprites_from_visuals(
                 insert_sprite(
                     container_entity_cmd,
                     &sprite_cfg_map,
-                    layout,
                     v,
                     0.0,
                     fade_animation,
@@ -288,7 +284,7 @@ fn update_sprites_from_visuals(
                 for (idx, v) in visuals.iter().enumerate() {
                     container_entity_cmd.with_children(|parent| {
                         let c = parent.spawn_empty();
-                        insert_sprite(c, &sprite_cfg_map, layout, v, idx as f32, fade_animation);
+                        insert_sprite(c, &sprite_cfg_map, v, idx as f32, fade_animation);
                     });
                 }
             }
@@ -299,7 +295,6 @@ fn update_sprites_from_visuals(
 fn insert_sprite(
     mut commands: EntityCommands,
     sprite_cfg_map: &Res<SpriteConfigMap>,
-    layout: &TextureAtlasLayout,
     visual: &str,
     zlayer: f32,
     fade_animation: Option<&FadeAnimation>,
@@ -309,18 +304,16 @@ fn insert_sprite(
             image_id,
             offset: (dx, dy),
         }) => {
-            let index = layout.get_texture_index(*image_id).unwrap_or(0);
+            let index = sprite_cfg_map.sources.texture_index(*image_id).unwrap_or(0);
+            let image = sprite_cfg_map.texture.clone();
+            let atlas = TextureAtlas {
+                layout: sprite_cfg_map.layout.clone(),
+                index,
+            };
 
             commands.insert((
-                SpriteBundle {
-                    texture: sprite_cfg_map.texture.clone(),
-                    transform: Transform::from_translation(Vec3::new(*dx, *dy, zlayer)),
-                    ..Default::default()
-                },
-                TextureAtlas {
-                    layout: sprite_cfg_map.layout.clone(),
-                    index,
-                },
+                Transform::from_translation(Vec3::new(*dx, *dy, zlayer)),
+                Sprite::from_atlas_image(image, atlas),
             ));
 
             if let Some(fa) = fade_animation {
@@ -335,7 +328,7 @@ fn insert_sprite(
         }) => {
             let indices = image_ids
                 .iter()
-                .map(|image_id| layout.get_texture_index(*image_id).unwrap_or(0))
+                .map(|image_id| sprite_cfg_map.sources.texture_index(*image_id).unwrap_or(0))
                 .collect::<Vec<_>>();
 
             let current_idx: usize = rand_between(0..indices.len());
@@ -343,21 +336,19 @@ fn insert_sprite(
                 Duration::from_millis(*frame_duration as u64),
                 TimerMode::Repeating,
             );
+            let image = sprite_cfg_map.texture.clone();
+            let atlas = TextureAtlas {
+                layout: sprite_cfg_map.layout.clone(),
+                index: *indices.first().unwrap(),
+            };
 
             timer.tick(Duration::from_millis(
                 rand_between(0..*frame_duration) as u64
             ));
 
             commands.insert((
-                SpriteBundle {
-                    texture: sprite_cfg_map.texture.clone(),
-                    transform: Transform::from_translation(Vec3::new(*dx, *dy, zlayer)),
-                    ..Default::default()
-                },
-                TextureAtlas {
-                    layout: sprite_cfg_map.layout.clone(),
-                    index: *indices.first().unwrap(),
-                },
+                Transform::from_translation(Vec3::new(*dx, *dy, zlayer)),
+                Sprite::from_atlas_image(image, atlas),
                 SpriteAnimation {
                     indices,
                     current_idx,
