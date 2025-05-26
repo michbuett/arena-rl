@@ -4,10 +4,10 @@ use bevy::prelude::*;
 use rand::prelude::Distribution;
 
 use crate::{
+    EndOfLive, MarkedForDeath,
     animations::{FadeAnimation, MovementAnimation, MovementModification, ScaleAnimation},
     assets::Visual,
-    style::TextStyle,
-    EndOfLive, MarkedForDeath,
+    style::{TextStyle, text2d},
 };
 
 use super::{
@@ -126,20 +126,7 @@ pub fn update_check_fx_ready(
                     );
                 }
 
-                FxEffect::CustomText {
-                    pos,
-                    duration,
-                    text,
-                    movement_anim,
-                } => {
-                    handle_custom_text(
-                        &mut commands,
-                        *pos,
-                        *duration,
-                        text,
-                        movement_anim.as_ref(),
-                    );
-                }
+                FxEffect::CustomEffect(eff) => handle_custom_effect(&mut commands, eff),
             }
 
             // Effect is triggered
@@ -173,15 +160,17 @@ pub enum FxEffect {
         fade_out_after: u64,
     },
 
-    CustomText {
-        pos: Vec3,
-        duration: u64,
-        // sprite: Option<String>,
-        text: (String, TextStyle),
-        // scale_anim: Option<(f32, f32)>,
-        movement_anim: Option<Vec<Vec3>>,
-        // fade_anim: bool,
-    },
+    CustomEffect(CustomEffect),
+}
+
+#[derive(Debug)]
+pub struct CustomEffect {
+    pos: Vec3,
+    duration: u64,
+    visual: Option<Visual>,
+    text: Option<(String, TextStyle)>,
+    scale_anim: Option<(f32, f32)>,
+    movement_anim: Option<Vec<Vec3>>,
 }
 
 impl FxEffect {
@@ -199,15 +188,30 @@ impl FxEffect {
         }
     }
 
+    pub fn hit(visual: Visual, pos: MapPos) -> Self {
+        let pos = pos.into_vec3().with_z(Z_LAYER_VFX);
+
+        Self::CustomEffect(CustomEffect {
+            pos,
+            duration: 400,
+            visual: Some(visual),
+            text: None,
+            scale_anim: None,
+            movement_anim: None,
+        })
+    }
+
     pub fn say(txt: impl Into<String>, pos: MapPos) -> Self {
         let pos = pos.into_vec3().with_z(Z_LAYER_VFX) + Vec3::new(0.0, 50.0, 0.0);
 
-        Self::CustomText {
+        Self::CustomEffect(CustomEffect {
             pos,
-            duration: 2000,
-            text: (txt.into(), TextStyle::InGameScream),
+            duration: 1000,
+            visual: None,
+            text: Some((txt.into(), TextStyle::InGameScream)),
+            scale_anim: Some((1.0, 3.0)),
             movement_anim: None,
-        }
+        })
     }
 
     pub fn duration(&self) -> Duration {
@@ -225,7 +229,7 @@ impl FxEffect {
                 ..
             } => path.len().checked_sub(1).unwrap_or(0) as u64 * step_durration,
 
-            FxEffect::CustomText { duration, .. } => *duration,
+            FxEffect::CustomEffect(CustomEffect { duration, .. }) => *duration,
 
             _ => 0,
         };
@@ -279,26 +283,28 @@ fn handle_stains(commands: &mut Commands, pos: Vec3, visual: Visual, fade_out_af
     ));
 }
 
-fn handle_custom_text(
-    commands: &mut Commands,
-    pos: Vec3,
-    duration: u64,
-    (text, text_style): &(String, TextStyle),
-    movement_anim: Option<&Vec<Vec3>>,
-) {
-    let duration = Duration::from_millis(duration);
-    let mut text_entity = commands.spawn((
-        Text2d(text.clone()),
-        text_style.as_text_font(),
-        text_style.as_text_color(),
-        Transform::from_translation(pos),
+fn handle_custom_effect(commands: &mut Commands, eff: &CustomEffect) {
+    let duration = Duration::from_millis(eff.duration);
+    let mut ec = commands.spawn((
+        Transform::from_translation(eff.pos),
         EndOfLive::after(duration),
         FadeAnimation::fade_out(duration),
-        ScaleAnimation::new(1.0, 3.0, duration),
     ));
 
-    if let Some(movement_anim) = movement_anim {
-        text_entity.insert(MovementAnimation::new(duration, movement_anim.clone()));
+    if let Some(visual) = eff.visual.as_ref() {
+        ec.insert(visual.clone());
+    }
+
+    if let Some((txt, style)) = eff.text.as_ref() {
+        ec.insert(text2d(txt, *style));
+    }
+
+    if let Some((start_scale, end_scale)) = eff.scale_anim {
+        ec.insert(ScaleAnimation::new(start_scale, end_scale, duration));
+    }
+
+    if let Some(movement_anim) = eff.movement_anim.as_ref().cloned() {
+        ec.insert(MovementAnimation::new(duration, movement_anim.clone()));
     }
 }
 

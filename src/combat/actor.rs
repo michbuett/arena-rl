@@ -3,13 +3,13 @@ use bevy::prelude::*;
 use crate::combat::combat_resolution::Defence;
 use crate::core::{Card, Challenge, Deck, Suite};
 
-use super::combat_resolution::{handle_attack, Attack, CombatResult};
+use super::combat_resolution::{Attack, CombatResult, handle_attack};
 use super::fx::{FxEffect, FxSequence};
 use super::ui::Z_LAYER_ACTOR;
 use super::{
+    Visual,
     map::{HexMap, MapPos, Obstacle},
     ui::{Description, MapPosSelectedEvent, SelectedMapPos, UiState, UiStateTransitionedEvent},
-    Visual,
 };
 
 #[derive(Component, PartialEq, Clone, Copy)]
@@ -272,10 +272,10 @@ pub fn handle_begin_activation_command(
     mut commands: Commands,
     mut actor_activation_q: Query<(Mut<Activations>, &PlayerControlled, &MapPos)>,
 ) {
-    info!(
-        "[handle_begin_activation_command] entity={:?}",
-        trigger.target()
-    );
+    // info!(
+    //     "[handle_begin_activation_command] entity={:?}",
+    //     trigger.target()
+    // );
 
     let e = trigger.target();
     let (mut activation, PlayerControlled(is_pc), mpos) = actor_activation_q.get_mut(e).unwrap();
@@ -331,10 +331,12 @@ pub fn handle_attack_command(
 
     match attack {
         AttackData::MeleeAttack { target } => {
-            let [(attacker_pos, attacker_team, activation, _), (target_pos, target_team, _, mut health)] =
-                combat_data_q
-                    .get_many_mut([attacking_entity, *target])
-                    .unwrap();
+            let [
+                (attacker_pos, attacker_team, activation, _),
+                (target_pos, target_team, _, mut health),
+            ] = combat_data_q
+                .get_many_mut([attacking_entity, *target])
+                .unwrap();
 
             let effort_card = activation.active.as_ref().cloned().unwrap().0;
             let [mut attack_deck, mut defence_deck] = deck_q
@@ -411,7 +413,12 @@ fn create_melee_attack_fx_sequence(
             movement_modification: crate::animations::MovementModification::None,
             step_durration,
         })
-        .wait(step_durration);
+        .wait(step_durration)
+        .then(FxEffect::hit(
+            Visual::Single("fx-hit-1".to_string()),
+            target_mpos,
+        ))
+        .wait(200);
 
     fx_seq = match combat_result {
         CombatResult::Fumble => fx_seq.then(FxEffect::say("Fuck!", attacker_mpos)),

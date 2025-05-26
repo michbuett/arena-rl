@@ -3,17 +3,17 @@ use std::time::Duration;
 use bevy::color::palettes::tailwind::RED_100;
 use bevy::{input::mouse::MouseMotion, prelude::*, window::PrimaryWindow};
 
+use crate::MarkedForDeath;
 use crate::combat::actor::{ActionSelectedEvent, ActionTriggeredEvent};
 use crate::core::{Card, Suite};
-use crate::style::{text, TextStyle, BUTTON_BG_HIGHLIGHT};
-use crate::MarkedForDeath;
-use crate::{style::WINDOW_BACKGROUND, GameState};
+use crate::style::{BUTTON_BG_HIGHLIGHT, TextStyle, text};
+use crate::{GameState, style::WINDOW_BACKGROUND};
 
 use super::{
+    OnCombatState, ScrollBounds, Visual,
     actor::{Action, Activation, Activations, Actor},
     flow::{Turn, TurnPhase},
     map::{HexMap, MapPos},
-    OnCombatState, ScrollBounds, Visual,
 };
 
 pub const Z_LAYER_FLOOR: f32 = 1.0;
@@ -132,12 +132,7 @@ fn setup_ui(mut commands: Commands) {
             OnCombatState,
         ))
         .with_children(|parent| {
-            parent.spawn((
-                Text::new("Turn: -".to_string()),
-                TextStyle::UiNormal.as_text_color(),
-                TextStyle::UiNormal.as_text_font(),
-                TurnInfo,
-            ));
+            parent.spawn((text("Turn: -", TextStyle::UiNormal), TurnInfo));
         });
 
     commands
