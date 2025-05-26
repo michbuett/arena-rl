@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 bevy = { version = "0.15", features = ["dynamic_linking"] }
 serde = { version = "1.0", features = ["derive"] }
-thiserror = "1.0"
+thiserror = "2"
 rand = "0.8"
 
 # Enable a small amount of optimization in debug mode
