@@ -33,8 +33,11 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands, windows: Query<&Window, With<PrimaryWindow>>) {
-    let win = windows.single();
+fn setup(
+    mut commands: Commands,
+    windows: Query<&Window, With<PrimaryWindow>>,
+) -> Result<(), BevyError> {
+    let win = windows.single()?;
 
     commands.spawn((
         Camera2d::default(),
@@ -44,12 +47,14 @@ fn setup(mut commands: Commands, windows: Query<&Window, With<PrimaryWindow>>) {
             ..OrthographicProjection::default_2d()
         }),
     ));
+
+    Ok(())
 }
 
 /// Generic system that takes a component as a parameter, and will despawn all entities with that component
 fn despawn_screen<T: Component>(to_despawn: Query<Entity, With<T>>, mut commands: Commands) {
     for entity in &to_despawn {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }
 

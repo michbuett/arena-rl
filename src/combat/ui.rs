@@ -207,7 +207,7 @@ fn process_mouse_input(
     mut camera_transform_query: Query<&mut Transform, With<Camera>>,
     mut map_pos_selected_ew: EventWriter<MapPosSelectedEvent>,
     mut scroll_state: ResMut<ScrollState>,
-) {
+) -> Result<(), BevyError> {
     for (interaction, ActionTrigger { index, action }) in interaction_q.iter() {
         match (&selected_map_pos, interaction) {
             (Some(pa), Interaction::Pressed) => {
@@ -219,20 +219,19 @@ fn process_mouse_input(
                 }
 
                 mouse_button_input.reset_all();
-                return;
+                return Ok(());
             }
 
             (_, Interaction::Hovered) => {
                 // ignore all other mouse interactions while hovering over a button (e.g. no scrolling)
                 mouse_button_input.reset_all();
-                return;
+                return Ok(());
             }
             _ => {}
         }
     }
 
-    let mut camera_transform = camera_transform_query.single_mut();
-
+    let mut camera_transform = camera_transform_query.single_mut()?;
     if mouse_button_input.pressed(MouseButton::Left) {
         for ev in mouse_motion_evr.read() {
             move_camera(&mut camera_transform, -ev.delta.x, ev.delta.y, &dim);
@@ -251,25 +250,26 @@ fn process_mouse_input(
             if !ui_state.is_awaiting_input() {
                 // there is other stuff going on
                 // => just ignore user other input then scrolling
-                return;
+                return Ok(());
             }
 
-            if let Some(mouse_pos) = window_query.single().cursor_position() {
-                let (camera, camera_global_transform) = camera_query.single();
+            if let Some(mouse_pos) = window_query.single()?.cursor_position() {
+                let (camera, camera_global_transform) = camera_query.single()?;
                 if let Ok(wp) = camera.viewport_to_world_2d(camera_global_transform, mouse_pos) {
-                    map_pos_selected_ew.send(MapPosSelectedEvent(MapPos::from(wp)));
+                    map_pos_selected_ew.write(MapPosSelectedEvent(MapPos::from(wp)));
                 }
             }
         }
     }
+    Ok(())
 }
 
 fn process_keyboard_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     dim: Res<ScrollBounds>,
     mut camera_transform_query: Query<&mut Transform, With<Camera>>,
-) {
-    let mut camera_transform = camera_transform_query.single_mut();
+) -> Result<(), BevyError> {
+    let mut camera_transform = camera_transform_query.single_mut()?;
 
     if keyboard_input.pressed(KeyCode::KeyA) || keyboard_input.pressed(KeyCode::ArrowLeft) {
         move_camera(&mut camera_transform, -10.0, 0.0, &dim);
@@ -280,6 +280,7 @@ fn process_keyboard_input(
     } else if keyboard_input.pressed(KeyCode::KeyS) || keyboard_input.pressed(KeyCode::ArrowDown) {
         move_camera(&mut camera_transform, 0.0, -10.0, &dim);
     }
+    Ok(())
 }
 
 fn move_camera(camera_transform: &mut Transform, dx: f32, dy: f32, scroll_bounds: &ScrollBounds) {
@@ -304,8 +305,8 @@ fn handle_select_map_pos(
         return;
     };
 
-    let details_window = details_window_text.get_single_mut();
-    let selected_tile = selected_tile_q.get_single_mut();
+    let details_window = details_window_text.single_mut();
+    let selected_tile = selected_tile_q.single_mut();
 
     match (details_window, selected_tile) {
         (Ok(mut txt), Ok((mut selected_tile_transform, mut selected_tile_visibility))) => {
@@ -391,7 +392,7 @@ fn update_available_playeractions(
     indicatorq: Query<(Entity, &PlayerActionIndicator)>,
 ) {
     for (e, _) in indicatorq.iter() {
-        commands.entity(e).despawn_descendants();
+        commands.entity(e).despawn_related::<Children>();
     }
 
     let Some(selected_action) = player_actions
@@ -419,7 +420,7 @@ fn update_available_playeractions(
 }
 
 fn update_turn_info(turn: Res<Turn>, mut turn_info_q: Query<Mut<Text>, With<TurnInfo>>) {
-    if let Ok(mut turn_info) = turn_info_q.get_single_mut() {
+    if let Ok(mut turn_info) = turn_info_q.single_mut() {
         // let mut text = turn_info_q.single_mut();
         let phase = match turn.turn_phase {
             TurnPhase::StartTurn => "Beginning new turn",
@@ -496,7 +497,7 @@ fn card_descr(card: &Card) -> String {
     format!("{} of {}", val, suite)
 }
 
-fn spawn_activation_indicators(parent: &mut ChildBuilder, card: &Card, pos: usize) {
+fn spawn_activation_indicators(parent: &mut ChildSpawnerCommands, card: &Card, pos: usize) {
     let offset_x = -24.0 + 16.0 * (pos as f32);
     let pos = Vec3::new(offset_x, -32.0, 200.0);
 
@@ -557,7 +558,7 @@ fn update_ui_on_state_change(
             });
         }
 
-        map_pos_selected_ew.send(MapPosSelectedEvent(*mpos));
+        map_pos_selected_ew.write(MapPosSelectedEvent(*mpos));
     } else {
         if let UiState::AwaitInput(..) = ui_state.as_ref() {
             for mut visibility in ui_elements_q.iter_mut() {
@@ -577,13 +578,15 @@ pub fn update_action_buttons(
     player_actions: Res<SelectedMapPos>,
     button_container_q: Query<Entity, With<ActionButtonContainer>>,
 ) {
-    let Ok(container_entity) = button_container_q.get_single() else {
+    let Ok(container_entity) = button_container_q.single() else {
         // container does not exist
         // => ignore change
         return;
     };
 
-    commands.entity(container_entity).despawn_descendants();
+    commands
+        .entity(container_entity)
+        .despawn_related::<Children>();
     commands.entity(container_entity).with_children(|parent| {
         for (idx, action) in player_actions.available_actions.iter().enumerate() {
             let (background_color, border_color) = if idx == player_actions.selected_action {

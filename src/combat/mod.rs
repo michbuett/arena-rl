@@ -87,8 +87,8 @@ fn setup_camera(
     mut commands: Commands,
     mut camera_query: Query<&mut Transform, With<Camera>>,
     map: Res<HexMap>,
-) {
-    let mut camera_transform = camera_query.single_mut();
+) -> Result<(), BevyError> {
+    let mut camera_transform = camera_query.single_mut()?;
     let scroll_zone = Rect::from_corners(
         Vec2::new(map.scroll_limit_x.0, map.scroll_limit_y.0),
         Vec2::new(map.scroll_limit_x.1, map.scroll_limit_y.1),
@@ -97,6 +97,8 @@ fn setup_camera(
     *camera_transform = Transform::from_translation(map.camera_focus.into_vec3());
 
     commands.insert_resource(ScrollBounds(scroll_zone));
+
+    Ok(())
 }
 
 fn setup_actors(mut commands: Commands) {

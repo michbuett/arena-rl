@@ -243,7 +243,7 @@ pub fn handle_action_triggered_event(
     mut commands: Commands,
 ) {
     let ActionTriggeredEvent(action) = trigger.event();
-    let entity = trigger.entity();
+    let entity = trigger.target();
 
     // info!(
     //     "[handle_action_selected_event] entity={:?}, action={:?}",
@@ -274,10 +274,10 @@ pub fn handle_begin_activation_command(
 ) {
     info!(
         "[handle_begin_activation_command] entity={:?}",
-        trigger.entity()
+        trigger.target()
     );
 
-    let e = trigger.entity();
+    let e = trigger.target();
     let (mut activation, PlayerControlled(is_pc), mpos) = actor_activation_q.get_mut(e).unwrap();
 
     activation.active = activation.remaining.pop();
@@ -293,10 +293,10 @@ pub fn handle_end_activation_command(
 ) {
     // info!(
     //     "handle_end_activation_command - entity={:?}",
-    //     trigger.entity()
+    //     trigger.target()
     // );
 
-    if let Ok(mut activations) = activations_q.get_mut(trigger.entity()) {
+    if let Ok(mut activations) = activations_q.get_mut(trigger.target()) {
         activations.active = None;
     }
 }
@@ -310,7 +310,7 @@ pub fn handle_move_to_command(trigger: Trigger<MoveToCommand>, mut commands: Com
     }
 
     let end_pos = *path.last().unwrap();
-    let moving_entity = trigger.entity();
+    let moving_entity = trigger.target();
 
     commands.entity(moving_entity).insert(end_pos);
 
@@ -327,7 +327,7 @@ pub fn handle_attack_command(
     mut commands: Commands,
 ) {
     let AttackCommand(attack) = trigger.event();
-    let attacking_entity = trigger.entity();
+    let attacking_entity = trigger.target();
 
     match attack {
         AttackData::MeleeAttack { target } => {

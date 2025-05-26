@@ -6,14 +6,13 @@ use bevy::{
     asset::{io::Reader, ron, AssetLoader, LoadContext, LoadedFolder},
     ecs::system::EntityCommands,
     prelude::*,
-    utils::HashMap,
 };
 use rand::{
     distributions::uniform::{SampleRange, SampleUniform},
     prelude::*,
 };
 use serde::Deserialize;
-use std::{marker::PhantomData, time::Duration};
+use std::{collections::HashMap, marker::PhantomData, time::Duration};
 use thiserror::Error;
 
 /// An generic asset loader for data stored in RON files
@@ -245,7 +244,7 @@ fn update_sprites_from_visuals(
     sprite_cfg_map: Res<SpriteConfigMap>,
     // layouts: Res<Assets<TextureAtlasLayout>>,
     visual_q: Query<(Entity, &Visual, Option<&FadeAnimation>), Changed<Visual>>,
-    sprite_container_q: Query<(&Parent, Entity, &SpriteContainer)>,
+    sprite_container_q: Query<(&ChildOf, Entity, &SpriteContainer)>,
 ) {
     if visual_q.is_empty() {
         return;
@@ -253,8 +252,8 @@ fn update_sprites_from_visuals(
 
     for (entity, visual, fade_animation) in visual_q.iter() {
         // clear "old" sprites
-        for (parent, child_entity, _) in sprite_container_q.iter() {
-            if parent.get() == entity {
+        for (child_of, child_entity, _) in sprite_container_q.iter() {
+            if child_of.parent() == entity {
                 commands.entity(child_entity).insert(MarkedForDeath);
             }
         }
@@ -267,7 +266,7 @@ fn update_sprites_from_visuals(
             SpriteContainer,
         ));
 
-        container_entity_cmd.set_parent(entity);
+        container_entity_cmd.insert(ChildOf(entity));
 
         match visual {
             Visual::Single(v) => {

@@ -16,7 +16,7 @@ fn choose_ai_action(
     map: Res<HexMap>,
     mut commands: Commands,
 ) {
-    let e = trigger.entity();
+    let e = trigger.target();
     let Ok((team, pos)) = activated_actor_q.get(e) else {
         warn!("Cannot find entity to determine ai action.");
         return;

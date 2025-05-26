@@ -61,7 +61,6 @@ pub fn update_combat_flow(
         // Activate actors in order if the initiative card
         let mut actor_to_activate: Option<(Entity, u8)> = None;
 
-        println!("Processing ...");
         for (entity, activations, _, prep_action) in activations_q.iter() {
             if activations.active.is_some() {
                 // info!(
