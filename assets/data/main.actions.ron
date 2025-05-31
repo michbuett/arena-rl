@@ -1,0 +1,8 @@
+([
+    ("melee-attack-bite-01", MeleeAttack(
+        name: "Bite"
+    )),
+    ("melee-attack-sword-01", MeleeAttack(
+        name: "Swing Sword"
+    )),
+])

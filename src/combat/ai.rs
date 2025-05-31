@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::assets::Attacks;
+
 use super::{
     actor::{Action, AttackData, BeginActivationCommand, PreparedAction, Team},
     map::{HexMap, MapPos, Path},
@@ -11,13 +13,13 @@ pub fn combat_ai_plugin(app: &mut App) {
 
 fn choose_ai_action(
     trigger: Trigger<BeginActivationCommand>,
-    activated_actor_q: Query<(&Team, &MapPos)>,
+    activated_actor_q: Query<(&Team, &MapPos, &Attacks)>,
     other_actors_q: Query<(Entity, &Team, &MapPos)>,
     map: Res<HexMap>,
     mut commands: Commands,
 ) {
     let e = trigger.target();
-    let Ok((team, pos)) = activated_actor_q.get(e) else {
+    let Ok((team, pos, attacks)) = activated_actor_q.get(e) else {
         warn!("Cannot find entity to determine ai action.");
         return;
     };
@@ -45,13 +47,13 @@ fn choose_ai_action(
     }
 
     if let Some((target, mut p)) = nearest_enemy {
-        if p.len() == 2 {
-            commands
-                .entity(e)
-                .insert(PreparedAction(Action::Attack(AttackData::MeleeAttack {
-                    target,
-                })));
-            return;
+        for ao in attacks.0.iter() {
+            if ao.can_attack(p.len() as i32 - 1) {
+                commands
+                    .entity(e)
+                    .insert(PreparedAction(Action::Attack(AttackData::new(target, ao))));
+                return;
+            }
         }
 
         let path = p.drain(0..p.len() - 1).collect();

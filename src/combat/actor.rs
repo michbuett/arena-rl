@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::assets::{AttackOption, Attacks};
 use crate::combat::combat_resolution::Defence;
 use crate::core::{Card, Challenge, Deck, Suite};
 
@@ -84,7 +85,7 @@ pub struct ActorBundle {
     pub team: Team,
     pub play_controlled: PlayerControlled,
     pub map_pos: MapPos,
-    pub visual: Visual,
+    // pub visual: Visual,
     pub activations: Activations,
     pub health: Health,
     pub obstacle: Obstacle,
@@ -95,7 +96,7 @@ pub struct ActorBundle {
 }
 
 impl ActorBundle {
-    pub fn new(name: Name, team: Team, is_pc: bool, map_pos: MapPos, visual: Visual) -> Self {
+    pub fn new(name: Name, team: Team, is_pc: bool, map_pos: MapPos) -> Self {
         Self {
             actor: Actor::new(),
             name,
@@ -103,7 +104,7 @@ impl ActorBundle {
             team,
             play_controlled: PlayerControlled(is_pc),
             map_pos,
-            visual,
+            // visual,
             activations: Activations {
                 active: None,
                 remaining: vec![],
@@ -118,11 +119,11 @@ impl ActorBundle {
     }
 }
 
-#[derive(Bundle)]
-pub struct AiActorBundle {
-    actor_bundle: ActorBundle,
-    ai_behaivour: AiBehaviour,
-}
+// #[derive(Bundle)]
+// pub struct AiActorBundle {
+//     actor_bundle: ActorBundle,
+//     ai_behaivour: AiBehaviour,
+// }
 
 #[derive(Debug, Component)]
 pub struct PreparedAction(pub Action);
@@ -147,7 +148,18 @@ pub struct AttackCommand(AttackData);
 
 #[derive(Debug, Clone)]
 pub enum AttackData {
-    MeleeAttack { target: Entity },
+    MeleeAttack { name: String, target: Entity },
+}
+
+impl AttackData {
+    pub fn new(target: Entity, attack_template: &AttackOption) -> Self {
+        match attack_template {
+            AttackOption::MeleeAttack { name } => Self::MeleeAttack {
+                name: name.clone(),
+                target,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -159,7 +171,10 @@ pub enum Action {
 
 pub fn handle_select_map_pos(
     map: Res<HexMap>,
-    active_actor_q: Query<(Entity, &Actor, &Activations, &MapPos, &Team), Without<AiBehaviour>>,
+    active_actor_q: Query<
+        (Entity, &Actor, &Activations, &MapPos, &Team, &Attacks),
+        Without<AiBehaviour>,
+    >,
     target_actor_q: Query<(Entity, &MapPos, &Team), With<Actor>>,
 
     mut commands: Commands,
@@ -170,7 +185,7 @@ pub fn handle_select_map_pos(
         return;
     };
 
-    if let Some((entity, actor_pos, team)) = find_active_player_actor(&active_actor_q) {
+    if let Some((entity, actor_pos, team, attacks)) = find_active_player_actor(&active_actor_q) {
         if let Some(action) =
             player_actions.and_then(|pa| pa.get_selected_action_when_at(hex).cloned())
         {
@@ -182,17 +197,22 @@ pub fn handle_select_map_pos(
             let mut available_actions = vec![];
 
             if let Some(target) = find_enemy_at(&target_actor_q, &team, *hex) {
-                if actor_pos.distance(hex) == 1 {
-                    // There is an enemy next to us
-                    // => allow melee attack
-                    let attack = AttackData::MeleeAttack { target };
-                    available_actions.push(Action::Attack(attack));
-                } else if let Some(mut path) = map.find_path(actor_pos, *hex) {
-                    if path.len() > 1 {
-                        let max_steps = (path.len() - 1).max(3);
-                        let path = path.drain(..max_steps).collect();
+                let distance = actor_pos.distance(hex);
+                for attack_option in attacks.0.iter() {
+                    if attack_option.can_attack(distance) {
+                        let attack = AttackData::new(target, attack_option);
+                        available_actions.push(Action::Attack(attack));
+                    }
+                }
 
-                        available_actions.push(Action::MoveAlong { path });
+                if actor_pos.distance(hex) > 1 {
+                    if let Some(mut path) = map.find_path(actor_pos, *hex) {
+                        if path.len() > 1 {
+                            let max_steps = (path.len() - 1).max(3);
+                            let path = path.drain(..max_steps).collect();
+
+                            available_actions.push(Action::MoveAlong { path });
+                        }
                     }
                 }
             } else if let Some(path) = map.find_path(actor_pos, *hex) {
@@ -206,11 +226,14 @@ pub fn handle_select_map_pos(
 }
 
 fn find_active_player_actor(
-    q_active_actor: &Query<(Entity, &Actor, &Activations, &MapPos, &Team), Without<AiBehaviour>>,
-) -> Option<(Entity, MapPos, Team)> {
-    for (entity, _actor, activations, map_pos, team) in q_active_actor.iter() {
+    q_active_actor: &Query<
+        (Entity, &Actor, &Activations, &MapPos, &Team, &Attacks),
+        Without<AiBehaviour>,
+    >,
+) -> Option<(Entity, MapPos, Team, Attacks)> {
+    for (entity, _actor, activations, map_pos, team, attacks) in q_active_actor.iter() {
         if activations.active.is_some() {
-            return Some((entity, *map_pos, *team));
+            return Some((entity, *map_pos, *team, attacks.clone()));
         }
     }
     None
@@ -330,13 +353,18 @@ pub fn handle_attack_command(
     let attacking_entity = trigger.target();
 
     match attack {
-        AttackData::MeleeAttack { target } => {
-            let [
-                (attacker_pos, attacker_team, activation, _),
-                (target_pos, target_team, _, mut health),
-            ] = combat_data_q
-                .get_many_mut([attacking_entity, *target])
-                .unwrap();
+        AttackData::MeleeAttack { target, .. } => {
+            let Ok(
+                [
+                    (attacker_pos, attacker_team, activation, _),
+                    (target_pos, target_team, _, mut health),
+                ],
+            ) = combat_data_q.get_many_mut([attacking_entity, *target])
+            else {
+                // target may already be destroyed
+                // => ignore action
+                return;
+            };
 
             let effort_card = activation.active.as_ref().cloned().unwrap().0;
             let [mut attack_deck, mut defence_deck] = deck_q

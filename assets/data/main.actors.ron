@@ -1,0 +1,18 @@
+([
+    ("sucker", (
+        name: "Sucker",
+        attacks: ["melee-attack-bite-01"],
+        visual: ["monster-sucker_1"],
+    )),
+
+    ("player", (
+        name: "Player",
+        attacks: ["melee-attack-sword-01"],
+        visual: [
+            "body-heavy_1",
+            "head-heavy_1",
+            "melee-1h_2",
+        ],
+    )),
+])
+

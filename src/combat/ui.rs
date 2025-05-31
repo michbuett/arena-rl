@@ -9,6 +9,7 @@ use crate::core::{Card, Suite};
 use crate::style::{BUTTON_BG_HIGHLIGHT, TextStyle, text};
 use crate::{GameState, style::WINDOW_BACKGROUND};
 
+use super::actor::AttackData;
 use super::{
     OnCombatState, ScrollBounds, Visual,
     actor::{Action, Activation, Activations, Actor},
@@ -622,7 +623,9 @@ pub fn update_action_buttons(
 fn button_text_for_action(action: &Action) -> String {
     match action {
         Action::MoveAlong { .. } => "Move",
-        Action::Attack { .. } => "Attack",
+        Action::Attack(attack_data) => match attack_data {
+            AttackData::MeleeAttack { name, .. } => name,
+        },
         _ => "Unknown",
     }
     .to_string()

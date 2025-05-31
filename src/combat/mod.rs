@@ -7,23 +7,27 @@ mod map;
 mod ui;
 
 use actor::{
-    handle_action_triggered_event, handle_attack_command, ActionSelectedEvent, AttackCommand,
+    ActionSelectedEvent, AttackCommand, handle_action_triggered_event, handle_attack_command,
 };
 use ai::combat_ai_plugin;
 use bevy::prelude::*;
-use ui::{update_action_buttons, SelectedMapPos};
+use ui::{SelectedMapPos, update_action_buttons};
 
-use crate::{assets::Visual, despawn_screen, GameState};
+use crate::{
+    GameState,
+    assets::{ActorGenerator, Visual},
+    despawn_screen,
+};
 
 use self::{
     actor::{
-        handle_action_selected_event, handle_begin_activation_command,
-        handle_end_activation_command, handle_move_to_command, ActionTriggeredEvent, ActorBundle,
-        AiBehaviour, BeginActivationCommand, EndActivationCommand, MoveToCommand, Team, TeamBundle,
+        ActionTriggeredEvent, ActorBundle, AiBehaviour, BeginActivationCommand,
+        EndActivationCommand, MoveToCommand, Team, TeamBundle, handle_action_selected_event,
+        handle_begin_activation_command, handle_end_activation_command, handle_move_to_command,
     },
-    flow::{setup_combat_flow, update_combat_flow, CombatFlowEvent},
-    map::{update_obstacles_in_map, HexMap, MapPos},
-    ui::{combat_ui_plugin, UiState},
+    flow::{CombatFlowEvent, setup_combat_flow, update_combat_flow},
+    map::{HexMap, MapPos, update_obstacles_in_map},
+    ui::{UiState, combat_ui_plugin},
 };
 
 #[derive(Component)]
@@ -101,21 +105,21 @@ fn setup_camera(
     Ok(())
 }
 
-fn setup_actors(mut commands: Commands) {
+fn setup_actors(mut commands: Commands, actor_generator: Res<ActorGenerator>) {
     let player_team = Team(commands.spawn(TeamBundle::new("Player", true)).id());
     let cpu_team = Team(commands.spawn(TeamBundle::new("CPU", false)).id());
 
-    commands.spawn(ActorBundle::new(
-        Name::new("Player"),
-        player_team,
-        true,
-        MapPos::from_oddr(5, 5),
-        Visual::Multi(vec![
-            "body-heavy_1".to_string(),
-            "head-heavy_1".to_string(),
-            "melee-1h_2".to_string(),
-        ]),
+    commands.spawn((
+        ActorBundle::new(
+            Name::new("Player"),
+            player_team,
+            true,
+            MapPos::from_oddr(5, 5),
+        ),
+        actor_generator.generate_actor("player"),
     ));
+
+    commands.spawn((Name::new("Player"), player_team, MapPos::from_oddr(5, 5)));
 
     commands.spawn((
         ActorBundle::new(
@@ -123,8 +127,8 @@ fn setup_actors(mut commands: Commands) {
             cpu_team,
             false,
             MapPos::from_oddr(2, 2),
-            Visual::Single("monster-sucker_1".to_string()),
         ),
+        actor_generator.generate_actor("sucker"),
         AiBehaviour::Zombi,
     ));
 
@@ -134,8 +138,8 @@ fn setup_actors(mut commands: Commands) {
             cpu_team,
             false,
             MapPos::from_oddr(8, 2),
-            Visual::Single("monster-sucker_1".to_string()),
         ),
+        actor_generator.generate_actor("sucker"),
         AiBehaviour::Zombi,
     ));
 }

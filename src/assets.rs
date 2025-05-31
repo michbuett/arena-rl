@@ -1,23 +1,26 @@
-use crate::{
-    animations::{FadeAnimation, SpriteAnimation},
-    GameState, MarkedForDeath,
-};
+mod data;
+mod sprites;
+
+use crate::GameState;
 use bevy::{
-    asset::{io::Reader, ron, AssetLoader, LoadContext, LoadedFolder},
-    ecs::system::EntityCommands,
+    asset::{AssetLoader, LoadContext, LoadState, io::Reader, ron},
     prelude::*,
 };
-use rand::{
-    distributions::uniform::{SampleRange, SampleUniform},
-    prelude::*,
-};
+use core::panic;
+use data::{ActionTemplates, ActorTemplates};
 use serde::Deserialize;
-use std::{collections::HashMap, marker::PhantomData, time::Duration};
+use sprites::{RawSpriteConfig, SpriteConfigMap, update_sprites_from_visuals};
+
+pub use data::{ActorGenerator, AttackOption, Attacks};
+pub use sprites::Visual;
+
+use std::{fmt::Display, marker::PhantomData};
 use thiserror::Error;
 
 /// An generic asset loader for data stored in RON files
 pub struct DataAssetLoader<T> {
-    _t: PhantomData<fn() -> T>,
+    extensions: Vec<&'static str>,
+    _t: PhantomData<T>,
 }
 
 /// Possible errors that can be produced by [`CustomAssetLoader`]
@@ -53,320 +56,183 @@ where
     }
 
     fn extensions(&self) -> &[&str] {
-        &["ron"]
+        &self.extensions
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Asset, TypePath)]
-pub struct RawSpriteConfig(Vec<(String, ProtoSpriteConfig)>);
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ProtoSpriteConfig {
-    pub files: Vec<String>,
-    pub offset: Option<(i32, i32)>,
-    // pub alpha: Option<u8>,
-    pub frame_durration: Option<u32>,
+impl<T> DataAssetLoader<T> {
+    fn new(extension: &'static str) -> DataAssetLoader<T> {
+        Self {
+            extensions: vec![extension],
+            _t: PhantomData,
+        }
+    }
 }
 
-#[derive(Debug, Resource)]
-pub struct SpriteConfigMap {
-    pub layout: Handle<TextureAtlasLayout>,
-    pub sources: TextureAtlasSources,
-    pub texture: Handle<Image>,
-    pub map: HashMap<String, SpriteConfig>,
+#[derive(Component)]
+struct AssetHandle(UntypedHandle);
+
+#[derive(Component)]
+struct Loading;
+
+#[derive(Component)]
+struct SpriteData;
+
+#[derive(Component)]
+struct OnLoaded(AssetLoadedEvent);
+
+#[derive(Event, Clone, Copy)]
+enum AssetLoadedEvent {
+    SpriteConfigLoaded,
 }
 
-#[derive(Debug)]
-pub enum SpriteConfig {
-    Single {
-        image_id: AssetId<Image>,
-        offset: (f32, f32),
-    },
-
-    Animated {
-        image_ids: Vec<AssetId<Image>>,
-        offset: (f32, f32),
-        frame_duration: u32,
-    },
-}
-
-#[derive(Resource, Default)]
-struct CombatSpritesFolder(Handle<LoadedFolder>);
+#[derive(Event, Clone, Copy)]
+struct AllAssetsLoadedEvent;
 
 pub fn assets_plugin(app: &mut App) {
-    app.init_asset::<RawSpriteConfig>()
-        .register_asset_loader(DataAssetLoader::<RawSpriteConfig> { _t: PhantomData })
-        .add_systems(OnEnter(GameState::Start), load_sprites)
+    app.add_event::<AssetLoadedEvent>()
+        .add_event::<AllAssetsLoadedEvent>()
+        .init_asset::<ActionTemplates>()
+        .init_asset::<ActorTemplates>()
+        .init_asset::<RawSpriteConfig>()
+        .register_asset_loader(DataAssetLoader::<ActionTemplates>::new("actions.ron"))
+        .register_asset_loader(DataAssetLoader::<ActorTemplates>::new("actors.ron"))
+        .register_asset_loader(DataAssetLoader::<RawSpriteConfig>::new("sprites.ron"))
+        .add_observer(handle_on_loaded)
+        .add_observer(handle_all_assets_loaded_event)
+        .add_systems(OnEnter(GameState::Start), load_data_files)
         .add_systems(
             Update,
             (
-                check_textures.run_if(in_state(GameState::Start)),
+                check_asset_loading_state.run_if(in_state(GameState::Start)),
                 update_sprites_from_visuals.run_if(resource_exists::<SpriteConfigMap>),
             ),
         );
 }
 
-fn load_sprites(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // load multiple, individual sprites from a folder
-    commands.insert_resource(CombatSpritesFolder(
-        asset_server.load_folder("images/combat"),
+fn load_data_files(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.spawn((
+        Loading,
+        AssetHandle(
+            asset_server
+                .load::<ActorTemplates>("data/main.actors.ron")
+                .untyped(),
+        ),
+    ));
+
+    commands.spawn((
+        Loading,
+        AssetHandle(
+            asset_server
+                .load::<ActionTemplates>("data/main.actions.ron")
+                .untyped(),
+        ),
+    ));
+
+    commands.spawn((
+        Loading,
+        SpriteData,
+        OnLoaded(AssetLoadedEvent::SpriteConfigLoaded),
+        AssetHandle(
+            asset_server
+                .load::<RawSpriteConfig>("images/combat/main.sprites.ron")
+                .untyped(),
+        ),
     ));
 }
 
-fn check_textures(
-    mut events: EventReader<AssetEvent<LoadedFolder>>,
-    rpg_sprite_folder: Res<CombatSpritesFolder>,
-    raw_sprite_config: Res<Assets<RawSpriteConfig>>,
+fn check_asset_loading_state(
     asset_server: Res<AssetServer>,
+    loading_assets_q: Query<(Entity, &AssetHandle, Option<&OnLoaded>), With<Loading>>,
+    mut commands: Commands,
+) {
+    let mut all_loaded = true;
+
+    for (entity, AssetHandle(handle), on_loaded) in loading_assets_q.iter() {
+        let Some(loading_state) = asset_server.get_load_state(handle) else {
+            panic!("Could not get load state of asset '{:?}'", handle.path());
+        };
+
+        match loading_state {
+            LoadState::Loaded => {
+                commands.entity(entity).remove::<Loading>();
+
+                if let Some(OnLoaded(ev)) = on_loaded {
+                    commands.trigger_targets(*ev, entity);
+                    all_loaded = false;
+                }
+            }
+
+            LoadState::Loading | LoadState::NotLoaded => {
+                all_loaded = false;
+            }
+
+            LoadState::Failed(err) => {
+                warn!("Error loading asset '{:?}': {:?}", handle.path(), err);
+            }
+        }
+    }
+
+    if all_loaded {
+        commands.trigger(AllAssetsLoadedEvent);
+    }
+}
+
+fn handle_on_loaded(
+    trigger: Trigger<AssetLoadedEvent>,
+    asset_server: Res<AssetServer>,
+    raw_sprite_config: Res<Assets<RawSpriteConfig>>,
+    loading_assets_q: Query<&AssetHandle>,
+    mut commands: Commands,
+) -> Result<(), BevyError> {
+    match trigger.event() {
+        AssetLoadedEvent::SpriteConfigLoaded => {
+            let AssetHandle(handle) = loading_assets_q.get(trigger.target())?;
+            let typed_handle = handle.clone().typed::<RawSpriteConfig>();
+            let Some(rsc) = raw_sprite_config.get(typed_handle.id()) else {
+                panic!("Could not get RawSpriteConfig asset");
+            };
+
+            for (_, psc) in rsc.0.iter() {
+                for f in psc.files.iter() {
+                    commands.spawn(AssetHandle(
+                        asset_server.load::<Image>(combat_sprite_path(f)).untyped(),
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_all_assets_loaded_event(
+    _trigger: Trigger<AllAssetsLoadedEvent>,
+    asset_server: Res<AssetServer>,
+    raw_sprite_config: Res<Assets<RawSpriteConfig>>,
+    action_templates_assets: Res<Assets<ActionTemplates>>,
+    actor_templates_assets: Res<Assets<ActorTemplates>>,
+
     mut next_state: ResMut<NextState<GameState>>,
     mut atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
     mut textures: ResMut<Assets<Image>>,
     mut commands: Commands,
 ) {
-    // Advance the `AppState` once all sprite handles have been loaded by the `AssetServer`
-    for event in events.read() {
-        if event.is_loaded_with_dependencies(&rpg_sprite_folder.0) {
-            let sprite_cfg_map = create_texture_atlas(
-                &raw_sprite_config,
-                &asset_server,
-                &mut atlas_layouts,
-                &mut textures,
-            );
+    commands.insert_resource(ActorGenerator::new(
+        &action_templates_assets,
+        &actor_templates_assets,
+    ));
 
-            commands.insert_resource(sprite_cfg_map);
+    commands.insert_resource(SpriteConfigMap::new(
+        &raw_sprite_config,
+        &asset_server,
+        &mut atlas_layouts,
+        &mut textures,
+    ));
 
-            next_state.set(GameState::MainMenu);
-        }
-    }
+    next_state.set(GameState::MainMenu);
 }
 
-fn create_texture_atlas(
-    raw_sprite_config: &Res<Assets<RawSpriteConfig>>,
-    asset_server: &Res<AssetServer>,
-    atlas_layouts: &mut ResMut<Assets<TextureAtlasLayout>>,
-    textures: &mut ResMut<Assets<Image>>,
-) -> SpriteConfigMap {
-    // ) -> (TextureAtlasLayout, Image, SpriteConfigMap) {
-    let mut sprite_configs: HashMap<String, SpriteConfig> = HashMap::new();
-    let mut texture_atlas_builder = TextureAtlasBuilder::default();
-
-    for (_, rsc) in raw_sprite_config.iter() {
-        for (key, proto_sprite_cfg) in rsc.0.iter() {
-            let offset = proto_sprite_cfg
-                .offset
-                .map(|(dx, dy)| (dx as f32, dy as f32))
-                .unwrap_or((0.0, 0.0));
-
-            if proto_sprite_cfg.files.len() == 1 {
-                let file_name = proto_sprite_cfg.files.first().unwrap();
-                let Some(handle) =
-                    asset_server.get_handle::<Image>(format!("images/combat/{}", file_name))
-                else {
-                    warn!(
-                        "Cannot find handle for path \"{}\". (sprite_key=\"{}\")",
-                        file_name, key,
-                    );
-                    continue;
-                };
-
-                let Some(texture) = textures.get(handle.id()) else {
-                    warn!(
-                        "{:?} did not resolve to an `Image` asset. (sprite_key=\"{}\")",
-                        handle.path().unwrap(),
-                        key,
-                    );
-                    continue;
-                };
-
-                texture_atlas_builder.add_texture(Some(handle.id()), texture);
-
-                sprite_configs.insert(
-                    key.clone(),
-                    SpriteConfig::Single {
-                        image_id: handle.id(),
-                        offset,
-                    },
-                );
-            } else {
-                let image_ids = proto_sprite_cfg
-                    .files
-                    .iter()
-                    .filter_map(|file_name| {
-                        asset_server.get_handle::<Image>(format!("images/combat/{}", file_name))
-                    })
-                    .map(|handle| handle.id())
-                    .collect::<Vec<_>>();
-
-                for id in image_ids.iter() {
-                    let Some(texture) = textures.get(*id) else {
-                        warn!("{:?} did not resolve to an `Image` asset.", id);
-                        continue;
-                    };
-                    texture_atlas_builder.add_texture(Some(*id), texture);
-                }
-
-                sprite_configs.insert(
-                    key.clone(),
-                    SpriteConfig::Animated {
-                        image_ids,
-                        offset,
-                        frame_duration: proto_sprite_cfg.frame_durration.unwrap_or(50),
-                    },
-                );
-            }
-        }
-    }
-
-    let (atlas_layout, atlas_sources, texture) = texture_atlas_builder.build().unwrap();
-    let atlas_layout_handle = atlas_layouts.add(atlas_layout);
-    let atlas_texture_handle = textures.add(texture);
-
-    SpriteConfigMap {
-        layout: atlas_layout_handle,
-        sources: atlas_sources,
-        texture: atlas_texture_handle,
-        map: sprite_configs,
-    }
-}
-
-#[derive(Component, Clone, Debug)]
-#[require(Visibility, Transform)]
-pub enum Visual {
-    Single(String),
-    Multi(Vec<String>),
-}
-
-#[derive(Component)]
-pub struct SpriteContainer;
-
-fn update_sprites_from_visuals(
-    mut commands: Commands,
-    sprite_cfg_map: Res<SpriteConfigMap>,
-    // layouts: Res<Assets<TextureAtlasLayout>>,
-    visual_q: Query<(Entity, &Visual, Option<&FadeAnimation>), Changed<Visual>>,
-    sprite_container_q: Query<(&ChildOf, Entity, &SpriteContainer)>,
-) {
-    if visual_q.is_empty() {
-        return;
-    }
-
-    for (entity, visual, fade_animation) in visual_q.iter() {
-        // clear "old" sprites
-        for (child_of, child_entity, _) in sprite_container_q.iter() {
-            if child_of.parent() == entity {
-                commands.entity(child_entity).insert(MarkedForDeath);
-            }
-        }
-
-        // the container entity exists to help removeing all changed visuals
-        let mut container_entity_cmd = commands.spawn((
-            Name::new("SpriteContainer"),
-            Transform::default(),
-            Visibility::Inherited,
-            SpriteContainer,
-        ));
-
-        container_entity_cmd.insert(ChildOf(entity));
-
-        match visual {
-            Visual::Single(v) => {
-                insert_sprite(
-                    container_entity_cmd,
-                    &sprite_cfg_map,
-                    v,
-                    0.0,
-                    fade_animation,
-                );
-            }
-
-            Visual::Multi(visuals) => {
-                for (idx, v) in visuals.iter().enumerate() {
-                    container_entity_cmd.with_children(|parent| {
-                        let c = parent.spawn_empty();
-                        insert_sprite(c, &sprite_cfg_map, v, idx as f32, fade_animation);
-                    });
-                }
-            }
-        }
-    }
-}
-
-fn insert_sprite(
-    mut commands: EntityCommands,
-    sprite_cfg_map: &Res<SpriteConfigMap>,
-    visual: &str,
-    zlayer: f32,
-    fade_animation: Option<&FadeAnimation>,
-) {
-    match sprite_cfg_map.map.get(visual) {
-        Some(SpriteConfig::Single {
-            image_id,
-            offset: (dx, dy),
-        }) => {
-            let index = sprite_cfg_map.sources.texture_index(*image_id).unwrap_or(0);
-            let image = sprite_cfg_map.texture.clone();
-            let atlas = TextureAtlas {
-                layout: sprite_cfg_map.layout.clone(),
-                index,
-            };
-
-            commands.insert((
-                Transform::from_translation(Vec3::new(*dx, *dy, zlayer)),
-                Sprite::from_atlas_image(image, atlas),
-            ));
-
-            if let Some(fa) = fade_animation {
-                commands.insert(fa.clone());
-            }
-        }
-
-        Some(SpriteConfig::Animated {
-            image_ids,
-            offset: (dx, dy),
-            frame_duration,
-        }) => {
-            let indices = image_ids
-                .iter()
-                .map(|image_id| sprite_cfg_map.sources.texture_index(*image_id).unwrap_or(0))
-                .collect::<Vec<_>>();
-
-            let current_idx: usize = rand_between(0..indices.len());
-            let mut timer = Timer::new(
-                Duration::from_millis(*frame_duration as u64),
-                TimerMode::Repeating,
-            );
-            let image = sprite_cfg_map.texture.clone();
-            let atlas = TextureAtlas {
-                layout: sprite_cfg_map.layout.clone(),
-                index: *indices.first().unwrap(),
-            };
-
-            timer.tick(Duration::from_millis(
-                rand_between(0..*frame_duration) as u64
-            ));
-
-            commands.insert((
-                Transform::from_translation(Vec3::new(*dx, *dy, zlayer)),
-                Sprite::from_atlas_image(image, atlas),
-                SpriteAnimation {
-                    indices,
-                    current_idx,
-                    timer,
-                },
-            ));
-        }
-
-        None => {
-            warn!("Unknown visual '{}'", visual);
-        }
-    }
-}
-
-fn rand_between<R, T>(r: R) -> T
-where
-    T: SampleUniform,
-    R: SampleRange<T>,
-{
-    let mut rng = thread_rng();
-    rng.gen_range(r)
+fn combat_sprite_path(n: impl Display) -> String {
+    format!("images/combat/{}", n)
 }
