@@ -241,6 +241,7 @@ impl FxEffect {
 fn handle_blood_splatter(commands: &mut Commands, pos: Vec3) {
     let duration = Duration::from_millis(BLOOD_SPLATTER_DURATION);
     let num_particals = 10;
+    let pos = pos.with_z(Z_LAYER_VFX);
 
     for i in 1..=num_particals {
         let visual = Visual::Single(format!("blood-splatter-{}", (i % 3) + 1));

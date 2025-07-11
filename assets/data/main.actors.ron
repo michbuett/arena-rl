@@ -3,6 +3,12 @@
         name: "Sucker",
         attacks: ["melee-attack-bite-01"],
         visual: ["monster-sucker_1"],
+        attribute_values: (
+            physical_strength: 0,
+            physical_agility: 2,
+            mental_strength: -1,
+            methal_agility: -1,
+        )
     )),
 
     ("player", (
@@ -13,6 +19,12 @@
             "head-heavy_1",
             "melee-1h_2",
         ],
+        attribute_values: (
+            physical_strength: 2,
+            physical_agility: 1,
+            mental_strength: 0,
+            methal_agility: 0,
+        )
     )),
 ])
 

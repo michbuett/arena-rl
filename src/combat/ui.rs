@@ -9,7 +9,8 @@ use crate::core::{Card, Suite};
 use crate::style::{BUTTON_BG_HIGHLIGHT, TextStyle, text};
 use crate::{GameState, style::WINDOW_BACKGROUND};
 
-use super::actor::AttackData;
+use super::actor::{AttackData, CombatFinishedEvent, Health};
+use super::combat_resolution::CombatConsequence;
 use super::{
     OnCombatState, ScrollBounds, Visual,
     actor::{Action, Activation, Activations, Actor},
@@ -39,6 +40,9 @@ pub struct ScrollState(bool);
 
 #[derive(Component)]
 pub struct ActionButtonContainer;
+
+#[derive(Component)]
+pub struct CombatLogContainer;
 
 #[derive(Resource)]
 pub struct SelectedMapPos {
@@ -99,6 +103,7 @@ pub fn combat_ui_plugin(app: &mut App) {
     app.add_event::<MapPosSelectedEvent>()
         .add_event::<UiStateTransitionedEvent>()
         .add_observer(update_ui_on_state_change)
+        .add_observer(handle_combat_finished_event)
         // .add_observer(process_action_button_click)
         .add_systems(OnEnter(GameState::Combat), setup_ui)
         .add_systems(
@@ -106,8 +111,11 @@ pub fn combat_ui_plugin(app: &mut App) {
             (
                 process_keyboard_input,
                 (process_mouse_input, handle_select_map_pos).chain(),
-                update_description_on_activation_changed,
-                update_available_playeractions
+                update_description_on_changed,
+                (
+                    update_details_window_text_on_change,
+                    update_available_playeractions,
+                )
                     .run_if(resource_exists_and_changed::<SelectedMapPos>),
                 update_turn_info.run_if(resource_exists_and_changed::<Turn>),
                 update_waiting_state,
@@ -183,6 +191,27 @@ fn setup_ui(mut commands: Commands) {
         SelectedTile,
         OnCombatState,
         UserInputElement,
+    ));
+
+    commands.spawn((
+        Name::from("Combat log container"),
+        // Visibility::Hidden,
+        Node {
+            position_type: PositionType::Absolute,
+            flex_direction: FlexDirection::Column,
+            justify_items: JustifyItems::Start,
+            align_items: AlignItems::Stretch,
+            display: Display::Flex,
+            row_gap: Val::Px(5.0),
+            top: Val::Px(100.0),
+            left: Val::Px(20.0),
+            width: Val::Px(200.0),
+            padding: UiRect::all(Val::Px(10.0)),
+            ..Default::default()
+        },
+        OnCombatState,
+        // UserInputElement,
+        CombatLogContainer,
     ));
 }
 
@@ -296,46 +325,53 @@ fn handle_select_map_pos(
     mut user_input_evr: EventReader<MapPosSelectedEvent>,
     mut details_window_text: Query<&mut Text, With<DetailsWindowText>>,
     mut selected_tile_q: Query<(&mut Transform, &mut Visibility), With<SelectedTile>>,
-) {
+) -> Result<(), BevyError> {
     let Some(MapPosSelectedEvent(hex)) = user_input_evr.read().last() else {
-        return;
+        return Ok(());
     };
 
-    let details_window = details_window_text.single_mut();
-    let selected_tile = selected_tile_q.single_mut();
+    let mut details_window_txt = details_window_text.single_mut()?;
+    let selected_tile = selected_tile_q.single_mut()?;
+    let (mut selected_tile_transform, mut selected_tile_visibility) = selected_tile;
 
-    match (details_window, selected_tile) {
-        (Ok(mut txt), Ok((mut selected_tile_transform, mut selected_tile_visibility))) => {
-            if let Some((pos, ..)) = map.find_tile(hex) {
-                if let Some(descr) = find_descr_at(&pos, &description_q) {
-                    txt.0 = format!("You look at {:?}, you see...\n{}", pos, descr.as_str());
-                } else {
-                    txt.0 = format!("You look at {:?}, there is nothing", pos);
-                }
-                selected_tile_transform.translation = hex.into_vec3().with_z(Z_LAYER_UI_MAP_MARKER);
-                *selected_tile_visibility = Visibility::Inherited;
-            } else {
-                txt.0 = "No tile selected".to_string();
-                *selected_tile_visibility = Visibility::Hidden;
-            }
+    if let Some((pos, ..)) = map.find_tile(hex) {
+        let descr_at = description_q
+            .iter()
+            .filter_map(|(mp, descr)| if pos == *mp { Some(descr) } else { None })
+            .next();
+
+        if let Some(descr) = descr_at {
+            details_window_txt.0 = format!("You look at {:?}, you see...\n{}", pos, descr.as_str());
+        } else {
+            details_window_txt.0 = format!("You look at {:?}, there is nothing", pos);
         }
 
-        err @ _ => {
-            warn!("{:?}", err);
-        }
+        selected_tile_transform.translation = hex.into_vec3().with_z(Z_LAYER_UI_MAP_MARKER);
+        *selected_tile_visibility = Visibility::Inherited;
+    } else {
+        details_window_txt.0 = "No tile selected".to_string();
+        *selected_tile_visibility = Visibility::Hidden;
     }
+
+    Ok(())
 }
 
-fn find_descr_at<'a>(
-    mpos: &MapPos,
-    description_q: &'a Query<(&MapPos, &Description)>,
-) -> Option<&'a Description> {
-    for (p, desc) in description_q {
-        if mpos == p {
-            return Some(desc);
+fn update_details_window_text_on_change(
+    description_q: Query<(&MapPos, Ref<Description>), Without<SelectedTile>>,
+    selected_map_pos: Res<SelectedMapPos>,
+    mut details_window_text_q: Query<&mut Text, With<DetailsWindowText>>,
+) -> Result<(), BevyError> {
+    let selected_mpos = selected_map_pos.map_pos;
+    let mut details_window_text = details_window_text_q.single_mut()?;
+
+    for (mpos, descr) in description_q {
+        if descr.is_changed() && *mpos == selected_mpos {
+            details_window_text.0 =
+                format!("You look at {:?}, you see...\n{}", mpos, descr.0.as_str());
         }
     }
-    None
+
+    Ok(())
 }
 
 #[derive(Debug, Event)]
@@ -441,53 +477,58 @@ impl Description {
     }
 }
 
-fn update_description_on_activation_changed(
-    mut actor_q: Query<(&Actor, &Activations, &Name, Mut<Description>), Changed<Activations>>,
+fn update_description_on_changed(
+    mut actor_q: Query<
+        (&Actor, &Activations, &Name, &Health, Mut<Description>),
+        Changed<Activations>,
+    >,
 ) {
-    for (_, activations, name, mut description) in actor_q.iter_mut() {
-        description.0 = describe_actor(name, activations);
+    for (_, activations, name, health, mut description) in actor_q.iter_mut() {
+        description.0 = describe_actor(name, health, activations);
     }
 }
 
-fn describe_actor(name: &Name, activations: &Activations) -> String {
-    let active_activations_txt = if let Some(activation) = &activations.active {
+fn describe_actor(name: &Name, health: &Health, activations: &Activations) -> String {
+    let health_text = format!("{}/{}", health.damage_total(), health.max_health);
+
+    let active_activations_txt = if let Some(activation) = &activations.active() {
         card_descr(&activation.0)
     } else {
         " - ".to_string()
     };
 
-    let remaining_activations_txt = if activations.remaining.is_empty() {
+    let remaining_activations_txt = if activations.remaining().is_empty() {
         " - ".to_string()
     } else {
         activations
-            .remaining
+            .remaining()
             .iter()
+            .rev()
             .map(|a| card_descr(&a.0))
             .collect::<Vec<_>>()
             .join(", ")
     };
 
     format!(
-        "{}\nActivations:\n - active: {}\n - remaining: {}",
-        name, active_activations_txt, remaining_activations_txt
+        "{}\nHealth: {}\nActivations:\n - active: {}\n - remaining: {}",
+        name, health_text, active_activations_txt, remaining_activations_txt
     )
 }
 
 fn card_descr(card: &Card) -> String {
-    let val = match card.value {
+    let val = match card.value_low() {
         1 => "Ace".to_string(),
         11 => "Jack".to_string(),
         12 => "Queen".to_string(),
         13 => "King".to_string(),
-        _ => format!("{}", card.value),
+        _ => format!("{}", card.value_low()),
     };
 
-    let suite = match card.suite {
-        Suite::PhysicalStr => "Clubs",
-        Suite::PhysicalAg => "Spades",
-        Suite::MentalStr => "Hearts",
-        Suite::MentalAg => "Diamonds",
-        _ => "(Unknown)",
+    let suite = match card.suite() {
+        Suite::Clubs => "Clubs",
+        Suite::Spades => "Spades",
+        Suite::Hearts => "Hearts",
+        Suite::Diamonds => "Diamonds",
     };
 
     format!("{} of {}", val, suite)
@@ -506,20 +547,19 @@ fn spawn_activation_indicators(parent: &mut ChildSpawnerCommands, card: &Card, p
 }
 
 fn card_visual_name(card: &Card) -> String {
-    let suite = match card.suite {
-        Suite::PhysicalStr => "ps",
-        Suite::PhysicalAg => "pa",
-        Suite::MentalStr => "ms",
-        Suite::MentalAg => "ma",
-        _ => "?",
+    let suite = match card.suite() {
+        Suite::Clubs => "ps",
+        Suite::Spades => "pa",
+        Suite::Hearts => "ms",
+        Suite::Diamonds => "ma",
     };
 
-    let value = match card.value {
+    let value = match card.value_low() {
         1 => "A".to_string(),
         11 => "J".to_string(),
         12 => "Q".to_string(),
         13 => "K".to_string(),
-        _ => format!("{}", card.value),
+        _ => format!("{}", card.value_low()),
     };
 
     format!("icon-ai-{}-{}", suite, value)
@@ -544,11 +584,11 @@ fn update_ui_on_state_change(
 
         for (e, activations) in actor_q.iter() {
             commands.entity(e).with_children(|parent| {
-                if let Some(Activation(card)) = activations.active {
+                if let Some(Activation(card)) = activations.active() {
                     spawn_activation_indicators(parent, &card, 0);
                 }
 
-                for (idx, Activation(card)) in activations.remaining.iter().enumerate() {
+                for (idx, Activation(card)) in activations.remaining().iter().enumerate() {
                     spawn_activation_indicators(parent, card, idx + 2);
                 }
             });
@@ -623,10 +663,68 @@ pub fn update_action_buttons(
 fn button_text_for_action(action: &Action) -> String {
     match action {
         Action::MoveAlong { .. } => "Move",
-        Action::Attack(attack_data) => match attack_data {
-            AttackData::MeleeAttack { name, .. } => name,
-        },
+        Action::Attack(AttackData { name, .. }) => name,
         _ => "Unknown",
     }
     .to_string()
+}
+
+pub fn handle_combat_finished_event(
+    trigger: Trigger<CombatFinishedEvent>,
+    actor_data_q: Query<(&Name, &Health)>,
+    log_container_q: Query<Entity, With<CombatLogContainer>>,
+    children_q: Query<&Children>,
+    mut commands: Commands,
+) -> Result<(), BevyError> {
+    let CombatFinishedEvent {
+        attacker,
+        target,
+        result,
+    } = trigger.event();
+    let [(attacker_name, _), (target_name, _)] = actor_data_q.get_many([*attacker, *target])?;
+    let combat_log_ct = log_container_q.single()?;
+
+    let effect_txt = if result.is_empty() {
+        "Miss".to_string()
+    } else {
+        result
+            .iter()
+            .map({
+                |(_, c)| match c {
+                    CombatConsequence::ClumsyAttack => "Fumble".to_string(),
+                    CombatConsequence::Hit { damage } => {
+                        let dmg: u8 = damage.iter().map(|c| c.value_high()).sum();
+                        format!("Hit for {} damage", dmg)
+                    }
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
+    let txt = format!("{} attacks {}: {}", attacker_name, target_name, effect_txt);
+    let log_entry = commands
+        .spawn((
+            Node {
+                padding: UiRect::all(Val::Px(5.0)),
+                ..Default::default()
+            },
+            BackgroundColor(WINDOW_BACKGROUND.into()),
+            children![text(txt, TextStyle::UiNormal),],
+        ))
+        .id();
+
+    commands
+        .entity(combat_log_ct)
+        .insert_children(0, &[log_entry]);
+
+    if children_q.contains(combat_log_ct) {
+        for (idx, entity) in children_q.get(combat_log_ct)?.iter().enumerate() {
+            if idx >= 4 {
+                commands.entity(entity).insert(MarkedForDeath);
+            }
+        }
+    }
+
+    Ok(())
 }

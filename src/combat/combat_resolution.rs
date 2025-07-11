@@ -1,91 +1,128 @@
-use crate::core::{resolve_challenge, Card, Challenge, Deck, Suite, SUCCESS_THRESHOLD};
+use std::cmp::{max, min};
+
+use bevy::prelude::Entity;
+
+use crate::core::{Attribute, AttributeValues, Card, Deck, ProgressCheck, SkillCheck};
 
 #[derive(Debug)]
 pub struct Attack {
+    pub speed: Card,
+    pub attribute: Attribute,
+    pub difficulty: u8,
     pub damage: i16,
-    pub challenge: Challenge,
+    pub attacker: ActorData,
+    pub target: Target,
 }
 
 #[derive(Debug)]
-pub struct Defence {
-    pub armor: i16,
-    pub challenge: Challenge,
+pub enum Target {
+    SingleMelee(ActorData),
 }
 
-// pub struct CombatAction {
-//     pub target_suite: Suite,
-//     pub target_value: u8,
+pub type ActorData = (Entity, AttributeValues);
+
+#[derive(Debug)]
+pub enum CombatConsequence {
+    /// Deals damage
+    Hit { damage: Vec<Card> },
+
+    /// Makes you more vulnarable (e.g. for counter attacks)
+    // TODO: Stumble,
+
+    /// Makes your attack easier to be avoided
+    ClumsyAttack,
+}
+
+// pub struct CombatSequence {
+//     action: Attack,
+//     fumble: Vec<CombatConsequence>,
+//     hit: Vec<CombatConsequence>,
 // }
 
-pub enum CombatResult {
-    Fumble,
-    Defence,
-    Bounced,
-    Wounded(Card),
-    OutOfAction,
+// pub enum AttackResult {
+//     MeleeAttack {
+//         attacker: entity,
+//         target: entity,
+//     }
+// }
+
+pub type CombatResult = Vec<(Entity, CombatConsequence)>;
+
+pub fn handle_attack(attack: Attack, deck: &mut Deck) -> CombatResult {
+    println!("[DEBUG] handle_attack - attack={:?}", attack);
+
+    let result = match attack.target {
+        Target::SingleMelee(target) => handle_melee_attack(&attack, &target, deck),
+    };
+
+    println!("  => result={:?}", result);
+    result
 }
 
-pub fn handle_attack(
-    attack: Attack,
-    effort_card: Card,
-    attack_deck: &mut Deck,
-    defence: Defence,
-    defence_deck: &mut Deck,
-) -> CombatResult {
-    println!(
-        "\n[DEBUG] handle_attack\n  - effort={:?}\n  - attack={:?}\n  - defence={:?}",
-        effort_card, attack, defence
-    );
+pub fn handle_melee_attack(attack: &Attack, target: &ActorData, deck: &mut Deck) -> CombatResult {
+    let mut result: CombatResult = vec![];
+    let fumble_effect = perform_quality_check(&attack, deck);
+    let hit_effect = perform_hit_check(&attack, deck, &fumble_effect);
 
-    // step 1: see if attack needs a fumble check
-    let effort = effort_card.value(attack.challenge.target_suite);
-    let attack_quality = effort + attack.challenge.skill_value;
-    if (attack_quality as i16) < SUCCESS_THRESHOLD {
-        // step 1.1 if yes, then perform fumble check
-        let fumble_result = resolve_challenge(
-            &Challenge {
-                advantage: attack.challenge.advantage,
-                target_suite: attack.challenge.target_suite,
-                skill_value: attack_quality,
-            },
-            attack_deck,
-        );
-
-        if fumble_result.success_lvl < 0 {
-            // step 1.2 if fumble check fails => apply effects (possible exit)
-            println!(
-                "[DEBUG] handle_attack - FUMBLE - fumble_result={:?}",
-                fumble_result
-            );
-            return CombatResult::Fumble;
-        }
+    if let Some(c) = fumble_effect {
+        result.push((attack.attacker.0, c));
+    }
+    if let Some(c) = hit_effect {
+        result.push((target.0, c));
     }
 
-    // step 2: check if defence succeeds (possible exit)
-    let defence_result = resolve_challenge(&defence.challenge, defence_deck);
-    if defence_result.success_lvl > 0 {
-        // defence succeeds
-        println!(
-            "[DEBUG] handle_attack - DEFENCE - defence_result={:?}",
-            defence_result
-        );
-        return CombatResult::Defence;
-    }
+    result
+}
 
-    // step 3: flip for damage
-    let damage_flip = attack_deck.deal();
-    let damage_value = damage_flip.value(Suite::Any) as i16 + attack.damage - defence.armor;
-
-    println!(
-        "[DEBUG] handle_attack - damage_flip={:?}, damage_value={}",
-        damage_flip, damage_value
-    );
-
-    if damage_value > 10 {
-        CombatResult::OutOfAction
-    } else if damage_value > 0 {
-        CombatResult::Wounded(damage_flip)
+fn perform_quality_check(attack: &Attack, deck: &mut Deck) -> Option<CombatConsequence> {
+    let target_number = if attack.speed.suite().matches(&attack.attribute) {
+        min(attack.difficulty, attack.speed.value_low())
     } else {
-        CombatResult::Bounced
+        max(attack.difficulty, attack.speed.value_low())
+    };
+
+    let fumble_check = SkillCheck {
+        attribute: attack.attribute,
+        target_number,
+    };
+
+    let fumble_result = fumble_check.perform_check(deck, &attack.attacker.1);
+    if !fumble_result.is_success() {
+        Some(CombatConsequence::ClumsyAttack)
+    } else {
+        None
+    }
+}
+
+const TO_HIT_DIFFICULY_DEFAULT: u8 = 7;
+const TO_HIT_DIFFICULY_HARD: u8 = 9;
+
+fn perform_hit_check(
+    attack: &Attack,
+    deck: &mut Deck,
+    fumble_effect: &Option<CombatConsequence>,
+) -> Option<CombatConsequence> {
+    let target_number = if matches!(fumble_effect, Some(CombatConsequence::ClumsyAttack)) {
+        TO_HIT_DIFFICULY_HARD
+    } else {
+        TO_HIT_DIFFICULY_DEFAULT
+    };
+
+    let hit_check = SkillCheck {
+        target_number,
+        attribute: attack.attribute,
+    };
+
+    let hit_result = hit_check.perform_check(deck, &attack.attacker.1);
+    if !hit_result.is_success() {
+        let magnitude = (hit_result.magnitude() as i16 + attack.damage).clamp(0, 10) as u8;
+        let damage_check = ProgressCheck { magnitude };
+        let damage_result = damage_check.perform_check(deck);
+
+        Some(CombatConsequence::Hit {
+            damage: damage_result.draw,
+        })
+    } else {
+        None
     }
 }

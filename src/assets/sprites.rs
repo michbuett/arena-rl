@@ -140,6 +140,21 @@ pub enum Visual {
     Multi(Vec<String>),
 }
 
+impl From<Vec<String>> for Visual {
+    fn from(mut value: Vec<String>) -> Self {
+        if value.len() == 1 {
+            Visual::Single(value.pop().unwrap())
+        } else {
+            Visual::Multi(value)
+        }
+    }
+}
+impl From<&Vec<String>> for Visual {
+    fn from(value: &Vec<String>) -> Self {
+        Self::from(value.clone())
+    }
+}
+
 #[derive(Component)]
 pub struct SpriteContainer;
 

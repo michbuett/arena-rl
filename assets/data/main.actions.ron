@@ -1,8 +1,14 @@
 ([
     ("melee-attack-bite-01", MeleeAttack(
-        name: "Bite"
+        name: "Bite",
+        attribute: PhysicalStr,
+        damage: 1,
+        difficulty: 3,
     )),
     ("melee-attack-sword-01", MeleeAttack(
-        name: "Swing Sword"
+        name: "Swing Sword",
+        attribute: PhysicalStr,
+        damage: 1,
+        difficulty: 5,
     )),
 ])

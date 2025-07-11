@@ -40,7 +40,7 @@ fn setup(
     let win = windows.single()?;
 
     commands.spawn((
-        Camera2d::default(),
+        Camera2d,
         Projection::Orthographic(OrthographicProjection {
             scaling_mode: ScalingMode::WindowSize,
             scale: win.resolution.scale_factor(),

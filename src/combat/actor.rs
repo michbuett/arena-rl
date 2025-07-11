@@ -1,14 +1,13 @@
 use bevy::prelude::*;
 
 use crate::assets::{AttackOption, Attacks};
-use crate::combat::combat_resolution::Defence;
-use crate::core::{Card, Challenge, Deck, Suite};
+use crate::core::{Attribute, AttributeValues, Card, Suite};
 
-use super::combat_resolution::{Attack, CombatResult, handle_attack};
+use super::GameDeck;
+use super::combat_resolution::{Attack, CombatConsequence, CombatResult, Target, handle_attack};
 use super::fx::{FxEffect, FxSequence};
 use super::ui::Z_LAYER_ACTOR;
 use super::{
-    Visual,
     map::{HexMap, MapPos, Obstacle},
     ui::{Description, MapPosSelectedEvent, SelectedMapPos, UiState, UiStateTransitionedEvent},
 };
@@ -16,16 +15,16 @@ use super::{
 #[derive(Component, PartialEq, Clone, Copy)]
 pub struct Team(pub Entity);
 
-#[derive(Component, Debug)]
-pub struct TeamDeck(pub Deck);
+// #[derive(Component, Debug)]
+// pub struct TeamDeck(pub Deck);
 
 #[derive(Component, Debug)]
-pub struct TeamHand();
+pub struct TeamHand(pub Vec<Card>);
 
 #[derive(Bundle)]
 pub struct TeamBundle {
     name: Name,
-    deck: TeamDeck,
+    // deck: TeamDeck,
     hand: TeamHand,
     player_controlled: PlayerControlled,
 }
@@ -33,8 +32,8 @@ impl TeamBundle {
     pub fn new(name: impl Into<Name>, is_pc: bool) -> Self {
         Self {
             name: name.into(),
-            deck: TeamDeck(Deck::new_rnd()),
-            hand: TeamHand(),
+            // deck: TeamDeck(Deck::new_rnd()),
+            hand: TeamHand(vec![]),
             player_controlled: PlayerControlled(is_pc),
         }
     }
@@ -60,21 +59,96 @@ pub enum AiBehaviour {
 #[derive(Debug, Clone)]
 pub struct Activation(pub Card);
 
-#[derive(Component)]
+impl Activation {
+    pub fn speed(&self) -> u8 {
+        self.0.value_high()
+    }
+}
+
+#[derive(Component, Debug)]
 pub struct Activations {
-    pub active: Option<Activation>,
-    pub remaining: Vec<Activation>,
+    active: Option<Activation>,
+    remaining: Vec<Activation>,
 }
 
 impl Activations {
     pub fn next_activation_initiative(&self) -> Option<u8> {
-        self.remaining.iter().map(|Activation(c)| c.value).min()
+        self.remaining.iter().map(|a| a.speed()).max()
+    }
+
+    pub fn active(&self) -> Option<&Activation> {
+        self.active.as_ref()
+    }
+
+    pub fn activate_next(&mut self) {
+        self.active = self.remaining.pop();
+    }
+
+    pub fn refresh(&mut self, mut new_activations: Vec<Card>) {
+        self.remaining = new_activations.drain(..).map(|c| Activation(c)).collect();
+        self.remaining
+            .sort_unstable_by(|a1, a2| a1.speed().cmp(&a2.speed()));
+    }
+
+    pub fn remaining(&self) -> &[Activation] {
+        &self.remaining
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Debug, Clone)]
 pub struct Health {
+    pub max_health: u8,
     pub wounds: Vec<Card>,
+}
+
+impl Health {
+    pub fn new(max_health: u8) -> Self {
+        Self {
+            max_health,
+            wounds: vec![],
+        }
+    }
+
+    pub fn damage_total(&self) -> u8 {
+        self.wounds.iter().map(|c| c.value_high()).sum()
+    }
+
+    pub fn is_alive(&self) -> bool {
+        self.max_health > self.damage_total()
+    }
+
+    fn current_attribute_values(&self, base_values: AttributeValues) -> AttributeValues {
+        let AttributeValues {
+            mut physical_strength,
+            mut physical_agility,
+            mut mental_strength,
+            mut methal_agility,
+        } = base_values;
+
+        for card in self.wounds.iter() {
+            match card.suite() {
+                Suite::Clubs => {
+                    physical_strength -= 1;
+                }
+                Suite::Spades => {
+                    physical_agility -= 1;
+                }
+                Suite::Hearts => {
+                    mental_strength -= 1;
+                }
+                Suite::Diamonds => {
+                    methal_agility -= 1;
+                }
+            }
+        }
+
+        AttributeValues {
+            physical_strength,
+            physical_agility,
+            mental_strength,
+            methal_agility,
+        }
+    }
 }
 
 #[derive(Bundle)]
@@ -87,7 +161,7 @@ pub struct ActorBundle {
     pub map_pos: MapPos,
     // pub visual: Visual,
     pub activations: Activations,
-    pub health: Health,
+    // pub health: Health,
     pub obstacle: Obstacle,
     pub transform: Transform,
     pub global_transform: GlobalTransform,
@@ -109,7 +183,7 @@ impl ActorBundle {
                 active: None,
                 remaining: vec![],
             },
-            health: Health { wounds: vec![] },
+            // health: Health { wounds: vec![] },
             obstacle: Obstacle(f32::MAX),
             transform: Transform::from_translation(map_pos.into_vec3().with_z(Z_LAYER_ACTOR)),
             global_transform: GlobalTransform::default(),
@@ -119,20 +193,18 @@ impl ActorBundle {
     }
 }
 
-// #[derive(Bundle)]
-// pub struct AiActorBundle {
-//     actor_bundle: ActorBundle,
-//     ai_behaivour: AiBehaviour,
-// }
-
-#[derive(Debug, Component)]
-pub struct PreparedAction(pub Action);
-
 #[derive(Debug, Event)]
 pub struct ActionTriggeredEvent(pub Action);
 
 #[derive(Debug, Event)]
 pub struct ActionSelectedEvent(pub usize);
+
+#[derive(Debug, Event)]
+pub struct CombatFinishedEvent {
+    pub attacker: Entity,
+    pub target: Entity,
+    pub result: CombatResult,
+}
 
 #[derive(Debug, Event)]
 pub struct BeginActivationCommand;
@@ -147,16 +219,33 @@ pub struct MoveToCommand(Vec<MapPos>);
 pub struct AttackCommand(AttackData);
 
 #[derive(Debug, Clone)]
-pub enum AttackData {
-    MeleeAttack { name: String, target: Entity },
+pub struct AttackData {
+    pub target: AttackTarget,
+    pub name: String,
+    pub attribute: Attribute,
+    pub damage: i16,
+    pub difficulty: u8,
+}
+
+#[derive(Debug, Clone)]
+pub enum AttackTarget {
+    MeleeAttack { target: Entity },
 }
 
 impl AttackData {
     pub fn new(target: Entity, attack_template: &AttackOption) -> Self {
         match attack_template {
-            AttackOption::MeleeAttack { name } => Self::MeleeAttack {
+            AttackOption::MeleeAttack {
+                name,
+                attribute,
+                damage,
+                difficulty,
+            } => Self {
+                target: AttackTarget::MeleeAttack { target },
                 name: name.clone(),
-                target,
+                attribute: *attribute,
+                damage: *damage,
+                difficulty: *difficulty,
             },
         }
     }
@@ -198,6 +287,7 @@ pub fn handle_select_map_pos(
 
             if let Some(target) = find_enemy_at(&target_actor_q, &team, *hex) {
                 let distance = actor_pos.distance(hex);
+
                 for attack_option in attacks.0.iter() {
                     if attack_option.can_attack(distance) {
                         let attack = AttackData::new(target, attack_option);
@@ -268,10 +358,10 @@ pub fn handle_action_triggered_event(
     let ActionTriggeredEvent(action) = trigger.event();
     let entity = trigger.target();
 
-    // info!(
-    //     "[handle_action_selected_event] entity={:?}, action={:?}",
-    //     entity, action,
-    // );
+    info!(
+        "[handle_action_selected_event] entity={:?}, action={:?}",
+        entity, action,
+    );
 
     match action {
         Action::MoveAlong { path } => {
@@ -293,21 +383,24 @@ pub fn handle_action_triggered_event(
 pub fn handle_begin_activation_command(
     trigger: Trigger<BeginActivationCommand>,
     mut commands: Commands,
-    mut actor_activation_q: Query<(Mut<Activations>, &PlayerControlled, &MapPos)>,
-) {
+    mut actor_activation_q: Query<(Mut<Activations>, &PlayerControlled, &MapPos, &Name)>,
+) -> Result<(), BevyError> {
+    let e = trigger.target();
+    let (mut activation, PlayerControlled(is_pc), mpos, _name) = actor_activation_q.get_mut(e)?;
+
     // info!(
-    //     "[handle_begin_activation_command] entity={:?}",
+    //     "[actor::handle_begin_activation_command] {} (entity={:?})",
+    //     _name,
     //     trigger.target()
     // );
 
-    let e = trigger.target();
-    let (mut activation, PlayerControlled(is_pc), mpos) = actor_activation_q.get_mut(e).unwrap();
-
-    activation.active = activation.remaining.pop();
+    activation.activate_next();
 
     if *is_pc {
         commands.trigger(UiStateTransitionedEvent(UiState::await_input(*mpos)));
     }
+
+    Ok(())
 }
 
 pub fn handle_end_activation_command(
@@ -345,122 +438,75 @@ pub fn handle_move_to_command(trigger: Trigger<MoveToCommand>, mut commands: Com
 
 pub fn handle_attack_command(
     trigger: Trigger<AttackCommand>,
-    mut combat_data_q: Query<(&MapPos, &Team, &Activations, Mut<Health>)>,
-    mut deck_q: Query<Mut<TeamDeck>>,
+    combat_data_q: Query<(&Health, &Activations, &AttributeValues)>,
+    mut deck: ResMut<GameDeck>,
     mut commands: Commands,
-) {
+) -> Result<(), BevyError> {
     let AttackCommand(attack) = trigger.event();
-    let attacking_entity = trigger.target();
+    let attacker = trigger.target();
 
-    match attack {
-        AttackData::MeleeAttack { target, .. } => {
-            let Ok(
-                [
-                    (attacker_pos, attacker_team, activation, _),
-                    (target_pos, target_team, _, mut health),
-                ],
-            ) = combat_data_q.get_many_mut([attacking_entity, *target])
-            else {
-                // target may already be destroyed
-                // => ignore action
-                return;
-            };
+    let combat_finished_event = match &attack.target {
+        AttackTarget::MeleeAttack { target } => {
+            // info!(
+            //     "[handle_attack_command] attacker={:?}, target={:?}",
+            //     attacking_entity, target
+            // );
+
+            let [
+                (attacker_health, activation, attacker_av),
+                (target_health, _, target_av),
+            ] = combat_data_q.get_many([attacker, *target])?;
 
             let effort_card = activation.active.as_ref().cloned().unwrap().0;
-            let [mut attack_deck, mut defence_deck] = deck_q
-                .get_many_mut([attacker_team.0, target_team.0])
-                .unwrap();
-
-            let attack = Attack {
-                damage: 5,
-                challenge: Challenge {
-                    advantage: 0,
-                    target_suite: Suite::PhysicalStr,
-                    skill_value: 3, // TODO: use actor attributes
-                },
-            };
-
-            let wounds: i16 = health
-                .wounds
-                .iter()
-                .map(|c| if c.value < 10 { 1 } else { 2 })
-                .sum();
-
-            let defence = Defence {
-                armor: 3 - wounds,
-                challenge: Challenge {
-                    advantage: 0,
-                    target_suite: Suite::PhysicalAg,
-                    skill_value: 3, // TODO: use actor attributes
-                },
-            };
 
             let combat_result = handle_attack(
-                attack,
-                effort_card,
-                &mut attack_deck.0,
-                defence,
-                &mut defence_deck.0,
+                Attack {
+                    speed: effort_card,
+                    attribute: attack.attribute,
+                    damage: attack.damage,
+                    difficulty: attack.difficulty,
+                    attacker: (
+                        attacker,
+                        attacker_health.current_attribute_values(*attacker_av),
+                    ),
+                    target: Target::SingleMelee((
+                        *target,
+                        target_health.current_attribute_values(*target_av),
+                    )),
+                },
+                &mut deck.0,
             );
 
-            match &combat_result {
-                CombatResult::Wounded(card) => {
-                    health.wounds.push(*card);
-                }
-                _ => {}
+            CombatFinishedEvent {
+                attacker,
+                target: *target,
+                result: combat_result,
             }
-
-            create_melee_attack_fx_sequence(
-                attacking_entity,
-                *attacker_pos,
-                *target,
-                *target_pos,
-                combat_result,
-            )
-            .run(&mut commands);
         }
-    }
-}
-
-fn create_melee_attack_fx_sequence(
-    attacking_entity: Entity,
-    attacker_mpos: MapPos,
-    target_entity: Entity,
-    target_mpos: MapPos,
-    combat_result: CombatResult,
-) -> FxSequence {
-    let step_durration = 100;
-    let attacker_pos = attacker_mpos.into_vec3().with_z(Z_LAYER_ACTOR);
-    let target_pos = target_mpos.into_vec3().with_z(Z_LAYER_ACTOR);
-    let path = vec![attacker_pos, target_pos, attacker_pos];
-
-    let mut fx_seq = FxSequence::new()
-        .then(FxEffect::MoveTo {
-            entity: attacking_entity,
-            path,
-            movement_modification: crate::animations::MovementModification::None,
-            step_durration,
-        })
-        .wait(step_durration)
-        .then(FxEffect::hit(
-            Visual::Single("fx-hit-1".to_string()),
-            target_mpos,
-        ))
-        .wait(200);
-
-    fx_seq = match combat_result {
-        CombatResult::Fumble => fx_seq.then(FxEffect::say("Fuck!", attacker_mpos)),
-        CombatResult::Bounced => fx_seq.then(FxEffect::say("Boing!", target_mpos)),
-        CombatResult::Defence => fx_seq.then(FxEffect::say("Blocked!", target_mpos)),
-        CombatResult::Wounded(..) => fx_seq.then(FxEffect::BloodSplatter(target_pos)),
-        CombatResult::OutOfAction => fx_seq
-            .then(FxEffect::Remove(target_entity))
-            .then(FxEffect::BloodSplatter(target_pos))
-            .wait(50)
-            .then(FxEffect::BloodSplatter(target_pos))
-            .wait(50)
-            .then(FxEffect::BloodSplatter(target_pos)),
     };
 
-    fx_seq.wait(100)
+    commands.trigger(combat_finished_event);
+
+    Ok(())
+}
+
+pub fn handle_combat_finished_event(
+    trigger: Trigger<CombatFinishedEvent>,
+    mut health_q: Query<Mut<Health>>,
+) -> Result<(), BevyError> {
+    let CombatFinishedEvent {
+        result: combat_result,
+        ..
+    } = trigger.event();
+
+    for (e, c) in combat_result.iter() {
+        if let CombatConsequence::Hit { damage } = c {
+            let mut health = health_q.get_mut(*e)?;
+            for card in damage.iter() {
+                health.wounds.push(*card);
+            }
+        }
+    }
+
+    Ok(())
 }

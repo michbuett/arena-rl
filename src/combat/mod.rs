@@ -1,23 +1,23 @@
 mod actor;
 mod ai;
+mod combat_fx;
 mod combat_resolution;
 mod flow;
 mod fx;
+mod generator;
 mod map;
 mod ui;
 
 use actor::{
-    ActionSelectedEvent, AttackCommand, handle_action_triggered_event, handle_attack_command,
+    ActionSelectedEvent, AttackCommand, CombatFinishedEvent, handle_action_triggered_event,
+    handle_attack_command,
 };
 use ai::combat_ai_plugin;
 use bevy::prelude::*;
+use generator::{ActorGenerator, setup_generators};
 use ui::{SelectedMapPos, update_action_buttons};
 
-use crate::{
-    GameState,
-    assets::{ActorGenerator, Visual},
-    despawn_screen,
-};
+use crate::{GameState, assets::Visual, core::Deck, despawn_screen};
 
 use self::{
     actor::{
@@ -36,10 +36,14 @@ struct OnCombatState;
 #[derive(Resource)]
 struct ScrollBounds(Rect);
 
+#[derive(Resource)]
+struct GameDeck(pub Deck);
+
 pub fn combat_plugin(app: &mut App) {
     app.add_plugins((combat_ui_plugin, combat_ai_plugin))
         .add_event::<ActionTriggeredEvent>()
         .add_event::<ActionSelectedEvent>()
+        .add_event::<CombatFinishedEvent>()
         .add_event::<BeginActivationCommand>()
         .add_event::<EndActivationCommand>()
         .add_event::<MoveToCommand>()
@@ -51,11 +55,14 @@ pub fn combat_plugin(app: &mut App) {
         .add_observer(handle_end_activation_command)
         .add_observer(handle_move_to_command)
         .add_observer(handle_attack_command)
+        .add_observer(actor::handle_combat_finished_event)
+        .add_observer(combat_fx::handle_combat_finished_event)
         .add_systems(
             OnEnter(GameState::Combat),
             (
                 (setup_map, setup_camera, setup_actors).chain(),
                 setup_combat_flow,
+                setup_generators,
             ),
         )
         .add_systems(
@@ -108,6 +115,7 @@ fn setup_camera(
 fn setup_actors(mut commands: Commands, actor_generator: Res<ActorGenerator>) {
     let player_team = Team(commands.spawn(TeamBundle::new("Player", true)).id());
     let cpu_team = Team(commands.spawn(TeamBundle::new("CPU", false)).id());
+    let deck = Deck::new_rnd();
 
     commands.spawn((
         ActorBundle::new(
@@ -118,8 +126,6 @@ fn setup_actors(mut commands: Commands, actor_generator: Res<ActorGenerator>) {
         ),
         actor_generator.generate_actor("player"),
     ));
-
-    commands.spawn((Name::new("Player"), player_team, MapPos::from_oddr(5, 5)));
 
     commands.spawn((
         ActorBundle::new(
@@ -142,6 +148,8 @@ fn setup_actors(mut commands: Commands, actor_generator: Res<ActorGenerator>) {
         actor_generator.generate_actor("sucker"),
         AiBehaviour::Zombi,
     ));
+
+    commands.insert_resource(GameDeck(deck));
 }
 
 fn progress_game(ui_state: Option<Res<UiState>>) -> bool {

@@ -7,11 +7,10 @@ use bevy::{
     prelude::*,
 };
 use core::panic;
-use data::{ActionTemplates, ActorTemplates};
 use serde::Deserialize;
 use sprites::{RawSpriteConfig, SpriteConfigMap, update_sprites_from_visuals};
 
-pub use data::{ActorGenerator, AttackOption, Attacks};
+pub use data::*;
 pub use sprites::Visual;
 
 use std::{fmt::Display, marker::PhantomData};
@@ -210,19 +209,12 @@ fn handle_all_assets_loaded_event(
     _trigger: Trigger<AllAssetsLoadedEvent>,
     asset_server: Res<AssetServer>,
     raw_sprite_config: Res<Assets<RawSpriteConfig>>,
-    action_templates_assets: Res<Assets<ActionTemplates>>,
-    actor_templates_assets: Res<Assets<ActorTemplates>>,
 
     mut next_state: ResMut<NextState<GameState>>,
     mut atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
     mut textures: ResMut<Assets<Image>>,
     mut commands: Commands,
 ) {
-    commands.insert_resource(ActorGenerator::new(
-        &action_templates_assets,
-        &actor_templates_assets,
-    ));
-
     commands.insert_resource(SpriteConfigMap::new(
         &raw_sprite_config,
         &asset_server,
