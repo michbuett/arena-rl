@@ -1,7 +1,9 @@
 extern crate rand;
 
+use super::AttributeType;
 use rand::prelude::*;
 use serde::Deserialize;
+use std::fmt;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize)]
 pub enum Suite {
@@ -12,8 +14,8 @@ pub enum Suite {
 }
 
 impl Suite {
-    pub fn matches(&self, attr: &Attribute) -> bool {
-        use Attribute::*;
+    pub fn matches(&self, attr: &AttributeType) -> bool {
+        use AttributeType::*;
         use Suite::*;
 
         match attr {
@@ -95,9 +97,6 @@ pub struct Deck {
     shuffle: &'static (dyn Fn() -> Vec<Card> + Send + Sync),
 }
 
-use std::fmt;
-
-use super::mechanics::Attribute;
 impl fmt::Debug for Deck {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Deck").field("cards", &self.cards).finish()

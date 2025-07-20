@@ -1,10 +1,13 @@
 use bevy::prelude::*;
 
-use crate::assets::{AttackOption, Attacks};
-use crate::core::{Attribute, AttributeValues, Card, Suite};
+use crate::core::{
+    AttackOption, Attacks, AttributeType, Attributes, Card, Health, Protection, Suite,
+};
 
 use super::GameDeck;
-use super::combat_resolution::{Attack, CombatConsequence, CombatResult, Target, handle_attack};
+use super::combat_resolution::{
+    Attack, CombatConsequence, CombatResult, Combatant, Target, handle_attack,
+};
 use super::fx::{FxEffect, FxSequence};
 use super::ui::Z_LAYER_ACTOR;
 use super::{
@@ -95,62 +98,6 @@ impl Activations {
     }
 }
 
-#[derive(Component, Debug, Clone)]
-pub struct Health {
-    pub max_health: u8,
-    pub wounds: Vec<Card>,
-}
-
-impl Health {
-    pub fn new(max_health: u8) -> Self {
-        Self {
-            max_health,
-            wounds: vec![],
-        }
-    }
-
-    pub fn damage_total(&self) -> u8 {
-        self.wounds.iter().map(|c| c.value_high()).sum()
-    }
-
-    pub fn is_alive(&self) -> bool {
-        self.max_health > self.damage_total()
-    }
-
-    fn current_attribute_values(&self, base_values: AttributeValues) -> AttributeValues {
-        let AttributeValues {
-            mut physical_strength,
-            mut physical_agility,
-            mut mental_strength,
-            mut methal_agility,
-        } = base_values;
-
-        for card in self.wounds.iter() {
-            match card.suite() {
-                Suite::Clubs => {
-                    physical_strength -= 1;
-                }
-                Suite::Spades => {
-                    physical_agility -= 1;
-                }
-                Suite::Hearts => {
-                    mental_strength -= 1;
-                }
-                Suite::Diamonds => {
-                    methal_agility -= 1;
-                }
-            }
-        }
-
-        AttributeValues {
-            physical_strength,
-            physical_agility,
-            mental_strength,
-            methal_agility,
-        }
-    }
-}
-
 #[derive(Bundle)]
 pub struct ActorBundle {
     pub actor: Actor,
@@ -222,8 +169,9 @@ pub struct AttackCommand(AttackData);
 pub struct AttackData {
     pub target: AttackTarget,
     pub name: String,
-    pub attribute: Attribute,
-    pub damage: i16,
+    pub attribute: AttributeType,
+    pub damage: u8,
+    pub penetration: u8,
     pub difficulty: u8,
 }
 
@@ -239,12 +187,14 @@ impl AttackData {
                 name,
                 attribute,
                 damage,
+                penetration,
                 difficulty,
             } => Self {
                 target: AttackTarget::MeleeAttack { target },
                 name: name.clone(),
                 attribute: *attribute,
                 damage: *damage,
+                penetration: *penetration,
                 difficulty: *difficulty,
             },
         }
@@ -438,7 +388,7 @@ pub fn handle_move_to_command(trigger: Trigger<MoveToCommand>, mut commands: Com
 
 pub fn handle_attack_command(
     trigger: Trigger<AttackCommand>,
-    combat_data_q: Query<(&Health, &Activations, &AttributeValues)>,
+    combat_data_q: Query<(&Health, &Activations, &Attributes, &Protection)>,
     mut deck: ResMut<GameDeck>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
@@ -453,26 +403,31 @@ pub fn handle_attack_command(
             // );
 
             let [
-                (attacker_health, activation, attacker_av),
-                (target_health, _, target_av),
+                (health_a, activation_a, attributes_a, protection_a),
+                (health_t, _, attributes_t, protection_t),
             ] = combat_data_q.get_many([attacker, *target])?;
 
-            let effort_card = activation.active.as_ref().cloned().unwrap().0;
+            let effort_card = activation_a.active.as_ref().cloned().unwrap().0;
 
             let combat_result = handle_attack(
                 Attack {
                     speed: effort_card,
                     attribute: attack.attribute,
                     damage: attack.damage,
+                    penetration: attack.penetration,
                     difficulty: attack.difficulty,
-                    attacker: (
-                        attacker,
-                        attacker_health.current_attribute_values(*attacker_av),
-                    ),
-                    target: Target::SingleMelee((
-                        *target,
-                        target_health.current_attribute_values(*target_av),
-                    )),
+                    attacker: Combatant {
+                        id: attacker,
+                        attributes: *attributes_a,
+                        health: health_a.clone(),
+                        protection: protection_a.clone(),
+                    },
+                    target: Target::SingleMelee(Combatant {
+                        id: *target,
+                        attributes: *attributes_t,
+                        health: health_t.clone(),
+                        protection: protection_t.clone(),
+                    }),
                 },
                 &mut deck.0,
             );
@@ -500,7 +455,7 @@ pub fn handle_combat_finished_event(
     } = trigger.event();
 
     for (e, c) in combat_result.iter() {
-        if let CombatConsequence::Hit { damage } = c {
+        if let CombatConsequence::Wound { damage } = c {
             let mut health = health_q.get_mut(*e)?;
             for card in damage.iter() {
                 health.wounds.push(*card);

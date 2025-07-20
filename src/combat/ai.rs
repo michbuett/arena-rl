@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::assets::Attacks;
+use crate::core::Attacks;
 
 use super::{
     actor::{

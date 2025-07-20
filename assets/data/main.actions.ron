@@ -3,12 +3,14 @@
         name: "Bite",
         attribute: PhysicalStr,
         damage: 1,
+        penetration: 0,
         difficulty: 3,
     )),
     ("melee-attack-sword-01", MeleeAttack(
         name: "Swing Sword",
         attribute: PhysicalStr,
-        damage: 1,
+        damage: 2,
+        penetration: 0,
         difficulty: 5,
     )),
 ])

@@ -1,7 +1,9 @@
-mod data;
 mod sprites;
 
-use crate::GameState;
+use crate::{
+    GameState,
+    core::{ActionTemplates, ActorTemplates, Feats},
+};
 use bevy::{
     asset::{AssetLoader, LoadContext, LoadState, io::Reader, ron},
     prelude::*,
@@ -10,7 +12,6 @@ use core::panic;
 use serde::Deserialize;
 use sprites::{RawSpriteConfig, SpriteConfigMap, update_sprites_from_visuals};
 
-pub use data::*;
 pub use sprites::Visual;
 
 use std::{fmt::Display, marker::PhantomData};
@@ -94,9 +95,11 @@ pub fn assets_plugin(app: &mut App) {
         .init_asset::<ActionTemplates>()
         .init_asset::<ActorTemplates>()
         .init_asset::<RawSpriteConfig>()
+        .init_asset::<Feats>()
         .register_asset_loader(DataAssetLoader::<ActionTemplates>::new("actions.ron"))
         .register_asset_loader(DataAssetLoader::<ActorTemplates>::new("actors.ron"))
         .register_asset_loader(DataAssetLoader::<RawSpriteConfig>::new("sprites.ron"))
+        .register_asset_loader(DataAssetLoader::<Feats>::new("feats.ron"))
         .add_observer(handle_on_loaded)
         .add_observer(handle_all_assets_loaded_event)
         .add_systems(OnEnter(GameState::Start), load_data_files)
@@ -126,6 +129,11 @@ fn load_data_files(mut commands: Commands, asset_server: Res<AssetServer>) {
                 .load::<ActionTemplates>("data/main.actions.ron")
                 .untyped(),
         ),
+    ));
+
+    commands.spawn((
+        Loading,
+        AssetHandle(asset_server.load::<Feats>("data/main.feats.ron").untyped()),
     ));
 
     commands.spawn((

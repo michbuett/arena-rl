@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 
-use crate::assets::Visual;
+use crate::{assets::Visual, core::Health};
 
 use super::{
-    actor::{CombatFinishedEvent, Health},
+    actor::CombatFinishedEvent,
     combat_resolution::CombatConsequence,
     fx::{FxEffect, FxSequence},
     map::MapPos,
@@ -46,7 +46,7 @@ pub fn handle_combat_finished_event(
 
         fx_seq = match consequence {
             CombatConsequence::ClumsyAttack => fx_seq.then(FxEffect::say("Fuck!", *mpos)),
-            CombatConsequence::Hit { damage } => {
+            CombatConsequence::Wound { damage } => {
                 if !health.is_alive() {
                     fx_seq = fx_seq.then(FxEffect::Remove(*entity));
                 }
@@ -59,6 +59,7 @@ pub fn handle_combat_finished_event(
 
                 fx_seq
             }
+            CombatConsequence::ArmorBreak => fx_seq.then(FxEffect::say("Armor -1", *mpos)),
         };
     }
 

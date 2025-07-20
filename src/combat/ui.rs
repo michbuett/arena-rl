@@ -5,11 +5,11 @@ use bevy::{input::mouse::MouseMotion, prelude::*, window::PrimaryWindow};
 
 use crate::MarkedForDeath;
 use crate::combat::actor::{ActionSelectedEvent, ActionTriggeredEvent};
-use crate::core::{Card, Suite};
+use crate::core::{Card, Health, Protection, Suite};
 use crate::style::{BUTTON_BG_HIGHLIGHT, TextStyle, text};
 use crate::{GameState, style::WINDOW_BACKGROUND};
 
-use super::actor::{AttackData, CombatFinishedEvent, Health};
+use super::actor::{AttackData, CombatFinishedEvent};
 use super::combat_resolution::CombatConsequence;
 use super::{
     OnCombatState, ScrollBounds, Visual,
@@ -479,16 +479,28 @@ impl Description {
 
 fn update_description_on_changed(
     mut actor_q: Query<
-        (&Actor, &Activations, &Name, &Health, Mut<Description>),
+        (
+            &Actor,
+            &Activations,
+            &Name,
+            &Health,
+            &Protection,
+            Mut<Description>,
+        ),
         Changed<Activations>,
     >,
 ) {
-    for (_, activations, name, health, mut description) in actor_q.iter_mut() {
-        description.0 = describe_actor(name, health, activations);
+    for (_, activations, name, health, protection, mut description) in actor_q.iter_mut() {
+        description.0 = describe_actor(name, health, protection, activations);
     }
 }
 
-fn describe_actor(name: &Name, health: &Health, activations: &Activations) -> String {
+fn describe_actor(
+    name: &Name,
+    health: &Health,
+    protection: &Protection,
+    activations: &Activations,
+) -> String {
     let health_text = format!("{}/{}", health.damage_total(), health.max_health);
 
     let active_activations_txt = if let Some(activation) = &activations.active() {
@@ -510,8 +522,12 @@ fn describe_actor(name: &Name, health: &Health, activations: &Activations) -> St
     };
 
     format!(
-        "{}\nHealth: {}\nActivations:\n - active: {}\n - remaining: {}",
-        name, health_text, active_activations_txt, remaining_activations_txt
+        "{}\nHealth: {} (Armor: {})\nActivations:\n - active: {}\n - remaining: {}",
+        name,
+        health_text,
+        protection.total_resistance(),
+        active_activations_txt,
+        remaining_activations_txt
     )
 }
 
@@ -691,8 +707,9 @@ pub fn handle_combat_finished_event(
             .iter()
             .map({
                 |(_, c)| match c {
+                    CombatConsequence::ArmorBreak => "Armor -1".to_string(),
                     CombatConsequence::ClumsyAttack => "Fumble".to_string(),
-                    CombatConsequence::Hit { damage } => {
+                    CombatConsequence::Wound { damage } => {
                         let dmg: u8 = damage.iter().map(|c| c.value_high()).sum();
                         format!("Hit for {} damage", dmg)
                     }

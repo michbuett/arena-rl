@@ -1,58 +1,15 @@
-use std::cmp::max;
-
-use bevy::prelude::Component;
-use serde::Deserialize;
-
-use super::{Card, Deck};
+use super::{AttributeType, Attributes, Card, Deck};
 
 pub const MAX_HAND_SIZE: usize = 5;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize)]
-pub enum Attribute {
-    PhysicalStr,
-    PhysicalAg,
-    MentalStr,
-    MentalAg,
-    Physical,
-    Mental,
-    Strength,
-    Agility,
-    Any,
-}
-
-#[derive(Debug, Clone, Copy, Component, Deserialize)]
-pub struct AttributeValues {
-    pub physical_strength: i8,
-    pub physical_agility: i8,
-    pub mental_strength: i8,
-    pub methal_agility: i8,
-}
-
-impl AttributeValues {
-    fn get(&self, attr: Attribute) -> i8 {
-        use Attribute::*;
-        match attr {
-            PhysicalStr => self.physical_strength,
-            PhysicalAg => self.physical_agility,
-            MentalStr => self.mental_strength,
-            MentalAg => self.methal_agility,
-            Strength => max(self.physical_strength, self.mental_strength),
-            Agility => max(self.physical_agility, self.methal_agility),
-            Physical => max(self.physical_strength, self.physical_agility),
-            Mental => max(self.mental_strength, self.methal_agility),
-            Any => max(self.get(Physical), self.get(Mental)),
-        }
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct SkillCheck {
     pub target_number: u8,
-    pub attribute: Attribute,
+    pub attribute: AttributeType,
 }
 
 impl SkillCheck {
-    pub fn perform_check(self, deck: &mut Deck, attr_values: &AttributeValues) -> SkillCheckResult {
+    pub fn perform_check(self, deck: &mut Deck, attr_values: &Attributes) -> SkillCheckResult {
         let av = attr_values.get(self.attribute);
         let flip = deck.deal();
         let result = (flip.value_low() as i8 + av).try_into().unwrap_or(0);
@@ -79,12 +36,34 @@ impl SkillCheckResult {
         self.result >= self.check.target_number
     }
 
-    pub fn magnitude(&self) -> u8 {
-        (self.result as i16 - self.check.target_number as i16).unsigned_abs() as u8
-    }
+    // pub fn magnitude(&self) -> u8 {
+    //     (self.result as i16 - self.check.target_number as i16).unsigned_abs() as u8
+    // }
 
-    pub fn result(&self) -> u8 {
-        self.result
+    // pub fn result(&self) -> u8 {
+    //     self.result
+    // }
+}
+
+#[derive(Debug)]
+pub struct ProgressCheckNew {
+    pub num_cards: u8,
+    pub resistence: u8,
+}
+
+impl ProgressCheckNew {
+    pub fn perform_check(self, deck: &mut Deck) -> ProgressCheckResult {
+        let resistance = self.resistence.clamp(0, self.num_cards);
+        let mut draw = (1..=self.num_cards)
+            .map(|_| deck.deal())
+            .collect::<Vec<_>>();
+
+        draw.sort_by(|a, b| b.value_high().cmp(&a.value_high()));
+
+        let split = draw.split_at(resistance as usize);
+        let (discard, draw) = (split.0.to_vec(), split.1.to_vec());
+
+        ProgressCheckResult { discard, draw }
     }
 }
 

@@ -2,56 +2,56 @@ use std::cmp::{max, min};
 
 use bevy::prelude::Entity;
 
-use crate::core::{Attribute, AttributeValues, Card, Deck, ProgressCheck, SkillCheck};
+use crate::core::{
+    AttributeType, Attributes, Card, Deck, Health, ProgressCheckNew, Protection, SkillCheck,
+};
 
 #[derive(Debug)]
 pub struct Attack {
     pub speed: Card,
-    pub attribute: Attribute,
+    pub attribute: AttributeType,
     pub difficulty: u8,
-    pub damage: i16,
-    pub attacker: ActorData,
+    pub damage: u8,
+    pub penetration: u8,
+    pub attacker: Combatant,
     pub target: Target,
 }
 
 #[derive(Debug)]
 pub enum Target {
-    SingleMelee(ActorData),
+    SingleMelee(Combatant),
 }
 
-pub type ActorData = (Entity, AttributeValues);
+#[derive(Debug)]
+pub struct Combatant {
+    pub id: Entity,
+    pub attributes: Attributes,
+    pub health: Health,
+    pub protection: Protection,
+}
 
 #[derive(Debug)]
 pub enum CombatConsequence {
     /// Deals damage
-    Hit { damage: Vec<Card> },
+    Wound {
+        damage: Vec<Card>,
+    },
 
     /// Makes you more vulnarable (e.g. for counter attacks)
     // TODO: Stumble,
 
     /// Makes your attack easier to be avoided
     ClumsyAttack,
+
+    ArmorBreak,
 }
-
-// pub struct CombatSequence {
-//     action: Attack,
-//     fumble: Vec<CombatConsequence>,
-//     hit: Vec<CombatConsequence>,
-// }
-
-// pub enum AttackResult {
-//     MeleeAttack {
-//         attacker: entity,
-//         target: entity,
-//     }
-// }
 
 pub type CombatResult = Vec<(Entity, CombatConsequence)>;
 
 pub fn handle_attack(attack: Attack, deck: &mut Deck) -> CombatResult {
     println!("[DEBUG] handle_attack - attack={:?}", attack);
 
-    let result = match attack.target {
+    let result = match &attack.target {
         Target::SingleMelee(target) => handle_melee_attack(&attack, &target, deck),
     };
 
@@ -59,16 +59,17 @@ pub fn handle_attack(attack: Attack, deck: &mut Deck) -> CombatResult {
     result
 }
 
-pub fn handle_melee_attack(attack: &Attack, target: &ActorData, deck: &mut Deck) -> CombatResult {
+pub fn handle_melee_attack(attack: &Attack, target: &Combatant, deck: &mut Deck) -> CombatResult {
     let mut result: CombatResult = vec![];
     let fumble_effect = perform_quality_check(&attack, deck);
-    let hit_effect = perform_hit_check(&attack, deck, &fumble_effect);
+    let hit_effect = perform_hit_check(&attack, &target.protection, deck, &fumble_effect);
 
     if let Some(c) = fumble_effect {
-        result.push((attack.attacker.0, c));
+        result.push((attack.attacker.id, c));
     }
-    if let Some(c) = hit_effect {
-        result.push((target.0, c));
+
+    for c in hit_effect {
+        result.push((target.id, c));
     }
 
     result
@@ -86,7 +87,11 @@ fn perform_quality_check(attack: &Attack, deck: &mut Deck) -> Option<CombatConse
         target_number,
     };
 
-    let fumble_result = fumble_check.perform_check(deck, &attack.attacker.1);
+    let attributes = attack
+        .attacker
+        .health
+        .current_attribute_values(attack.attacker.attributes);
+    let fumble_result = fumble_check.perform_check(deck, &attributes);
     if !fumble_result.is_success() {
         Some(CombatConsequence::ClumsyAttack)
     } else {
@@ -99,9 +104,10 @@ const TO_HIT_DIFFICULY_HARD: u8 = 9;
 
 fn perform_hit_check(
     attack: &Attack,
+    protection: &Protection,
     deck: &mut Deck,
     fumble_effect: &Option<CombatConsequence>,
-) -> Option<CombatConsequence> {
+) -> Vec<CombatConsequence> {
     let target_number = if matches!(fumble_effect, Some(CombatConsequence::ClumsyAttack)) {
         TO_HIT_DIFFICULY_HARD
     } else {
@@ -113,16 +119,46 @@ fn perform_hit_check(
         attribute: attack.attribute,
     };
 
-    let hit_result = hit_check.perform_check(deck, &attack.attacker.1);
-    if !hit_result.is_success() {
-        let magnitude = (hit_result.magnitude() as i16 + attack.damage).clamp(0, 10) as u8;
-        let damage_check = ProgressCheck { magnitude };
-        let damage_result = damage_check.perform_check(deck);
-
-        Some(CombatConsequence::Hit {
-            damage: damage_result.draw,
-        })
+    let attributes = attack
+        .attacker
+        .health
+        .current_attribute_values(attack.attacker.attributes);
+    let hit_result = hit_check.perform_check(deck, &attributes);
+    if hit_result.is_success() {
+        determine_damage(attack, protection, deck)
     } else {
-        None
+        vec![]
     }
+}
+
+fn determine_damage(
+    attack: &Attack,
+    protection: &Protection,
+    deck: &mut Deck,
+) -> Vec<CombatConsequence> {
+    let mut result = vec![];
+    let resistence = protection
+        .total_resistance()
+        .checked_sub(attack.penetration)
+        .unwrap_or(0);
+
+    let damage_result = ProgressCheckNew {
+        num_cards: attack.damage,
+        resistence,
+    }
+    .perform_check(deck);
+
+    for blocked_dmg in damage_result.discard.iter() {
+        if blocked_dmg.value_high() >= 10 {
+            result.push(CombatConsequence::ArmorBreak);
+        }
+    }
+
+    if !damage_result.draw.is_empty() {
+        result.push(CombatConsequence::Wound {
+            damage: damage_result.draw,
+        });
+    }
+
+    result
 }
