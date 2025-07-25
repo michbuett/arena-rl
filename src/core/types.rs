@@ -78,7 +78,7 @@ pub struct ActorTemplate {
     pub feats: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Deserialize, Asset, TypePath)]
+#[derive(Debug, Component, Clone, Deserialize, Asset, TypePath)]
 pub struct Feats(pub Vec<(String, Feat)>);
 
 #[derive(Debug, Clone, Deserialize)]
@@ -88,21 +88,19 @@ pub struct Feat {
     pub effects: Vec<Effect>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct FeatKey(pub String);
+// #[derive(Debug, Clone, Deserialize)]
+// pub struct FeatKey(pub String);
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 pub enum FeatSource {
     Intrinsic,
+    Item,
     // Temporary(u8),
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub enum Effect {
-    /// The amount resisted ...
-    /// (1) in a single instance and ...
-    /// (2) the total amount
-    Resistance(u8, u8),
+    Resistance(u8),
 }
 
 // #[derive(Debug, Clone, Copy, Deserialize)]
@@ -119,19 +117,30 @@ impl Protection {
 
 #[derive(Debug, Clone)]
 pub struct Resistance {
-    pub source: FeatKey,
+    pub source: (String, FeatSource),
     pub resistance: u8,
-    pub durability: u8,
 }
 
 impl Resistance {
-    pub fn new(source: FeatKey, resistance: u8, durability: u8) -> Self {
-        Self {
-            source,
-            resistance,
-            durability,
-        }
+    pub fn new(source: (String, FeatSource), resistance: u8) -> Self {
+        Self { source, resistance }
     }
+}
+#[derive(Debug, Component)]
+pub struct Items(pub Vec<Item>);
+
+#[derive(Debug)]
+pub struct Item {
+    pub key: String,
+    pub name: String,
+    pub state: ItemState,
+}
+
+#[derive(Debug)]
+pub enum ItemState {
+    New,
+    Damaged,
+    Broken,
 }
 
 #[derive(Component, Debug, Clone)]

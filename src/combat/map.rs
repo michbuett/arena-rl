@@ -19,6 +19,10 @@ impl MapPos {
         Self { q, r, s: -q - r }
     }
 
+    pub fn coordinates(&self) -> (i32, i32) {
+        (self.q, self.r)
+    }
+
     pub fn from_oddr(col: i32, row: i32) -> Self {
         let q = col - (row - (row & 1)) / 2;
         let r = row;

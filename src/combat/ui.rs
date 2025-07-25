@@ -5,7 +5,7 @@ use bevy::{input::mouse::MouseMotion, prelude::*, window::PrimaryWindow};
 
 use crate::MarkedForDeath;
 use crate::combat::actor::{ActionSelectedEvent, ActionTriggeredEvent};
-use crate::core::{Card, Health, Protection, Suite};
+use crate::core::{Card, Health, ItemState, Items, Protection, Suite};
 use crate::style::{BUTTON_BG_HIGHLIGHT, TextStyle, text};
 use crate::{GameState, style::WINDOW_BACKGROUND};
 
@@ -341,9 +341,13 @@ fn handle_select_map_pos(
             .next();
 
         if let Some(descr) = descr_at {
-            details_window_txt.0 = format!("You look at {:?}, you see...\n{}", pos, descr.as_str());
+            details_window_txt.0 = format!(
+                "You look at {:?}. There is...\n{}",
+                pos.coordinates(),
+                descr.as_str()
+            );
         } else {
-            details_window_txt.0 = format!("You look at {:?}, there is nothing", pos);
+            details_window_txt.0 = format!("You look at {:?}. There is nothing", pos.coordinates());
         }
 
         selected_tile_transform.translation = hex.into_vec3().with_z(Z_LAYER_UI_MAP_MARKER);
@@ -366,8 +370,11 @@ fn update_details_window_text_on_change(
 
     for (mpos, descr) in description_q {
         if descr.is_changed() && *mpos == selected_mpos {
-            details_window_text.0 =
-                format!("You look at {:?}, you see...\n{}", mpos, descr.0.as_str());
+            details_window_text.0 = format!(
+                "You look at {:?}, you see...\n{}",
+                mpos.coordinates(),
+                descr.0.as_str()
+            );
         }
     }
 
@@ -485,13 +492,19 @@ fn update_description_on_changed(
             &Name,
             &Health,
             &Protection,
+            &Items,
             Mut<Description>,
         ),
-        Changed<Activations>,
+        Or<(
+            Changed<Activations>,
+            Changed<Health>,
+            Changed<Items>,
+            Changed<Protection>,
+        )>,
     >,
 ) {
-    for (_, activations, name, health, protection, mut description) in actor_q.iter_mut() {
-        description.0 = describe_actor(name, health, protection, activations);
+    for (_, activations, name, health, protection, items, mut description) in actor_q.iter_mut() {
+        description.0 = describe_actor(name, health, protection, activations, items);
     }
 }
 
@@ -500,9 +513,8 @@ fn describe_actor(
     health: &Health,
     protection: &Protection,
     activations: &Activations,
+    items: &Items,
 ) -> String {
-    let health_text = format!("{}/{}", health.damage_total(), health.max_health);
-
     let active_activations_txt = if let Some(activation) = &activations.active() {
         card_descr(&activation.0)
     } else {
@@ -521,14 +533,57 @@ fn describe_actor(
             .join(", ")
     };
 
+    let health_text = describe_actor_condition(health, protection);
+    let items_txt = describe_actor_items(items);
+
     format!(
-        "{}\nHealth: {} (Armor: {})\nActivations:\n - active: {}\n - remaining: {}",
-        name,
-        health_text,
-        protection.total_resistance(),
-        active_activations_txt,
-        remaining_activations_txt
+        "{}\n{}\nActivations:\n - active: {}\n - remaining: {}\n{}",
+        name, health_text, active_activations_txt, remaining_activations_txt, items_txt
     )
+}
+
+fn describe_actor_condition(health: &Health, protection: &Protection) -> String {
+    let condition = if health.wounds.is_empty() {
+        "Unharmed"
+    } else {
+        let dmg = health.damage_total() as f32 * 100.0 / health.max_health as f32;
+        if dmg >= 50.0 {
+            "Heavily wounded"
+        } else {
+            "Wounded"
+        }
+    };
+
+    format!(
+        "Condition: {} ({}/{}), Armor: {}",
+        condition,
+        health.damage_total(),
+        health.max_health,
+        protection.total_resistance()
+    )
+}
+
+fn describe_actor_items(items: &Items) -> String {
+    if items.0.is_empty() {
+        "(carries nothing)".to_string()
+    } else {
+        format!(
+            "Equipped with:\n - {}",
+            items
+                .0
+                .iter()
+                .map(|item| {
+                    let state = match item.state {
+                        ItemState::New => "new",
+                        ItemState::Damaged => "damaged",
+                        ItemState::Broken => "broken",
+                    };
+                    format!("{} ({})", item.name, state)
+                })
+                .collect::<Vec<_>>()
+                .join("\n - ")
+        )
+    }
 }
 
 fn card_descr(card: &Card) -> String {

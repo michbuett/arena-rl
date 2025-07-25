@@ -1,7 +1,12 @@
+extern crate rand;
+
 use bevy::prelude::*;
+use rand::seq::IteratorRandom;
+use rand::thread_rng;
 
 use crate::core::{
-    AttackOption, Attacks, AttributeType, Attributes, Card, Health, Protection, Suite,
+    AttackOption, Attacks, AttributeType, Attributes, Card, FeatSource, Health, ItemState, Items,
+    Protection,
 };
 
 use super::GameDeck;
@@ -447,7 +452,7 @@ pub fn handle_attack_command(
 
 pub fn handle_combat_finished_event(
     trigger: Trigger<CombatFinishedEvent>,
-    mut health_q: Query<Mut<Health>>,
+    mut health_q: Query<(Mut<Health>, Mut<Protection>, Mut<Items>)>,
 ) -> Result<(), BevyError> {
     let CombatFinishedEvent {
         result: combat_result,
@@ -455,11 +460,46 @@ pub fn handle_combat_finished_event(
     } = trigger.event();
 
     for (e, c) in combat_result.iter() {
-        if let CombatConsequence::Wound { damage } = c {
-            let mut health = health_q.get_mut(*e)?;
-            for card in damage.iter() {
-                health.wounds.push(*card);
+        let (mut health, mut protection, mut items) = health_q.get_mut(*e)?;
+        match c {
+            CombatConsequence::Wound { damage } => {
+                for card in damage.iter() {
+                    health.wounds.push(*card);
+                }
             }
+
+            CombatConsequence::ArmorBreak => {
+                let mut rng = thread_rng();
+                let protecting_item = protection
+                    .0
+                    .iter()
+                    .filter_map(|r| {
+                        if matches!(r.source.1, FeatSource::Item) {
+                            Some(r.source.0.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .choose(&mut rng);
+
+                if let Some(item_name) = protecting_item {
+                    let resistance = protection
+                        .0
+                        .iter_mut()
+                        .find(|r| r.source.0 == item_name)
+                        .unwrap();
+
+                    resistance.resistance = resistance.resistance.checked_sub(1).unwrap_or(0);
+
+                    let item = items.0.iter_mut().find(|r| r.key == item_name).unwrap();
+                    item.state = if resistance.resistance == 0 {
+                        ItemState::Broken
+                    } else {
+                        ItemState::Damaged
+                    };
+                }
+            }
+            _ => {}
         }
     }
 

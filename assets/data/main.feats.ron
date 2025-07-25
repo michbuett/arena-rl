@@ -1,7 +1,7 @@
 ([
     ("armor-body-medium", (
         name: "Medium Armor",
-        source: Intrinsic,
-        effects: [Resistance(2, 7)],
+        source: Item,
+        effects: [Resistance(2)],
     )),
 ])

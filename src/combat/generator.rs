@@ -6,7 +6,7 @@ use crate::{
     assets::Visual,
     core::{
         ActionTemplates, ActorTemplate, ActorTemplates, AttackOption, Attacks, Deck, Effect, Feat,
-        FeatKey, Feats, Health, ProgressCheck, Protection, Resistance,
+        Feats, Health, Item, ItemState, Items, ProgressCheck, Protection, Resistance,
     },
 };
 
@@ -80,21 +80,24 @@ impl ActorGenerator {
             .sum();
 
         let mut resistances: Vec<Resistance> = vec![];
-        let mut feats: Vec<FeatKey> = vec![];
+        let mut items: Vec<Item> = vec![];
 
         if let Some(feat_list) = actor_template.feats.as_ref() {
             for feat_name in feat_list.iter() {
                 if let Some(feat) = self.feat_templates.get(feat_name) {
-                    feats.push(FeatKey(feat_name.to_string()));
+                    if matches!(feat.source, crate::core::FeatSource::Item) {
+                        items.push(Item {
+                            key: feat_name.to_string(),
+                            name: feat.name.to_string(),
+                            state: ItemState::New,
+                        });
+                    }
 
                     for eff in feat.effects.iter() {
                         match eff {
-                            Effect::Resistance(protection, durability) => {
-                                resistances.push(Resistance::new(
-                                    FeatKey(feat_name.to_string()),
-                                    *protection,
-                                    *durability,
-                                ));
+                            Effect::Resistance(resistance) => {
+                                let source = (feat_name.to_string(), feat.source);
+                                resistances.push(Resistance::new(source, *resistance));
                             }
                         }
                     }
@@ -108,6 +111,7 @@ impl ActorGenerator {
             Visual::from(&actor_template.visual),
             Attacks(attack_options),
             Protection(resistances),
+            Items(items),
             actor_template.attributes.clone(),
             Health::new(10 + max_health_mod),
         )
