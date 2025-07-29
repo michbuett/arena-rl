@@ -49,13 +49,13 @@ pub enum CombatConsequence {
 pub type CombatResult = Vec<(Entity, CombatConsequence)>;
 
 pub fn handle_attack(attack: Attack, deck: &mut Deck) -> CombatResult {
-    println!("[DEBUG] handle_attack - attack={:?}", attack);
+    // println!("[DEBUG] handle_attack - attack={:?}", attack);
 
     let result = match &attack.target {
         Target::SingleMelee(target) => handle_melee_attack(&attack, &target, deck),
     };
 
-    println!("  => result={:?}", result);
+    // println!("  => result={:?}", result);
     result
 }
 

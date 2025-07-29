@@ -5,14 +5,15 @@ use rand::seq::IteratorRandom;
 use rand::thread_rng;
 
 use crate::core::{
-    AttackOption, Attacks, AttributeType, Attributes, Card, FeatSource, Health, ItemState, Items,
-    Protection,
+    AttackOption, Attacks, AttributeType, Attributes, Card, FeatSource, Hand, Health, ItemState,
+    Items, Protection,
 };
 
 use super::GameDeck;
 use super::combat_resolution::{
     Attack, CombatConsequence, CombatResult, Combatant, Target, handle_attack,
 };
+use super::flow::{Turn, TurnPhase};
 use super::fx::{FxEffect, FxSequence};
 use super::ui::Z_LAYER_ACTOR;
 use super::{
@@ -20,29 +21,26 @@ use super::{
     ui::{Description, MapPosSelectedEvent, SelectedMapPos, UiState, UiStateTransitionedEvent},
 };
 
-#[derive(Component, PartialEq, Clone, Copy)]
+#[derive(Component, Debug, PartialEq, Clone, Copy)]
 pub struct Team(pub Entity);
 
-// #[derive(Component, Debug)]
-// pub struct TeamDeck(pub Deck);
-
-#[derive(Component, Debug)]
-pub struct TeamHand(pub Vec<Card>);
+#[derive(Component)]
+pub struct TeamReady(pub bool);
 
 #[derive(Bundle)]
 pub struct TeamBundle {
     name: Name,
-    // deck: TeamDeck,
-    hand: TeamHand,
+    hand: Hand,
     player_controlled: PlayerControlled,
+    ready: TeamReady,
 }
 impl TeamBundle {
     pub fn new(name: impl Into<Name>, is_pc: bool) -> Self {
         Self {
             name: name.into(),
-            // deck: TeamDeck(Deck::new_rnd()),
-            hand: TeamHand(vec![]),
+            hand: Hand::new(),
             player_controlled: PlayerControlled(is_pc),
+            ready: TeamReady(!is_pc), // CPU player are always ready
         }
     }
 }
@@ -90,6 +88,12 @@ impl Activations {
 
     pub fn activate_next(&mut self) {
         self.active = self.remaining.pop();
+    }
+
+    pub fn add_card(&mut self, card: Card) {
+        self.remaining.push(Activation(card));
+        self.remaining
+            .sort_unstable_by(|a1, a2| a1.speed().cmp(&a2.speed()));
     }
 
     pub fn refresh(&mut self, mut new_activations: Vec<Card>) {
@@ -152,6 +156,9 @@ pub struct ActionTriggeredEvent(pub Action);
 pub struct ActionSelectedEvent(pub usize);
 
 #[derive(Debug, Event)]
+pub struct HandCardSelectedEvent(pub usize);
+
+#[derive(Debug, Event)]
 pub struct CombatFinishedEvent {
     pub attacker: Entity,
     pub target: Entity,
@@ -169,6 +176,12 @@ pub struct MoveToCommand(Vec<MapPos>);
 
 #[derive(Debug, Event)]
 pub struct AttackCommand(AttackData);
+
+#[derive(Debug, Event)]
+pub struct AssignActivationCommand {
+    actor: Entity,
+    card_index: usize,
+}
 
 #[derive(Debug, Clone)]
 pub struct AttackData {
@@ -211,63 +224,105 @@ pub enum Action {
     NoOp,
     MoveAlong { path: Vec<MapPos> },
     Attack(AttackData),
+    EndPlanningPhase(Team),
+    AssignActivation { actor: Entity, card_index: usize },
 }
 
 pub fn handle_select_map_pos(
     map: Res<HexMap>,
+    turn: Res<Turn>,
+    player_actions: Option<Res<SelectedMapPos>>,
     active_actor_q: Query<
         (Entity, &Actor, &Activations, &MapPos, &Team, &Attacks),
         Without<AiBehaviour>,
     >,
     target_actor_q: Query<(Entity, &MapPos, &Team), With<Actor>>,
+    teams_q: Query<(Entity, &TeamReady, &PlayerControlled)>,
+    hands_q: Query<&Hand>,
 
     mut commands: Commands,
     mut map_pos_selected_er: EventReader<MapPosSelectedEvent>,
-    player_actions: Option<Res<SelectedMapPos>>,
-) {
+) -> Result<(), BevyError> {
     let Some(MapPosSelectedEvent(hex)) = map_pos_selected_er.read().last() else {
-        return;
+        return Ok(());
     };
 
-    if let Some((entity, actor_pos, team, attacks)) = find_active_player_actor(&active_actor_q) {
-        if let Some(action) =
-            player_actions.and_then(|pa| pa.get_selected_action_when_at(hex).cloned())
-        {
-            // there is already a selected action for this hex
-            // => execute this action
-            commands.remove_resource::<SelectedMapPos>();
-            commands.trigger_targets(ActionTriggeredEvent(action), entity);
-        } else {
-            let mut available_actions = vec![];
+    match turn.turn_phase {
+        TurnPhase::StartTurn => {
+            // Nothing to do here
+            return Ok(());
+        }
 
-            if let Some(target) = find_enemy_at(&target_actor_q, &team, *hex) {
-                let distance = actor_pos.distance(hex);
+        TurnPhase::BoostActivations => {
+            let mut available_actions: Vec<Action> = vec![];
 
-                for attack_option in attacks.0.iter() {
-                    if attack_option.can_attack(distance) {
-                        let attack = AttackData::new(target, attack_option);
-                        available_actions.push(Action::Attack(attack));
-                    }
+            if let Some((actor, team)) = find_actor_at(&target_actor_q, *hex) {
+                let hand = hands_q.get(team.0)?;
+                if let Some(card_index) = hand.selected_card() {
+                    available_actions.push(Action::AssignActivation { actor, card_index });
                 }
-
-                if actor_pos.distance(hex) > 1 {
-                    if let Some(mut path) = map.find_path(actor_pos, *hex) {
-                        if path.len() > 1 {
-                            let max_steps = (path.len() - 1).max(3);
-                            let path = path.drain(..max_steps).collect();
-
-                            available_actions.push(Action::MoveAlong { path });
-                        }
-                    }
-                }
-            } else if let Some(path) = map.find_path(actor_pos, *hex) {
-                available_actions.push(Action::MoveAlong { path });
             }
 
-            // println!("[DEBUG] available actions: {:?}", available_actions);
-            commands.insert_resource(SelectedMapPos::new(entity, *hex, available_actions));
+            for (team_entity, TeamReady(is_ready), PlayerControlled(is_pc)) in teams_q.iter() {
+                if *is_pc && !*is_ready {
+                    available_actions.push(Action::EndPlanningPhase(Team(team_entity)));
+                }
+            }
+
+            commands.insert_resource(SelectedMapPos::new(None, *hex, available_actions));
+        }
+
+        TurnPhase::PerformActions => {
+            if let Some((entity, actor_pos, team, attacks)) =
+                find_active_player_actor(&active_actor_q)
+            {
+                if let Some(action) =
+                    player_actions.and_then(|pa| pa.get_selected_action_when_at(hex).cloned())
+                {
+                    // there is already a selected action for this hex
+                    // => execute this action
+                    commands.remove_resource::<SelectedMapPos>();
+                    commands.trigger_targets(ActionTriggeredEvent(action), entity);
+                } else {
+                    let mut available_actions = vec![];
+
+                    if let Some(target) = find_enemy_at(&target_actor_q, &team, *hex) {
+                        let distance = actor_pos.distance(hex);
+
+                        for attack_option in attacks.0.iter() {
+                            if attack_option.can_attack(distance) {
+                                let attack = AttackData::new(target, attack_option);
+                                available_actions.push(Action::Attack(attack));
+                            }
+                        }
+
+                        if actor_pos.distance(hex) > 1 {
+                            if let Some(mut path) = map.find_path(actor_pos, *hex) {
+                                if path.len() > 1 {
+                                    let max_steps = (path.len() - 1).max(3);
+                                    let path = path.drain(..max_steps).collect();
+
+                                    available_actions.push(Action::MoveAlong { path });
+                                }
+                            }
+                        }
+                    } else if let Some(path) = map.find_path(actor_pos, *hex) {
+                        available_actions.push(Action::MoveAlong { path });
+                    }
+
+                    available_actions.push(Action::NoOp);
+
+                    commands.insert_resource(SelectedMapPos::new(
+                        Some(entity),
+                        *hex,
+                        available_actions,
+                    ));
+                }
+            }
         }
     }
+
+    Ok(())
 }
 
 fn find_active_player_actor(
@@ -284,18 +339,28 @@ fn find_active_player_actor(
     None
 }
 
+fn find_actor_at(
+    q_actor_at: &Query<(Entity, &MapPos, &Team), With<Actor>>,
+    target_pos: MapPos,
+) -> Option<(Entity, Team)> {
+    for (target, map_pos, target_team) in q_actor_at.iter() {
+        if *map_pos == target_pos {
+            return Some((target, *target_team));
+        }
+    }
+    None
+}
+
 fn find_enemy_at(
     q_actor_at: &Query<(Entity, &MapPos, &Team), With<Actor>>,
     attacker_team: &Team,
     target_pos: MapPos,
 ) -> Option<Entity> {
-    for (target, map_pos, target_team) in q_actor_at.iter() {
-        if target_team.0 != attacker_team.0 && *map_pos == target_pos {
-            return Some(target);
-        }
-    }
-    None
+    find_actor_at(q_actor_at, target_pos)
+        .filter(|(_, target_team)| target_team != attacker_team)
+        .map(|(entity, _)| entity)
 }
+
 pub fn handle_action_selected_event(
     trigger: Trigger<ActionSelectedEvent>,
     selected_map_pos: Option<ResMut<SelectedMapPos>>,
@@ -309,14 +374,15 @@ pub fn handle_action_selected_event(
 pub fn handle_action_triggered_event(
     trigger: Trigger<ActionTriggeredEvent>,
     mut commands: Commands,
-) {
+    mut team_ready_q: Query<Mut<TeamReady>>,
+) -> Result<(), BevyError> {
     let ActionTriggeredEvent(action) = trigger.event();
     let entity = trigger.target();
 
-    info!(
-        "[handle_action_selected_event] entity={:?}, action={:?}",
-        entity, action,
-    );
+    // info!(
+    //     "[handle_action_selected_event] entity={:?}, action={:?}",
+    //     entity, action,
+    // );
 
     match action {
         Action::MoveAlong { path } => {
@@ -328,11 +394,28 @@ pub fn handle_action_triggered_event(
         }
 
         Action::NoOp => {
-            // Just do nothing
+            // Do nothing, but progress ui state so next actor can be activated
+            commands.trigger(UiStateTransitionedEvent(UiState::prossing()));
+        }
+
+        Action::EndPlanningPhase(Team(id)) => {
+            let mut team_ready = team_ready_q.get_mut(*id)?;
+            team_ready.0 = true;
+            commands.trigger(UiStateTransitionedEvent(UiState::prossing()));
+        }
+
+        Action::AssignActivation { actor, card_index } => {
+            commands.trigger(AssignActivationCommand {
+                actor: *actor,
+                card_index: *card_index,
+            });
         }
     }
 
-    commands.trigger_targets(EndActivationCommand, entity);
+    if entity != Entity::PLACEHOLDER {
+        commands.trigger_targets(EndActivationCommand, entity);
+    }
+    Ok(())
 }
 
 pub fn handle_begin_activation_command(
@@ -361,15 +444,15 @@ pub fn handle_begin_activation_command(
 pub fn handle_end_activation_command(
     trigger: Trigger<EndActivationCommand>,
     mut activations_q: Query<Mut<Activations>>,
-) {
+) -> Result<(), BevyError> {
     // info!(
     //     "handle_end_activation_command - entity={:?}",
     //     trigger.target()
     // );
 
-    if let Ok(mut activations) = activations_q.get_mut(trigger.target()) {
-        activations.active = None;
-    }
+    let mut activations = activations_q.get_mut(trigger.target())?;
+    activations.active = None;
+    Ok(())
 }
 
 pub fn handle_move_to_command(trigger: Trigger<MoveToCommand>, mut commands: Commands) {
@@ -446,6 +529,28 @@ pub fn handle_attack_command(
     };
 
     commands.trigger(combat_finished_event);
+
+    Ok(())
+}
+
+pub fn handle_assign_activation_command(
+    trigger: Trigger<AssignActivationCommand>,
+    mut commands: Commands,
+    mut actor_q: Query<(Mut<Activations>, &Team, &Name)>,
+    mut team_q: Query<Mut<Hand>>,
+) -> Result<(), BevyError> {
+    let AssignActivationCommand { actor, card_index } = trigger.event();
+    let (mut activations, Team(team), name) = actor_q.get_mut(*actor)?;
+    let mut hand = team_q.get_mut(*team)?;
+    let card = hand.remove(*card_index);
+
+    info!(
+        "handle_assign_activation_command - actor={}, card={:?}",
+        name, card
+    );
+
+    activations.add_card(card);
+    commands.trigger(UiStateTransitionedEvent(UiState::prossing()));
 
     Ok(())
 }

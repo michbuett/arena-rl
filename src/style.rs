@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
-pub const WINDOW_BACKGROUND: Color = Color::srgb(0.99, 0.98, 0.97);
-pub const BUTTON_BG_HIGHLIGHT: Color = Color::srgb(1.0, 0.99, 0.98);
+pub const WINDOW_BACKGROUND: Color = Color::srgb(0.90, 0.89, 0.88);
+pub const WINDOW_BACKGROUND_HL: Color = Color::srgb(1.0, 0.99, 0.98);
+pub const WINDOW_BACKGROUND_TANSPARENT: Color = Color::srgba(0.99, 0.98, 0.97, 0.3);
 
 #[derive(Debug, Clone, Copy)]
 pub enum TextStyle {

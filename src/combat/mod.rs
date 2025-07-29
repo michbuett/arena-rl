@@ -9,8 +9,8 @@ mod map;
 mod ui;
 
 use actor::{
-    ActionSelectedEvent, AttackCommand, CombatFinishedEvent, handle_action_triggered_event,
-    handle_attack_command,
+    ActionSelectedEvent, AssignActivationCommand, AttackCommand, CombatFinishedEvent,
+    handle_action_triggered_event, handle_assign_activation_command, handle_attack_command,
 };
 use ai::combat_ai_plugin;
 use bevy::prelude::*;
@@ -48,6 +48,7 @@ pub fn combat_plugin(app: &mut App) {
         .add_event::<EndActivationCommand>()
         .add_event::<MoveToCommand>()
         .add_event::<AttackCommand>()
+        .add_event::<AssignActivationCommand>()
         .add_event::<CombatFlowEvent>()
         .add_observer(handle_action_selected_event)
         .add_observer(handle_action_triggered_event)
@@ -55,6 +56,7 @@ pub fn combat_plugin(app: &mut App) {
         .add_observer(handle_end_activation_command)
         .add_observer(handle_move_to_command)
         .add_observer(handle_attack_command)
+        .add_observer(handle_assign_activation_command)
         .add_observer(actor::handle_combat_finished_event)
         .add_observer(combat_fx::handle_combat_finished_event)
         .add_systems(

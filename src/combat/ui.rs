@@ -5,11 +5,11 @@ use bevy::{input::mouse::MouseMotion, prelude::*, window::PrimaryWindow};
 
 use crate::MarkedForDeath;
 use crate::combat::actor::{ActionSelectedEvent, ActionTriggeredEvent};
-use crate::core::{Card, Health, ItemState, Items, Protection, Suite};
-use crate::style::{BUTTON_BG_HIGHLIGHT, TextStyle, text};
+use crate::core::{Card, Hand, Health, ItemState, Items, Protection, Suite};
+use crate::style::{TextStyle, WINDOW_BACKGROUND_HL, WINDOW_BACKGROUND_TANSPARENT, text};
 use crate::{GameState, style::WINDOW_BACKGROUND};
 
-use super::actor::{AttackData, CombatFinishedEvent};
+use super::actor::{AttackData, CombatFinishedEvent, PlayerControlled, Team};
 use super::combat_resolution::CombatConsequence;
 use super::{
     OnCombatState, ScrollBounds, Visual,
@@ -46,14 +46,18 @@ pub struct CombatLogContainer;
 
 #[derive(Resource)]
 pub struct SelectedMapPos {
-    active_actor: Entity,
+    active_actor: Option<Entity>,
     map_pos: MapPos,
     available_actions: Vec<Action>,
     selected_action: usize,
 }
 
 impl SelectedMapPos {
-    pub fn new(active_actor: Entity, map_pos: MapPos, available_actions: Vec<Action>) -> Self {
+    pub fn new(
+        active_actor: Option<Entity>,
+        map_pos: MapPos,
+        available_actions: Vec<Action>,
+    ) -> Self {
         Self {
             active_actor,
             map_pos,
@@ -99,6 +103,12 @@ pub struct ActionTrigger {
 #[derive(Component)]
 pub struct ActivationIndicator;
 
+#[derive(Component)]
+pub struct PlayerHandWindow;
+
+#[derive(Component)]
+pub struct PlayerHandCard(usize);
+
 pub fn combat_ui_plugin(app: &mut App) {
     app.add_event::<MapPosSelectedEvent>()
         .add_event::<UiStateTransitionedEvent>()
@@ -112,8 +122,10 @@ pub fn combat_ui_plugin(app: &mut App) {
                 process_keyboard_input,
                 (process_mouse_input, handle_select_map_pos).chain(),
                 update_description_on_changed,
+                update_player_hand_window,
+                update_details_window_text_on_change.run_if(resource_exists::<SelectedMapPos>),
                 (
-                    update_details_window_text_on_change,
+                    // update_details_window_text_on_change,
                     update_available_playeractions,
                 )
                     .run_if(resource_exists_and_changed::<SelectedMapPos>),
@@ -195,7 +207,6 @@ fn setup_ui(mut commands: Commands) {
 
     commands.spawn((
         Name::from("Combat log container"),
-        // Visibility::Hidden,
         Node {
             position_type: PositionType::Absolute,
             flex_direction: FlexDirection::Column,
@@ -210,14 +221,9 @@ fn setup_ui(mut commands: Commands) {
             ..Default::default()
         },
         OnCombatState,
-        // UserInputElement,
         CombatLogContainer,
     ));
 }
-
-// fn process_action_button_click(click: Trigger<Pointer<Click>>) {
-//        println!("{} was clicked!", click.entity());
-// }
 
 fn process_mouse_input(
     mut commands: Commands,
@@ -238,7 +244,12 @@ fn process_mouse_input(
             (Some(pa), Interaction::Pressed) => {
                 if pa.get_selected_action_index() == *index {
                     commands.remove_resource::<SelectedMapPos>();
-                    commands.trigger_targets(ActionTriggeredEvent(action.clone()), pa.active_actor);
+
+                    if let Some(entity) = pa.active_actor {
+                        commands.trigger_targets(ActionTriggeredEvent(action.clone()), entity);
+                    } else {
+                        commands.trigger(ActionTriggeredEvent(action.clone()));
+                    }
                 } else {
                     commands.trigger(ActionSelectedEvent(*index));
                 }
@@ -504,6 +515,7 @@ fn update_description_on_changed(
     >,
 ) {
     for (_, activations, name, health, protection, items, mut description) in actor_q.iter_mut() {
+        // println!("UPDATE description of actor {}", name);
         description.0 = describe_actor(name, health, protection, activations, items);
     }
 }
@@ -605,13 +617,17 @@ fn card_descr(card: &Card) -> String {
     format!("{} of {}", val, suite)
 }
 
-fn spawn_activation_indicators(parent: &mut ChildSpawnerCommands, card: &Card, pos: usize) {
-    let offset_x = -24.0 + 16.0 * (pos as f32);
-    let pos = Vec3::new(offset_x, -32.0, 200.0);
+fn spawn_activation_indicators(
+    parent: &mut ChildSpawnerCommands,
+    card: &Card,
+    (offset_x, offset_y): (f32, f32),
+) {
+    // let offset_x = -24.0 + 16.0 * (pos as f32);
+    // let pos = Vec3::new(offset_x, -64.0, Z_LAYER_VFX);
 
     parent.spawn((
         Visual::Single(card_visual_name(card)),
-        Transform::from_translation(pos),
+        Transform::from_translation(Vec3::new(offset_x, offset_y, Z_LAYER_VFX)),
         UserInputElement,
         ActivationIndicator,
     ));
@@ -656,11 +672,16 @@ fn update_ui_on_state_change(
         for (e, activations) in actor_q.iter() {
             commands.entity(e).with_children(|parent| {
                 if let Some(Activation(card)) = activations.active() {
-                    spawn_activation_indicators(parent, &card, 0);
+                    spawn_activation_indicators(parent, &card, (0.0, 72.0));
                 }
 
+                let num_remaining = activations.remaining().len();
+                let card_size = 32;
                 for (idx, Activation(card)) in activations.remaining().iter().enumerate() {
-                    spawn_activation_indicators(parent, card, idx + 2);
+                    let offset_x =
+                        (idx * card_size) as f32 - (card_size / 2 * (num_remaining - 1)) as f32;
+
+                    spawn_activation_indicators(parent, card, (offset_x, -48.0));
                 }
             });
         }
@@ -694,10 +715,11 @@ pub fn update_action_buttons(
     commands
         .entity(container_entity)
         .despawn_related::<Children>();
+
     commands.entity(container_entity).with_children(|parent| {
         for (idx, action) in player_actions.available_actions.iter().enumerate() {
             let (background_color, border_color) = if idx == player_actions.selected_action {
-                (BUTTON_BG_HIGHLIGHT, RED_100.into())
+                (WINDOW_BACKGROUND_HL, RED_100.into())
             } else {
                 (WINDOW_BACKGROUND, Color::BLACK)
             };
@@ -735,7 +757,9 @@ fn button_text_for_action(action: &Action) -> String {
     match action {
         Action::MoveAlong { .. } => "Move",
         Action::Attack(AttackData { name, .. }) => name,
-        _ => "Unknown",
+        Action::NoOp => "Do Nothing",
+        Action::EndPlanningPhase(..) => "Start the Action",
+        Action::AssignActivation { .. } => "Assign Activation",
     }
     .to_string()
 }
@@ -797,6 +821,101 @@ pub fn handle_combat_finished_event(
             }
         }
     }
+
+    Ok(())
+}
+
+fn update_player_hand_window(
+    mut commands: Commands,
+    player_hand_window_q: Query<(Entity, &Children, &Team), With<PlayerHandWindow>>,
+    hand_q: Query<(Entity, &Hand, &PlayerControlled), Changed<Hand>>,
+) -> Result<(), BevyError> {
+    for (team, hand, PlayerControlled(is_player)) in hand_q.iter() {
+        if !*is_player {
+            continue;
+        }
+
+        let phw = player_hand_window_q.iter().find(|(_, _, t)| t.0 == team);
+        let mut phw_entity_commands = if let Some((e, cn, ..)) = phw {
+            for c in cn.iter() {
+                commands.entity(c).insert(MarkedForDeath);
+            }
+            commands.entity(e)
+        } else {
+            commands.spawn((
+                Name::new("PlayerHandWindow"),
+                BackgroundColor(WINDOW_BACKGROUND_TANSPARENT.into()),
+                Visibility::Hidden,
+                BorderRadius::all(Val::Px(5.)),
+                Node {
+                    position_type: PositionType::Absolute,
+                    bottom: Val::Px(20.0),
+                    left: Val::Px(20.0),
+                    margin: UiRect::all(Val::Px(3.)),
+                    ..Default::default()
+                },
+                OnCombatState,
+                UserInputElement,
+                PlayerHandWindow,
+                Team(team),
+            ))
+        };
+
+        phw_entity_commands.with_children(|parent| {
+            if hand.is_empty() {
+                parent.spawn((
+                    Name::new("Empty hand info"),
+                    Node {
+                        width: Val::Px(50.),
+                        height: Val::Px(80.),
+                        padding: UiRect::all(Val::Px(5.)),
+                        margin: UiRect::all(Val::Px(5.)),
+                        ..Default::default()
+                    },
+                    children![text("Your hand is empty", TextStyle::UiNormal),],
+                ));
+            } else {
+                for (index, card) in hand.cards().enumerate() {
+                    let background_color = if hand.is_selected(index) {
+                        WINDOW_BACKGROUND_HL
+                    } else {
+                        WINDOW_BACKGROUND
+                    };
+
+                    parent
+                        .spawn((
+                            Name::new("PlayerHandCard"),
+                            BackgroundColor(background_color),
+                            BorderRadius::all(Val::Px(5.)),
+                            Node {
+                                width: Val::Px(50.),
+                                height: Val::Px(80.),
+                                padding: UiRect::all(Val::Px(5.)),
+                                margin: UiRect::all(Val::Px(5.)),
+                                ..Default::default()
+                            },
+                            PlayerHandCard(index),
+                            Team(team),
+                            children![text(card_descr(card), TextStyle::UiNormal),],
+                        ))
+                        .observe(on_click_hand_card);
+                }
+            }
+        });
+    }
+
+    Ok(())
+}
+
+fn on_click_hand_card(
+    click: Trigger<Pointer<Click>>,
+    hand_cards_q: Query<(&PlayerHandCard, &Team)>,
+    mut hand_q: Query<Mut<Hand>>,
+) -> Result<(), BevyError> {
+    let (PlayerHandCard(index), Team(team_entity)) = hand_cards_q.get(click.target())?;
+    let mut hand = hand_q.get_mut(*team_entity)?;
+
+    hand.toggle_selection(*index);
 
     Ok(())
 }

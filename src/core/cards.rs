@@ -1,6 +1,7 @@
 extern crate rand;
 
 use super::AttributeType;
+use bevy::ecs::component::Component;
 use rand::prelude::*;
 use serde::Deserialize;
 use std::fmt;
@@ -159,4 +160,69 @@ pub fn fixed_deck() -> Vec<Card> {
         Card::new(8, Diamonds),
         Card::new(7, Clubs),
     ]
+}
+
+const MAX_HAND_SIZE: usize = 5;
+
+#[derive(Component)]
+pub struct Hand {
+    selected_idx: Option<usize>,
+    cards: Vec<Card>,
+}
+
+impl Hand {
+    pub fn new() -> Self {
+        let mut deck = Deck::new_rnd();
+        let cards = (0..3).map(|_| deck.deal()).collect();
+
+        Self {
+            cards,
+            selected_idx: None,
+        }
+    }
+
+    pub fn cards(&self) -> impl Iterator<Item = &Card> {
+        self.cards.iter()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.cards.is_empty()
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.cards.len() >= MAX_HAND_SIZE
+    }
+
+    pub fn add_card(&mut self, card: Card) {
+        self.cards.push(card);
+    }
+
+    pub fn remove(&mut self, index: usize) -> Card {
+        if self.selected_idx.is_some_and(|i| i == index) {
+            self.selected_idx = None;
+        }
+        self.cards.remove(index)
+    }
+
+    pub fn toggle_selection(&mut self, index: usize) {
+        assert!(index < self.cards.len());
+
+        if self.is_selected(index) {
+            self.reset_selection();
+        } else {
+            self.selected_idx = Some(index);
+        }
+    }
+
+    pub fn reset_selection(&mut self) {
+        self.selected_idx = None;
+    }
+
+    pub fn is_selected(&self, index: usize) -> bool {
+        self.selected_idx.is_some_and(|selected| selected == index)
+    }
+
+    pub fn selected_card(&self) -> Option<usize> {
+        self.selected_idx
+    }
 }

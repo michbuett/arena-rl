@@ -1,7 +1,5 @@
 use super::{AttributeType, Attributes, Card, Deck};
 
-pub const MAX_HAND_SIZE: usize = 5;
-
 #[derive(Clone, Debug)]
 pub struct SkillCheck {
     pub target_number: u8,

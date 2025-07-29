@@ -20,7 +20,8 @@ echo "done"
 
 echo -n "resizing sprites..."
 mkdir -p $PATH_OUT/ui/
-cp -r $PATH_IN/ui/cards $PATH_OUT/ui/
+# cp -r $PATH_IN/ui/cards $PATH_OUT/ui/
+resize "48x48" "ui/cards"
 
 resize "128x128" "chars/bodies"
 resize "128x128" "chars/equipment"
