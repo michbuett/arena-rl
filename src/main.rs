@@ -10,7 +10,7 @@ use std::time::Duration;
 use bevy::{prelude::*, render::camera::ScalingMode, window::PrimaryWindow};
 
 #[derive(Clone, Copy, Default, Eq, PartialEq, Debug, Hash, States)]
-enum GameState {
+pub enum GameState {
     #[default]
     Start,
     MainMenu,

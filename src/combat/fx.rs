@@ -12,7 +12,7 @@ use crate::{
 
 use super::{
     map::MapPos,
-    ui::{UiState, UiStateTransitionedEvent, Z_LAYER_ACTOR, Z_LAYER_FLOOR, Z_LAYER_VFX},
+    ui::{Z_LAYER_ACTOR, Z_LAYER_FLOOR, Z_LAYER_VFX},
 };
 
 const MOVE_STEP_DURATION: u64 = 200;
@@ -27,16 +27,16 @@ impl FxSequence {
     }
 
     pub fn wait_until_finished(mut self) -> Self {
-        if let Some(d) = self
-            .1
+        self.0 = self.duration();
+        self
+    }
+
+    fn duration(&self) -> Duration {
+        self.1
             .iter()
             .map(|(wait, eff)| *wait + eff.duration())
             .max()
-        {
-            self.0 = d;
-        }
-
-        self
+            .unwrap_or_default()
     }
 
     pub fn wait(mut self, ms: u64) -> Self {
@@ -64,6 +64,8 @@ impl FxSequence {
     // }
 
     pub fn run(mut self, commands: &mut Commands) {
+        let total_duration = self.duration();
+
         for (duration, effect) in self.1.drain(..) {
             commands.spawn(Fx {
                 timer: Timer::new(duration, TimerMode::Once),
@@ -71,9 +73,7 @@ impl FxSequence {
             });
         }
 
-        commands.trigger(UiStateTransitionedEvent(UiState::wait(
-            self.0.as_millis() as u64
-        )));
+        commands.spawn((FxRunning, EndOfLive::after(total_duration)));
     }
 }
 
@@ -82,6 +82,9 @@ pub struct Fx {
     timer: Timer,
     effect: FxEffect,
 }
+
+#[derive(Debug, Component)]
+pub struct FxRunning;
 
 pub fn update_check_fx_ready(
     time: Res<Time>,
@@ -241,7 +244,7 @@ impl FxEffect {
 fn handle_blood_splatter(commands: &mut Commands, pos: Vec3) {
     let duration = Duration::from_millis(BLOOD_SPLATTER_DURATION);
     let num_particals = 10;
-    let pos = pos.with_z(Z_LAYER_VFX);
+    let pos = pos.with_z(Z_LAYER_ACTOR);
 
     for i in 1..=num_particals {
         let visual = Visual::Single(format!("blood-splatter-{}", (i % 3) + 1));

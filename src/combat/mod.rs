@@ -8,26 +8,22 @@ mod generator;
 mod map;
 mod ui;
 
-use actor::{
-    ActionSelectedEvent, AssignActivationCommand, AttackCommand, CombatFinishedEvent,
-    handle_action_triggered_event, handle_assign_activation_command, handle_attack_command,
-};
+use actor::ActorActivatedEvent;
 use ai::combat_ai_plugin;
 use bevy::prelude::*;
 use generator::{ActorGenerator, setup_generators};
-use ui::{SelectedMapPos, update_action_buttons};
 
 use crate::{GameState, assets::Visual, core::Deck, despawn_screen};
 
 use self::{
     actor::{
-        ActionTriggeredEvent, ActorBundle, AiBehaviour, BeginActivationCommand,
-        EndActivationCommand, MoveToCommand, Team, TeamBundle, handle_action_selected_event,
-        handle_begin_activation_command, handle_end_activation_command, handle_move_to_command,
+        ActionSelectedEvent, ActionTriggeredEvent, ActivationEndedEvent, ActorBundle,
+        AssignActivationCommand, AttackCommand, BeginActivationCommand, CombatFinishedEvent,
+        MoveToCommand, Team, TeamBundle,
     },
-    flow::{CombatFlowEvent, setup_combat_flow, update_combat_flow},
+    flow::{ProgressCombatTurnCommand, TurnPhase, handle_turn_phase_start_turn, setup_combat_flow},
     map::{HexMap, MapPos, update_obstacles_in_map},
-    ui::{UiState, combat_ui_plugin},
+    ui::combat_ui_plugin,
 };
 
 #[derive(Component)]
@@ -40,24 +36,28 @@ struct ScrollBounds(Rect);
 struct GameDeck(pub Deck);
 
 pub fn combat_plugin(app: &mut App) {
-    app.add_plugins((combat_ui_plugin, combat_ai_plugin))
+    app.add_sub_state::<TurnPhase>()
+        .add_plugins((combat_ui_plugin, combat_ai_plugin))
         .add_event::<ActionTriggeredEvent>()
         .add_event::<ActionSelectedEvent>()
+        .add_event::<ActorActivatedEvent>()
         .add_event::<CombatFinishedEvent>()
         .add_event::<BeginActivationCommand>()
-        .add_event::<EndActivationCommand>()
+        .add_event::<ActivationEndedEvent>()
         .add_event::<MoveToCommand>()
         .add_event::<AttackCommand>()
         .add_event::<AssignActivationCommand>()
-        .add_event::<CombatFlowEvent>()
-        .add_observer(handle_action_selected_event)
-        .add_observer(handle_action_triggered_event)
-        .add_observer(handle_begin_activation_command)
-        .add_observer(handle_end_activation_command)
-        .add_observer(handle_move_to_command)
-        .add_observer(handle_attack_command)
-        .add_observer(handle_assign_activation_command)
+        .add_event::<ProgressCombatTurnCommand>()
+        .add_observer(actor::handle_actor_activated_event)
+        .add_observer(actor::handle_action_selected_event)
+        .add_observer(actor::handle_action_triggered_event)
+        .add_observer(actor::handle_begin_activation_command)
+        .add_observer(actor::handle_move_to_command)
+        .add_observer(actor::handle_attack_command)
+        .add_observer(actor::handle_assign_activation_command)
         .add_observer(actor::handle_combat_finished_event)
+        .add_observer(actor::handle_map_pos_selected_event)
+        // .add_observer(actor::handle_refresh_possible_actions_command)
         .add_observer(combat_fx::handle_combat_finished_event)
         .add_systems(
             OnEnter(GameState::Combat),
@@ -67,14 +67,20 @@ pub fn combat_plugin(app: &mut App) {
                 setup_generators,
             ),
         )
+        .add_systems(OnEnter(TurnPhase::StartTurn), handle_turn_phase_start_turn)
         .add_systems(
             Update,
             (
-                actor::handle_select_map_pos,
                 update_obstacles_in_map,
                 fx::update_check_fx_ready,
-                update_combat_flow.run_if(progress_game),
-                update_action_buttons.run_if(resource_exists_and_changed::<SelectedMapPos>),
+                flow::handle_turn_phase_perform_actions.run_if(in_state(TurnPhase::PerformActions)),
+                flow::handle_turn_phase_boost_activations
+                    .run_if(in_state(TurnPhase::BoostActivations)),
+                actor::clear_user_actions_on_turn_phase_change.run_if(state_changed::<TurnPhase>),
+                actor::collect_actions_for_assigning_activations
+                    .run_if(in_state(TurnPhase::BoostActivations)),
+                actor::collect_actions_for_performin_actions
+                    .run_if(in_state(TurnPhase::PerformActions)),
             )
                 .run_if(in_state(GameState::Combat)),
         )
@@ -137,7 +143,6 @@ fn setup_actors(mut commands: Commands, actor_generator: Res<ActorGenerator>) {
             MapPos::from_oddr(2, 2),
         ),
         actor_generator.generate_actor("sucker"),
-        AiBehaviour::Zombi,
     ));
 
     commands.spawn((
@@ -148,14 +153,7 @@ fn setup_actors(mut commands: Commands, actor_generator: Res<ActorGenerator>) {
             MapPos::from_oddr(8, 2),
         ),
         actor_generator.generate_actor("sucker"),
-        AiBehaviour::Zombi,
     ));
 
     commands.insert_resource(GameDeck(deck));
-}
-
-fn progress_game(ui_state: Option<Res<UiState>>) -> bool {
-    ui_state
-        .map(|ui_state| matches!(ui_state.as_ref(), UiState::Processing))
-        .unwrap_or(false)
 }

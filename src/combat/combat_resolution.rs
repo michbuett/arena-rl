@@ -6,9 +6,11 @@ use crate::core::{
     AttributeType, Attributes, Card, Deck, Health, ProgressCheckNew, Protection, SkillCheck,
 };
 
+use super::actor::Activation;
+
 #[derive(Debug)]
 pub struct Attack {
-    pub speed: Card,
+    pub speed: Activation,
     pub attribute: AttributeType,
     pub difficulty: u8,
     pub damage: u8,
@@ -77,9 +79,9 @@ pub fn handle_melee_attack(attack: &Attack, target: &Combatant, deck: &mut Deck)
 
 fn perform_quality_check(attack: &Attack, deck: &mut Deck) -> Option<CombatConsequence> {
     let target_number = if attack.speed.suite().matches(&attack.attribute) {
-        min(attack.difficulty, attack.speed.value_low())
+        min(attack.difficulty, attack.speed.difficulty())
     } else {
-        max(attack.difficulty, attack.speed.value_low())
+        max(attack.difficulty, attack.speed.difficulty())
     };
 
     let fumble_check = SkillCheck {

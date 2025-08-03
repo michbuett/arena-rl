@@ -4,7 +4,7 @@ use crate::core::Attacks;
 
 use super::{
     actor::{
-        Action, ActionTriggeredEvent, AttackData, BeginActivationCommand, PlayerControlled, Team,
+        Action, ActionTriggeredEvent, Active, ActorActivatedEvent, AttackData, Controller, Team,
     },
     map::{HexMap, MapPos, Path},
 };
@@ -14,23 +14,20 @@ pub fn combat_ai_plugin(app: &mut App) {
 }
 
 fn choose_ai_action(
-    trigger: Trigger<BeginActivationCommand>,
-    activated_actor_q: Query<(&Team, &MapPos, &Attacks, &PlayerControlled)>,
+    trigger: Trigger<ActorActivatedEvent>,
+    activated_actor_q: Query<(&Team, &MapPos, &Attacks, &Controller, &Active)>,
     other_actors_q: Query<(Entity, &Team, &MapPos)>,
     map: Res<HexMap>,
     mut commands: Commands,
-) {
+) -> Result<(), BevyError> {
     // info!("[ai::choose_ai_action] entity={:?}", trigger.target());
 
-    let e = trigger.target();
-    let Ok((team, pos, attacks, PlayerControlled(is_pc))) = activated_actor_q.get(e) else {
-        warn!("Cannot find entity to determine ai action.");
-        return;
-    };
+    let ActorActivatedEvent(actor) = trigger.event();
+    let (team, pos, attacks, controller, Active(activation)) = activated_actor_q.get(*actor)?;
 
-    if *is_pc {
+    if controller.is_pc() {
         // ignore player controlled actors
-        return;
+        return Ok(());
     }
 
     let mut nearest_enemy: Option<(Entity, Path)> = None;
@@ -52,22 +49,31 @@ fn choose_ai_action(
 
     if let Some((target, mut p)) = nearest_enemy {
         // 1. check if actor can attack an enemy
-        for ao in attacks.0.iter() {
-            if ao.can_attack(p.len() as i32 - 1) {
-                commands.trigger_targets(
-                    ActionTriggeredEvent(Action::Attack(AttackData::new(target, ao))),
-                    e,
-                );
-                return;
+        for attack_template in attacks.0.iter() {
+            if attack_template.can_attack(p.len() as i32 - 1) {
+                commands.trigger(ActionTriggeredEvent(Action::Attack(AttackData::new(
+                    *actor,
+                    target,
+                    attack_template,
+                    *activation,
+                ))));
+                return Ok(());
             }
         }
 
         // 2. if unable to attack, then try to move closer
         let path = p.drain(0..p.len() - 1).collect();
-        commands.trigger_targets(ActionTriggeredEvent(Action::MoveAlong { path }), e);
-        return;
+        commands.trigger_targets(
+            ActionTriggeredEvent(Action::MoveAlong {
+                actor: *actor,
+                path,
+            }),
+            *actor,
+        );
+        return Ok(());
     }
 
     // 3. if unable to move closer, then skip action
-    commands.trigger_targets(ActionTriggeredEvent(Action::NoOp), e);
+    commands.trigger_targets(ActionTriggeredEvent(Action::NoOp(*actor)), *actor);
+    Ok(())
 }

@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use bevy::color::palettes::tailwind::RED_100;
 use bevy::{input::mouse::MouseMotion, prelude::*, window::PrimaryWindow};
 
@@ -9,12 +7,16 @@ use crate::core::{Card, Hand, Health, ItemState, Items, Protection, Suite};
 use crate::style::{TextStyle, WINDOW_BACKGROUND_HL, WINDOW_BACKGROUND_TANSPARENT, text};
 use crate::{GameState, style::WINDOW_BACKGROUND};
 
-use super::actor::{AttackData, CombatFinishedEvent, PlayerControlled, Team};
+use super::actor::{
+    ActivationEndedEvent, Active, AttackData, CombatFinishedEvent, Controller, PossibleUserActions,
+    Team,
+};
 use super::combat_resolution::CombatConsequence;
+use super::fx::FxRunning;
 use super::{
     OnCombatState, ScrollBounds, Visual,
     actor::{Action, Activation, Activations, Actor},
-    flow::{Turn, TurnPhase},
+    flow::{TurnNumber, TurnPhase},
     map::{HexMap, MapPos},
 };
 
@@ -25,6 +27,9 @@ pub const Z_LAYER_VFX: f32 = 200.0;
 
 #[derive(Component)]
 pub struct TurnInfo;
+
+#[derive(Component)]
+pub struct DetailsWindow;
 
 #[derive(Component)]
 pub struct DetailsWindowText;
@@ -45,50 +50,10 @@ pub struct ActionButtonContainer;
 pub struct CombatLogContainer;
 
 #[derive(Resource)]
-pub struct SelectedMapPos {
-    active_actor: Option<Entity>,
-    map_pos: MapPos,
-    available_actions: Vec<Action>,
-    selected_action: usize,
-}
-
-impl SelectedMapPos {
-    pub fn new(
-        active_actor: Option<Entity>,
-        map_pos: MapPos,
-        available_actions: Vec<Action>,
-    ) -> Self {
-        Self {
-            active_actor,
-            map_pos,
-            available_actions,
-            selected_action: 0,
-        }
-    }
-
-    pub fn select_action(&mut self, new_index: usize) {
-        self.selected_action = new_index.clamp(0, self.available_actions.len() - 1);
-    }
-
-    pub fn get_selected_action_index(&self) -> usize {
-        self.selected_action
-    }
-
-    pub fn get_selected_action(&self) -> Option<&Action> {
-        self.available_actions.get(self.selected_action)
-    }
-
-    pub fn get_selected_action_when_at(&self, other_pos: &MapPos) -> Option<&Action> {
-        if self.map_pos == *other_pos {
-            self.get_selected_action()
-        } else {
-            None
-        }
-    }
-}
+pub struct SelectedMapPos(pub MapPos);
 
 #[derive(Debug, Event)]
-pub struct MapPosSelectedEvent(pub MapPos);
+pub struct MapPosSelectedEvent(pub Option<MapPos>);
 
 #[derive(Component)]
 pub struct UserInputElement;
@@ -111,26 +76,22 @@ pub struct PlayerHandCard(usize);
 
 pub fn combat_ui_plugin(app: &mut App) {
     app.add_event::<MapPosSelectedEvent>()
-        .add_event::<UiStateTransitionedEvent>()
-        .add_observer(update_ui_on_state_change)
         .add_observer(handle_combat_finished_event)
-        // .add_observer(process_action_button_click)
+        .add_observer(handle_map_pos_selected_event)
+        .add_observer(update_indicators_when_activation_ended)
         .add_systems(OnEnter(GameState::Combat), setup_ui)
         .add_systems(
             Update,
             (
                 process_keyboard_input,
-                (process_mouse_input, handle_select_map_pos).chain(),
+                process_mouse_input,
                 update_description_on_changed,
                 update_player_hand_window,
-                update_details_window_text_on_change.run_if(resource_exists::<SelectedMapPos>),
-                (
-                    // update_details_window_text_on_change,
-                    update_available_playeractions,
-                )
-                    .run_if(resource_exists_and_changed::<SelectedMapPos>),
-                update_turn_info.run_if(resource_exists_and_changed::<Turn>),
-                update_waiting_state,
+                update_details_window_text_on_change.run_if(resource_exists::<PossibleUserActions>),
+                (update_available_playeractions,).run_if(resource_exists::<PossibleUserActions>),
+                update_indicators_when_activations_changed,
+                update_turn_info.run_if(state_changed::<TurnPhase>),
+                update_action_buttons.run_if(resource_changed_or_removed::<PossibleUserActions>),
             )
                 .run_if(in_state(GameState::Combat)),
         );
@@ -138,7 +99,6 @@ pub fn combat_ui_plugin(app: &mut App) {
 
 fn setup_ui(mut commands: Commands) {
     commands.insert_resource(ScrollState(false));
-    commands.insert_resource(UiState::prossing());
 
     commands
         .spawn((
@@ -160,7 +120,6 @@ fn setup_ui(mut commands: Commands) {
         .spawn((
             Name::from("DetailsWindow"),
             BackgroundColor(WINDOW_BACKGROUND.into()),
-            Visibility::Hidden,
             Node {
                 position_type: PositionType::Absolute,
                 top: Val::Px(20.0),
@@ -171,6 +130,7 @@ fn setup_ui(mut commands: Commands) {
             },
             OnCombatState,
             UserInputElement,
+            DetailsWindow,
         ))
         .with_children(|parent| {
             parent.spawn((text("", TextStyle::UiNormal), DetailsWindowText));
@@ -178,7 +138,6 @@ fn setup_ui(mut commands: Commands) {
 
     commands.spawn((
         Name::from("Action Button Container"),
-        Visibility::Hidden,
         Node {
             position_type: PositionType::Absolute,
             flex_direction: FlexDirection::Column,
@@ -226,30 +185,26 @@ fn setup_ui(mut commands: Commands) {
 }
 
 fn process_mouse_input(
-    mut commands: Commands,
-    mut mouse_button_input: ResMut<ButtonInput<MouseButton>>,
-    selected_map_pos: Option<Res<SelectedMapPos>>,
+    selected_map_pos: Option<Res<PossibleUserActions>>,
     dim: Res<ScrollBounds>,
+    map: Res<HexMap>,
+    fx_running_q: Query<(), With<FxRunning>>,
     interaction_q: Query<(&Interaction, &ActionTrigger), Changed<Interaction>>,
     window_query: Query<&Window, With<PrimaryWindow>>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
-    ui_state: Res<UiState>,
+
+    mut commands: Commands,
+    mut mouse_button_input: ResMut<ButtonInput<MouseButton>>,
     mut mouse_motion_evr: EventReader<MouseMotion>,
     mut camera_transform_query: Query<&mut Transform, With<Camera>>,
-    mut map_pos_selected_ew: EventWriter<MapPosSelectedEvent>,
     mut scroll_state: ResMut<ScrollState>,
 ) -> Result<(), BevyError> {
     for (interaction, ActionTrigger { index, action }) in interaction_q.iter() {
         match (&selected_map_pos, interaction) {
             (Some(pa), Interaction::Pressed) => {
                 if pa.get_selected_action_index() == *index {
-                    commands.remove_resource::<SelectedMapPos>();
-
-                    if let Some(entity) = pa.active_actor {
-                        commands.trigger_targets(ActionTriggeredEvent(action.clone()), entity);
-                    } else {
-                        commands.trigger(ActionTriggeredEvent(action.clone()));
-                    }
+                    commands.remove_resource::<PossibleUserActions>();
+                    commands.trigger(ActionTriggeredEvent(action.clone()));
                 } else {
                     commands.trigger(ActionSelectedEvent(*index));
                 }
@@ -283,7 +238,7 @@ fn process_mouse_input(
             // => .. than reset the scroll state until next time
             scroll_state.0 = false;
         } else {
-            if !ui_state.is_awaiting_input() {
+            if !fx_running_q.is_empty() {
                 // there is other stuff going on
                 // => just ignore user other input then scrolling
                 return Ok(());
@@ -292,7 +247,13 @@ fn process_mouse_input(
             if let Some(mouse_pos) = window_query.single()?.cursor_position() {
                 let (camera, camera_global_transform) = camera_query.single()?;
                 if let Ok(wp) = camera.viewport_to_world_2d(camera_global_transform, mouse_pos) {
-                    map_pos_selected_ew.write(MapPosSelectedEvent(MapPos::from(wp)));
+                    if let Some((hex, ..)) = map.find_tile(&MapPos::from(wp)) {
+                        commands.insert_resource(SelectedMapPos(hex));
+                        commands.trigger(MapPosSelectedEvent(Some(hex)));
+                    } else {
+                        commands.remove_resource::<SelectedMapPos>();
+                        commands.trigger(MapPosSelectedEvent(None));
+                    }
                 }
             }
         }
@@ -330,25 +291,25 @@ fn move_camera(camera_transform: &mut Transform, dx: f32, dy: f32, scroll_bounds
         (camera_transform.translation.y + dy).clamp(bounds_min.y, bounds_max.y);
 }
 
-fn handle_select_map_pos(
-    map: Res<HexMap>,
+fn handle_map_pos_selected_event(
+    trigger: Trigger<MapPosSelectedEvent>,
     description_q: Query<(&MapPos, &Description)>,
-    mut user_input_evr: EventReader<MapPosSelectedEvent>,
-    mut details_window_text: Query<&mut Text, With<DetailsWindowText>>,
-    mut selected_tile_q: Query<(&mut Transform, &mut Visibility), With<SelectedTile>>,
+    details_window_q: Query<Entity, With<DetailsWindow>>,
+    mut details_window_text_q: Query<&mut Text, With<DetailsWindowText>>,
+    mut selected_tile_q: Query<(Entity, &mut Transform), With<SelectedTile>>,
+    mut visibility_q: Query<&mut Visibility>,
 ) -> Result<(), BevyError> {
-    let Some(MapPosSelectedEvent(hex)) = user_input_evr.read().last() else {
-        return Ok(());
-    };
+    let MapPosSelectedEvent(hex) = trigger.event();
+    let details_window = details_window_q.single()?;
+    let mut details_window_txt = details_window_text_q.single_mut()?;
+    let (selected_tile, mut selected_tile_transform) = selected_tile_q.single_mut()?;
+    let [mut details_window_visibility, mut selected_tile_visibility] =
+        visibility_q.get_many_mut([details_window, selected_tile])?;
 
-    let mut details_window_txt = details_window_text.single_mut()?;
-    let selected_tile = selected_tile_q.single_mut()?;
-    let (mut selected_tile_transform, mut selected_tile_visibility) = selected_tile;
-
-    if let Some((pos, ..)) = map.find_tile(hex) {
+    if let Some(pos) = hex {
         let descr_at = description_q
             .iter()
-            .filter_map(|(mp, descr)| if pos == *mp { Some(descr) } else { None })
+            .filter_map(|(mp, descr)| if pos == mp { Some(descr) } else { None })
             .next();
 
         if let Some(descr) = descr_at {
@@ -361,10 +322,12 @@ fn handle_select_map_pos(
             details_window_txt.0 = format!("You look at {:?}. There is nothing", pos.coordinates());
         }
 
-        selected_tile_transform.translation = hex.into_vec3().with_z(Z_LAYER_UI_MAP_MARKER);
+        selected_tile_transform.translation = pos.into_vec3().with_z(Z_LAYER_UI_MAP_MARKER);
+        *details_window_visibility = Visibility::Inherited;
         *selected_tile_visibility = Visibility::Inherited;
     } else {
-        details_window_txt.0 = "No tile selected".to_string();
+        details_window_txt.0 = "No tile".to_string();
+        *details_window_visibility = Visibility::Hidden;
         *selected_tile_visibility = Visibility::Hidden;
     }
 
@@ -373,14 +336,19 @@ fn handle_select_map_pos(
 
 fn update_details_window_text_on_change(
     description_q: Query<(&MapPos, Ref<Description>), Without<SelectedTile>>,
-    selected_map_pos: Res<SelectedMapPos>,
+    selected_map_pos: Option<Res<SelectedMapPos>>,
     mut details_window_text_q: Query<&mut Text, With<DetailsWindowText>>,
 ) -> Result<(), BevyError> {
-    let selected_mpos = selected_map_pos.map_pos;
+    let Some(selected_mpos) = selected_map_pos else {
+        // No valid tile selected at the moment
+        // => ignore change; when there is a new selection the text will be updated again
+        return Ok(());
+    };
+
     let mut details_window_text = details_window_text_q.single_mut()?;
 
     for (mpos, descr) in description_q {
-        if descr.is_changed() && *mpos == selected_mpos {
+        if descr.is_changed() && *mpos == selected_mpos.0 {
             details_window_text.0 = format!(
                 "You look at {:?}, you see...\n{}",
                 mpos.coordinates(),
@@ -392,67 +360,16 @@ fn update_details_window_text_on_change(
     Ok(())
 }
 
-#[derive(Debug, Event)]
-pub struct UiStateTransitionedEvent(pub UiState);
-
-#[derive(Debug, Clone, Resource)]
-pub enum UiState {
-    Processing,
-    Wait(Timer),
-    AwaitInput(MapPos),
-}
-
-impl UiState {
-    pub fn prossing() -> Self {
-        Self::Processing
-    }
-
-    pub fn wait(millis: u64) -> Self {
-        Self::Wait(Timer::new(Duration::from_millis(millis), TimerMode::Once))
-    }
-
-    pub fn await_input(mpos: MapPos) -> Self {
-        Self::AwaitInput(mpos)
-    }
-
-    pub fn is_awaiting_input(&self) -> bool {
-        matches!(self, Self::AwaitInput(..))
-    }
-}
-
-fn update_waiting_state(
-    mut commands: Commands,
-    time: Res<Time>,
-    // wait_until: Option<ResMut<WaitUntil>>,
-    mut ui_state: ResMut<UiState>,
-) {
-    let ui_state = ui_state.as_mut();
-    if let UiState::Wait(timer) = ui_state {
-        timer.tick(time.delta());
-
-        if timer.finished() {
-            commands.trigger(UiStateTransitionedEvent(UiState::prossing()));
-        }
-    }
-}
-
 fn update_available_playeractions(
     mut commands: Commands,
-    player_actions: Res<SelectedMapPos>,
+    player_actions: Res<PossibleUserActions>,
     indicatorq: Query<(Entity, &PlayerActionIndicator)>,
 ) {
     for (e, _) in indicatorq.iter() {
         commands.entity(e).despawn_related::<Children>();
     }
 
-    let Some(selected_action) = player_actions
-        .available_actions
-        .get(player_actions.selected_action)
-    else {
-        return;
-    };
-
-    match selected_action {
+    match player_actions.get_selected_action() {
         Action::MoveAlong { path, .. } => {
             for pos in path {
                 commands.spawn((
@@ -469,16 +386,18 @@ fn update_available_playeractions(
     }
 }
 
-fn update_turn_info(turn: Res<Turn>, mut turn_info_q: Query<Mut<Text>, With<TurnInfo>>) {
+fn update_turn_info(
+    turn_number: Res<TurnNumber>,
+    turn_phase: Res<State<TurnPhase>>,
+    mut turn_info_q: Query<Mut<Text>, With<TurnInfo>>,
+) {
     if let Ok(mut turn_info) = turn_info_q.single_mut() {
-        // let mut text = turn_info_q.single_mut();
-        let phase = match turn.turn_phase {
+        let phase = match turn_phase.get() {
             TurnPhase::StartTurn => "Beginning new turn",
             TurnPhase::BoostActivations => "Boosting activations",
             TurnPhase::PerformActions => "Performing actions",
         };
-        turn_info.0 = format!("Turn: {} - {}", turn.turn_number, phase);
-        // text.0 = format!("Turn: {} - {}", turn.turn_number, phase);
+        turn_info.0 = format!("Turn: {} - {}", turn_number.0, phase);
     }
 }
 
@@ -499,6 +418,7 @@ fn update_description_on_changed(
     mut actor_q: Query<
         (
             &Actor,
+            Option<&Active>,
             &Activations,
             &Name,
             &Health,
@@ -507,6 +427,7 @@ fn update_description_on_changed(
             Mut<Description>,
         ),
         Or<(
+            Changed<Active>,
             Changed<Activations>,
             Changed<Health>,
             Changed<Items>,
@@ -514,9 +435,11 @@ fn update_description_on_changed(
         )>,
     >,
 ) {
-    for (_, activations, name, health, protection, items, mut description) in actor_q.iter_mut() {
+    for (_, active, activations, name, health, protection, items, mut description) in
+        actor_q.iter_mut()
+    {
         // println!("UPDATE description of actor {}", name);
-        description.0 = describe_actor(name, health, protection, activations, items);
+        description.0 = describe_actor(name, health, protection, (active, activations), items);
     }
 }
 
@@ -524,19 +447,20 @@ fn describe_actor(
     name: &Name,
     health: &Health,
     protection: &Protection,
-    activations: &Activations,
+    activations: (Option<&Active>, &Activations),
     items: &Items,
 ) -> String {
-    let active_activations_txt = if let Some(activation) = &activations.active() {
+    let active_activations_txt = if let Some(Active(activation)) = activations.0 {
         card_descr(&activation.0)
     } else {
         " - ".to_string()
     };
 
-    let remaining_activations_txt = if activations.remaining().is_empty() {
+    let remaining_activations_txt = if activations.1.remaining().is_empty() {
         " - ".to_string()
     } else {
         activations
+            .1
             .remaining()
             .iter()
             .rev()
@@ -652,58 +576,71 @@ fn card_visual_name(card: &Card) -> String {
     format!("icon-ai-{}-{}", suite, value)
 }
 
-fn update_ui_on_state_change(
-    trigger: Trigger<UiStateTransitionedEvent>,
-    actor_q: Query<(Entity, &Activations), With<Actor>>,
-    activation_indicator_q: Query<Entity, With<ActivationIndicator>>,
+fn update_indicators_when_activation_ended(
+    trigger: Trigger<ActivationEndedEvent>,
+    actor_q: Query<&Activations>,
+    activation_indicator_q: Query<(Entity, &ChildOf), With<ActivationIndicator>>,
     mut commands: Commands,
+) -> Result<(), BevyError> {
+    let ActivationEndedEvent(e) = trigger.event();
+    let activations = actor_q.get(*e)?;
 
-    mut ui_elements_q: Query<Mut<Visibility>, With<UserInputElement>>,
-    mut map_pos_selected_ew: EventWriter<MapPosSelectedEvent>,
-    mut ui_state: ResMut<UiState>,
+    clear_activation_indicator_for(activation_indicator_q, &mut commands, *e);
+    insert_activation_indicator_for_entity(&mut commands, *e, activations, None);
+
+    Ok(())
+}
+
+fn update_indicators_when_activations_changed(
+    actor_q: Query<
+        (Entity, &Activations, Option<&Active>),
+        Or<(Changed<Activations>, Added<Active>)>,
+    >,
+    activation_indicator_q: Query<(Entity, &ChildOf), With<ActivationIndicator>>,
+    mut commands: Commands,
 ) {
-    let UiStateTransitionedEvent(new_ui_state) = trigger.event();
+    for (e, activations, active) in actor_q.iter() {
+        clear_activation_indicator_for(activation_indicator_q, &mut commands, e);
+        insert_activation_indicator_for_entity(&mut commands, e, activations, active);
+    }
+}
 
-    if let UiState::AwaitInput(mpos) = new_ui_state {
-        for mut visibility in ui_elements_q.iter_mut() {
-            *visibility = Visibility::Visible;
-        }
-
-        for (e, activations) in actor_q.iter() {
-            commands.entity(e).with_children(|parent| {
-                if let Some(Activation(card)) = activations.active() {
-                    spawn_activation_indicators(parent, &card, (0.0, 72.0));
-                }
-
-                let num_remaining = activations.remaining().len();
-                let card_size = 32;
-                for (idx, Activation(card)) in activations.remaining().iter().enumerate() {
-                    let offset_x =
-                        (idx * card_size) as f32 - (card_size / 2 * (num_remaining - 1)) as f32;
-
-                    spawn_activation_indicators(parent, card, (offset_x, -48.0));
-                }
-            });
-        }
-
-        map_pos_selected_ew.write(MapPosSelectedEvent(*mpos));
-    } else {
-        if let UiState::AwaitInput(..) = ui_state.as_ref() {
-            for mut visibility in ui_elements_q.iter_mut() {
-                *visibility = Visibility::Hidden;
-            }
-        }
-        for e in activation_indicator_q.iter() {
-            commands.entity(e).insert(MarkedForDeath);
+fn clear_activation_indicator_for(
+    activation_indicator_q: Query<'_, '_, (Entity, &ChildOf), With<ActivationIndicator>>,
+    commands: &mut Commands<'_, '_>,
+    e: Entity,
+) {
+    for (child_entity, child_of) in activation_indicator_q.iter() {
+        if child_of.parent() == e {
+            commands.entity(child_entity).insert(MarkedForDeath);
         }
     }
+}
 
-    *ui_state.as_mut() = new_ui_state.clone();
+fn insert_activation_indicator_for_entity(
+    commands: &mut Commands,
+    entity: Entity,
+    activations: &Activations,
+    active: Option<&Active>,
+) {
+    commands.entity(entity).with_children(|parent| {
+        if let Some(Active(Activation(card))) = active {
+            spawn_activation_indicators(parent, &card, (0.0, 72.0));
+        }
+
+        let num_remaining = activations.remaining().len();
+        let card_size = 32;
+        for (idx, Activation(card)) in activations.remaining().iter().enumerate() {
+            let offset_x = (idx * card_size) as f32 - (card_size / 2 * (num_remaining - 1)) as f32;
+
+            spawn_activation_indicators(parent, card, (offset_x, -48.0));
+        }
+    });
 }
 
 pub fn update_action_buttons(
     mut commands: Commands,
-    player_actions: Res<SelectedMapPos>,
+    player_actions: Option<Res<PossibleUserActions>>,
     button_container_q: Query<Entity, With<ActionButtonContainer>>,
 ) {
     let Ok(container_entity) = button_container_q.single() else {
@@ -716,48 +653,51 @@ pub fn update_action_buttons(
         .entity(container_entity)
         .despawn_related::<Children>();
 
-    commands.entity(container_entity).with_children(|parent| {
-        for (idx, action) in player_actions.available_actions.iter().enumerate() {
-            let (background_color, border_color) = if idx == player_actions.selected_action {
-                (WINDOW_BACKGROUND_HL, RED_100.into())
-            } else {
-                (WINDOW_BACKGROUND, Color::BLACK)
-            };
+    if let Some(player_actions) = player_actions {
+        commands.entity(container_entity).with_children(|parent| {
+            for (idx, action) in player_actions.available_actions().enumerate() {
+                let (background_color, border_color) =
+                    if idx == player_actions.get_selected_action_index() {
+                        (WINDOW_BACKGROUND_HL, RED_100.into())
+                    } else {
+                        (WINDOW_BACKGROUND, Color::BLACK)
+                    };
 
-            let txt = button_text_for_action(action);
+                let txt = button_text_for_action(action);
 
-            parent
-                .spawn((
-                    Name::new(format!("Button [{}]", txt)),
-                    BackgroundColor(background_color),
-                    BorderColor(border_color),
-                    Node {
-                        display: Display::Block,
-                        width: Val::Percent(100.0),
-                        border: UiRect::all(Val::Px(3.0)),
-                        margin: UiRect::vertical(Val::Px(5.0)),
-                        padding: UiRect::all(Val::Px(10.0)),
-                        ..Default::default()
-                    },
-                    OnCombatState,
-                    UserInputElement,
-                    ActionTrigger {
-                        index: idx,
-                        action: action.clone(),
-                    },
-                ))
-                .with_children(|button| {
-                    button.spawn(text(txt, TextStyle::UiNormal));
-                });
-        }
-    });
+                parent
+                    .spawn((
+                        Name::new(format!("Button [{}]", txt)),
+                        BackgroundColor(background_color),
+                        BorderColor(border_color),
+                        Node {
+                            display: Display::Block,
+                            width: Val::Percent(100.0),
+                            border: UiRect::all(Val::Px(3.0)),
+                            margin: UiRect::vertical(Val::Px(5.0)),
+                            padding: UiRect::all(Val::Px(10.0)),
+                            ..Default::default()
+                        },
+                        OnCombatState,
+                        UserInputElement,
+                        ActionTrigger {
+                            index: idx,
+                            action: action.clone(),
+                        },
+                    ))
+                    .with_children(|button| {
+                        button.spawn(text(txt, TextStyle::UiNormal));
+                    });
+            }
+        });
+    }
 }
 
 fn button_text_for_action(action: &Action) -> String {
     match action {
         Action::MoveAlong { .. } => "Move",
         Action::Attack(AttackData { name, .. }) => name,
-        Action::NoOp => "Do Nothing",
+        Action::NoOp(..) => "Do Nothing",
         Action::EndPlanningPhase(..) => "Start the Action",
         Action::AssignActivation { .. } => "Assign Activation",
     }
@@ -828,9 +768,9 @@ pub fn handle_combat_finished_event(
 fn update_player_hand_window(
     mut commands: Commands,
     player_hand_window_q: Query<(Entity, &Children, &Team), With<PlayerHandWindow>>,
-    hand_q: Query<(Entity, &Hand, &PlayerControlled), Changed<Hand>>,
+    hand_q: Query<(Entity, &Hand, &Controller), Changed<Hand>>,
 ) -> Result<(), BevyError> {
-    for (team, hand, PlayerControlled(is_player)) in hand_q.iter() {
+    for (team, hand, Controller(is_player)) in hand_q.iter() {
         if !*is_player {
             continue;
         }
@@ -845,7 +785,6 @@ fn update_player_hand_window(
             commands.spawn((
                 Name::new("PlayerHandWindow"),
                 BackgroundColor(WINDOW_BACKGROUND_TANSPARENT.into()),
-                Visibility::Hidden,
                 BorderRadius::all(Val::Px(5.)),
                 Node {
                     position_type: PositionType::Absolute,
