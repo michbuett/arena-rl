@@ -5,13 +5,13 @@ use bevy::prelude::*;
 use crate::{
     assets::Visual,
     core::{
-        ActionTemplates, ActorTemplate, ActorTemplates, AttackOption, Attacks, Deck, Effect, Feat,
+        ActorTemplate, ActorTemplates, AttackOption, AttackTemplates, Attacks, Deck, Effect, Feat,
         Feats, Health, Item, ItemState, Items, ProgressCheck, Protection, Resistance,
     },
 };
 
 pub fn setup_generators(
-    action_templates_assets: Res<Assets<ActionTemplates>>,
+    action_templates_assets: Res<Assets<AttackTemplates>>,
     actor_templates_assets: Res<Assets<ActorTemplates>>,
     feats_assets: Res<Assets<Feats>>,
     mut commands: Commands,
@@ -32,7 +32,7 @@ pub struct ActorGenerator {
 
 impl ActorGenerator {
     pub fn new(
-        action_templates_assets: &Res<Assets<ActionTemplates>>,
+        action_templates_assets: &Res<Assets<AttackTemplates>>,
         actor_templates_assets: &Res<Assets<ActorTemplates>>,
         feats_assets: &Res<Assets<Feats>>,
     ) -> Self {
@@ -40,7 +40,8 @@ impl ActorGenerator {
             action_templates_assets
                 .iter()
                 .flat_map(|(_, fl)| fl.0.iter())
-                .cloned(),
+                .cloned()
+                .map(|(key, aot)| (key.to_string(), aot.into_attack_option())),
         );
 
         let actor_templates: HashMap<String, ActorTemplate> = HashMap::from_iter(

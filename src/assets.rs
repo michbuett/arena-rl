@@ -2,7 +2,7 @@ mod sprites;
 
 use crate::{
     GameState,
-    core::{ActionTemplates, ActorTemplates, Feats},
+    core::{ActorTemplates, AttackTemplates, Feats},
 };
 use bevy::{
     asset::{AssetLoader, LoadContext, LoadState, io::Reader, ron},
@@ -92,11 +92,11 @@ struct AllAssetsLoadedEvent;
 pub fn assets_plugin(app: &mut App) {
     app.add_event::<AssetLoadedEvent>()
         .add_event::<AllAssetsLoadedEvent>()
-        .init_asset::<ActionTemplates>()
+        .init_asset::<AttackTemplates>()
         .init_asset::<ActorTemplates>()
         .init_asset::<RawSpriteConfig>()
         .init_asset::<Feats>()
-        .register_asset_loader(DataAssetLoader::<ActionTemplates>::new("actions.ron"))
+        .register_asset_loader(DataAssetLoader::<AttackTemplates>::new("actions.ron"))
         .register_asset_loader(DataAssetLoader::<ActorTemplates>::new("actors.ron"))
         .register_asset_loader(DataAssetLoader::<RawSpriteConfig>::new("sprites.ron"))
         .register_asset_loader(DataAssetLoader::<Feats>::new("feats.ron"))
@@ -126,7 +126,7 @@ fn load_data_files(mut commands: Commands, asset_server: Res<AssetServer>) {
         Loading,
         AssetHandle(
             asset_server
-                .load::<ActionTemplates>("data/main.actions.ron")
+                .load::<AttackTemplates>("data/main.actions.ron")
                 .untyped(),
         ),
     ));

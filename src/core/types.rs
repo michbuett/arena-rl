@@ -1,8 +1,7 @@
 use bevy::{asset::Asset, prelude::*, reflect::TypePath};
 use serde::Deserialize;
-use std::cmp::max;
 
-use super::Card;
+use super::{Card, DC, Suite};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize)]
 pub enum AttributeType {
@@ -10,11 +9,6 @@ pub enum AttributeType {
     PhysicalAg,
     MentalStr,
     MentalAg,
-    Physical,
-    Mental,
-    Strength,
-    Agility,
-    Any,
 }
 
 #[derive(Debug, Clone, Copy, Component, Deserialize)]
@@ -22,47 +16,179 @@ pub struct Attributes {
     pub physical_strength: i8,
     pub physical_agility: i8,
     pub mental_strength: i8,
-    pub methal_agility: i8,
+    pub mental_agility: i8,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct EffectiveAttributes(pub Attributes);
+
 impl Attributes {
-    pub fn get(&self, attr: AttributeType) -> i8 {
-        use AttributeType::*;
-        match attr {
-            PhysicalStr => self.physical_strength,
-            PhysicalAg => self.physical_agility,
-            MentalStr => self.mental_strength,
-            MentalAg => self.methal_agility,
-            Strength => max(self.physical_strength, self.mental_strength),
-            Agility => max(self.physical_agility, self.methal_agility),
-            Physical => max(self.physical_strength, self.physical_agility),
-            Mental => max(self.mental_strength, self.methal_agility),
-            Any => max(self.get(Physical), self.get(Mental)),
+    pub fn action_mod(mut self, card: &Card, modifier: i8) -> Self {
+        match card.suite() {
+            Suite::Clubs => {
+                self.physical_strength += modifier;
+            }
+            Suite::Spades => {
+                self.physical_agility += modifier;
+            }
+            Suite::Hearts => {
+                self.mental_strength += modifier;
+            }
+            Suite::Diamonds => {
+                self.mental_agility += modifier;
+            }
         }
+        self
+    }
+
+    pub fn effectiv_attributes(&self, health: &Health) -> EffectiveAttributes {
+        let mut result = *self;
+        for card in health.wounds.iter() {
+            result = result.action_mod(card, -1);
+        }
+        EffectiveAttributes(result)
     }
 }
 
 #[derive(Debug, Clone, Deserialize, Asset, TypePath)]
-pub struct ActionTemplates(pub Vec<(String, AttackOption)>);
-
-#[derive(Debug, Clone, Deserialize, Asset, TypePath)]
 pub struct ActorTemplates(pub Vec<(String, ActorTemplate)>);
 
+#[derive(Debug, Clone, Deserialize, Asset, TypePath)]
+pub struct AttackTemplates(pub Vec<(String, AttackOptionTemplate)>);
+
+#[derive(Debug, Clone, Copy)]
+pub struct AttributeRequirements([i8; 4]);
+impl AttributeRequirements {
+    fn dc_mod(&self, attributes: &Attributes) -> i32 {
+        let y = [
+            attributes.physical_strength,
+            attributes.physical_agility,
+            attributes.mental_strength,
+            attributes.mental_agility,
+        ];
+
+        self.0
+            .iter()
+            .zip(y.iter())
+            .map(|(req_attr_val, eff_val)| {
+                if eff_val < req_attr_val {
+                    1
+                } else if *req_attr_val > 0 && eff_val > req_attr_val {
+                    -1
+                } else {
+                    0
+                }
+            })
+            .sum::<i32>()
+            .clamp(i32::MIN, 1)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EffortRequirements(i8, i8);
+impl EffortRequirements {
+    fn dc_mod(&self, effort: &Card) -> i32 {
+        let EffortRequirements(req_effort_min, req_effort_max) = self;
+        let effort_val = effort.value_high() as i8;
+
+        if effort_val < *req_effort_min {
+            1
+        } else if effort_val >= *req_effort_max {
+            -1
+        } else {
+            0
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ActionCheck {
+    pub req_attributes: AttributeRequirements,
+    pub req_effort: EffortRequirements,
+    pub risk_complication: bool,
+}
+
+impl ActionCheck {
+    pub fn difficulty(&self, effort: &Card, attributes: &Attributes) -> DC {
+        let result = 8 + self.req_effort.dc_mod(effort) + self.req_attributes.dc_mod(attributes);
+        DC(result.clamp(0, 20) as u8)
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
-pub enum AttackOption {
+pub enum AttackOptionTemplate {
     MeleeAttack {
         name: String,
-        attribute: AttributeType,
         damage: u8,
         penetration: u8,
-        difficulty: u8,
+        req_attributes: Vec<(AttributeType, i8)>,
+        req_effort: (Option<i8>, Option<i8>),
     },
+}
+
+impl AttackOptionTemplate {
+    pub fn into_attack_option(self) -> AttackOption {
+        match self {
+            AttackOptionTemplate::MeleeAttack {
+                name,
+                damage,
+                penetration,
+                req_attributes,
+                req_effort,
+            } => {
+                let mut ra = [i8::MIN; 4];
+
+                for (attr, min) in req_attributes.iter() {
+                    match attr {
+                        AttributeType::PhysicalStr => ra[0] = *min,
+                        AttributeType::PhysicalAg => ra[1] = *min,
+                        AttributeType::MentalStr => ra[2] = *min,
+                        AttributeType::MentalAg => ra[3] = *min,
+                    }
+                }
+
+                AttackOption {
+                    name,
+                    target_type: AttackTargetType::MeleeSingle,
+                    data: AttackData {
+                        damage,
+                        penetration,
+                        req_attributes: AttributeRequirements(ra),
+                        req_effort: EffortRequirements(
+                            req_effort.0.unwrap_or(i8::MIN),
+                            req_effort.1.unwrap_or(i8::MAX),
+                        ),
+                    },
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AttackData {
+    pub damage: u8,
+    pub penetration: u8,
+    pub req_attributes: AttributeRequirements,
+    pub req_effort: EffortRequirements,
+}
+
+#[derive(Debug, Clone)]
+pub enum AttackTargetType {
+    MeleeSingle,
+}
+
+#[derive(Debug, Clone)]
+pub struct AttackOption {
+    pub name: String,
+    pub data: AttackData,
+    pub target_type: AttackTargetType,
 }
 
 impl AttackOption {
     pub fn can_attack(&self, distance: i32) -> bool {
-        match self {
-            AttackOption::MeleeAttack { .. } => distance == 1,
+        match self.target_type {
+            AttackTargetType::MeleeSingle => distance == 1,
         }
     }
 }
@@ -163,40 +289,5 @@ impl Health {
 
     pub fn is_alive(&self) -> bool {
         self.max_health > self.damage_total()
-    }
-
-    pub fn current_attribute_values(&self, base_values: Attributes) -> Attributes {
-        use crate::core::Suite;
-
-        let Attributes {
-            mut physical_strength,
-            mut physical_agility,
-            mut mental_strength,
-            mut methal_agility,
-        } = base_values;
-
-        for card in self.wounds.iter() {
-            match card.suite() {
-                Suite::Clubs => {
-                    physical_strength -= 1;
-                }
-                Suite::Spades => {
-                    physical_agility -= 1;
-                }
-                Suite::Hearts => {
-                    mental_strength -= 1;
-                }
-                Suite::Diamonds => {
-                    methal_agility -= 1;
-                }
-            }
-        }
-
-        Attributes {
-            physical_strength,
-            physical_agility,
-            mental_strength,
-            methal_agility,
-        }
     }
 }

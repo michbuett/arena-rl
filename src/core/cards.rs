@@ -1,6 +1,5 @@
 extern crate rand;
 
-use super::AttributeType;
 use bevy::ecs::component::Component;
 use rand::prelude::*;
 use serde::Deserialize;
@@ -14,24 +13,24 @@ pub enum Suite {
     Diamonds,
 }
 
-impl Suite {
-    pub fn matches(&self, attr: &AttributeType) -> bool {
-        use AttributeType::*;
-        use Suite::*;
+// impl Suite {
+//     pub fn matches(&self, attr: &AttributeType) -> bool {
+//         use AttributeType::*;
+//         use Suite::*;
 
-        match attr {
-            PhysicalStr => matches!(self, Clubs),
-            PhysicalAg => matches!(self, Spades),
-            MentalStr => matches!(self, Hearts),
-            MentalAg => matches!(self, Diamonds),
-            Physical => matches!(self, Clubs) || matches!(self, Spades),
-            Mental => matches!(self, Hearts) || matches!(self, Diamonds),
-            Strength => matches!(self, Clubs) || matches!(self, Hearts),
-            Agility => matches!(self, Spades) || matches!(self, Diamonds),
-            Any => true,
-        }
-    }
-}
+//         match attr {
+//             PhysicalStr => matches!(self, Clubs),
+//             PhysicalAg => matches!(self, Spades),
+//             MentalStr => matches!(self, Hearts),
+//             MentalAg => matches!(self, Diamonds),
+//             Physical => matches!(self, Clubs) || matches!(self, Spades),
+//             Mental => matches!(self, Hearts) || matches!(self, Diamonds),
+//             Strength => matches!(self, Clubs) || matches!(self, Hearts),
+//             Agility => matches!(self, Spades) || matches!(self, Diamonds),
+//             Any => true,
+//         }
+//     }
+// }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CardValue {

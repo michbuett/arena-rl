@@ -7,13 +7,13 @@
             physical_strength: 0,
             physical_agility: 2,
             mental_strength: -1,
-            methal_agility: -1,
+            mental_agility: -1,
         )
     )),
 
     ("player", (
         name: "Player",
-        attacks: ["melee-attack-sword-01"],
+        attacks: ["melee-attack-sword-01", "melee-attack-sword-02"],
         visual: [
             "body-heavy_1",
             "head-heavy_1",
@@ -23,7 +23,7 @@
             physical_strength: 2,
             physical_agility: 1,
             mental_strength: 0,
-            methal_agility: 0,
+            mental_agility: 0,
         ),
         feats: Some(["armor-body-medium"]),
     )),

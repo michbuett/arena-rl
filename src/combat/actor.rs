@@ -5,8 +5,8 @@ use rand::seq::IteratorRandom;
 use rand::thread_rng;
 
 use crate::core::{
-    AttackOption, Attacks, AttributeType, Attributes, Card, FeatSource, Hand, Health, ItemState,
-    Items, Protection, Suite,
+    AttackData, AttackOption, AttackTargetType, Attacks, Attributes, Card, FeatSource, Hand,
+    Health, ItemState, Items, Protection,
 };
 
 use super::GameDeck;
@@ -33,6 +33,7 @@ pub struct TeamBundle {
     player_controlled: Controller,
     ready: TeamReady,
 }
+
 impl TeamBundle {
     pub fn new(name: impl Into<Name>, is_pc: bool) -> Self {
         Self {
@@ -63,52 +64,40 @@ impl Actor {
 }
 
 #[derive(Debug, Clone, Component)]
-pub struct Active(pub Activation);
-
-#[derive(Debug, Clone, Copy)]
-pub struct Activation(pub Card);
-
-impl Activation {
-    pub fn speed(&self) -> u8 {
-        self.0.value_high()
-    }
-
-    pub fn difficulty(&self) -> u8 {
-        self.0.value_low()
-    }
-
-    pub fn suite(&self) -> Suite {
-        self.0.suite()
-    }
-}
+pub struct Active(pub Card);
 
 #[derive(Component, Debug)]
 pub struct Activations {
-    remaining: Vec<Activation>,
+    remaining: Vec<Card>,
 }
 
 impl Activations {
     pub fn next_activation_initiative(&self) -> Option<u8> {
-        self.remaining.iter().map(|a| a.speed()).max()
+        self.remaining.iter().map(|card| card.value_low()).min()
     }
 
-    pub fn activate_next(&mut self) -> Activation {
-        self.remaining.pop().unwrap()
+    pub fn activate_next(&mut self) -> Card {
+        assert!(!self.remaining.is_empty());
+
+        let (index, _) = self
+            .remaining
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, c)| c.value_low())
+            .unwrap();
+
+        self.remaining.remove(index)
     }
 
     pub fn add_card(&mut self, card: Card) {
-        self.remaining.push(Activation(card));
-        self.remaining
-            .sort_unstable_by(|a1, a2| a1.speed().cmp(&a2.speed()));
+        self.remaining.push(card);
     }
 
-    pub fn refresh(&mut self, mut new_activations: Vec<Card>) {
-        self.remaining = new_activations.drain(..).map(|c| Activation(c)).collect();
-        self.remaining
-            .sort_unstable_by(|a1, a2| a1.speed().cmp(&a2.speed()));
+    pub fn refresh(&mut self, new_activations: Vec<Card>) {
+        self.remaining = new_activations;
     }
 
-    pub fn remaining(&self) -> &[Activation] {
+    pub fn remaining(&self) -> &[Card] {
         &self.remaining
     }
 }
@@ -121,9 +110,7 @@ pub struct ActorBundle {
     pub team: Team,
     pub play_controlled: Controller,
     pub map_pos: MapPos,
-    // pub visual: Visual,
     pub activations: Activations,
-    // pub health: Health,
     pub obstacle: Obstacle,
     pub transform: Transform,
     pub global_transform: GlobalTransform,
@@ -227,7 +214,7 @@ pub struct ActorActivatedEvent(pub Entity);
 pub struct MoveToCommand(Entity, Vec<MapPos>);
 
 #[derive(Debug, Event)]
-pub struct AttackCommand(AttackData);
+pub struct AttackCommand(AttackCommandData);
 
 #[derive(Debug, Event)]
 pub struct AssignActivationCommand {
@@ -236,15 +223,13 @@ pub struct AssignActivationCommand {
 }
 
 #[derive(Debug, Clone)]
-pub struct AttackData {
+pub struct AttackCommandData {
     pub attacker: Entity,
     pub target: AttackTarget,
     pub name: String,
-    pub attribute: AttributeType,
-    pub damage: u8,
-    pub penetration: u8,
-    pub activation: Activation,
-    pub difficulty: u8,
+    pub activation: Card,
+    pub risk_complication: bool,
+    pub data: AttackData,
 }
 
 #[derive(Debug, Clone)]
@@ -252,30 +237,25 @@ pub enum AttackTarget {
     MeleeAttack { target: Entity },
 }
 
-impl AttackData {
+impl AttackCommandData {
     pub fn new(
         attacker: Entity,
         target: Entity,
         attack_template: &AttackOption,
-        activation: Activation,
+        activation: Card,
+        risky: bool,
     ) -> Self {
-        match attack_template {
-            AttackOption::MeleeAttack {
-                name,
-                attribute,
-                damage,
-                penetration,
-                difficulty,
-            } => Self {
-                attacker,
-                target: AttackTarget::MeleeAttack { target },
-                name: name.clone(),
-                attribute: *attribute,
-                damage: *damage,
-                penetration: *penetration,
-                difficulty: *difficulty,
-                activation,
-            },
+        let target = match attack_template.target_type {
+            AttackTargetType::MeleeSingle => AttackTarget::MeleeAttack { target },
+        };
+
+        Self {
+            attacker,
+            target,
+            name: attack_template.name.clone(),
+            activation,
+            risk_complication: risky,
+            data: attack_template.data,
         }
     }
 }
@@ -284,7 +264,7 @@ impl AttackData {
 pub enum Action {
     NoOp(Entity),
     MoveAlong { actor: Entity, path: Vec<MapPos> },
-    Attack(AttackData),
+    Attack(AttackCommandData),
     EndPlanningPhase(Team),
     AssignActivation { actor: Entity, card_index: usize },
 }
@@ -402,7 +382,13 @@ pub fn collect_actions_for_performin_actions(
 
                 for attack_option in attacks.0.iter() {
                     if attack_option.can_attack(distance) {
-                        let attack = AttackData::new(entity, target, attack_option, activation);
+                        let attack = AttackCommandData::new(
+                            entity,
+                            target,
+                            attack_option,
+                            activation,
+                            false,
+                        );
                         actions.push((Some(hex), Action::Attack(attack)));
                     }
                 }
@@ -444,7 +430,7 @@ pub fn collect_actions_for_performin_actions(
 
 fn find_active_player_actor(
     active_actor_q: &Query<(Entity, &Active, &Controller, &MapPos, &Team, &Attacks), With<Actor>>,
-) -> Option<(Entity, MapPos, Team, Attacks, Activation)> {
+) -> Option<(Entity, MapPos, Team, Attacks, Card)> {
     for (entity, Active(activation), controller, map_pos, team, attacks) in active_actor_q.iter() {
         if controller.is_pc() {
             return Some((entity, *map_pos, *team, attacks.clone(), *activation));
@@ -597,23 +583,19 @@ pub fn handle_attack_command(
 
             let combat_result = handle_attack(
                 Attack {
-                    speed: attack.activation,
-                    attribute: attack.attribute,
-                    damage: attack.damage,
-                    penetration: attack.penetration,
-                    difficulty: attack.difficulty,
+                    effort: attack.activation,
+                    risky_complication: attack.risk_complication,
                     attacker: Combatant {
                         id: attacker,
-                        attributes: *attributes_a,
-                        health: health_a.clone(),
+                        attributes: attributes_a.effectiv_attributes(health_a),
                         protection: protection_a.clone(),
                     },
                     target: Target::SingleMelee(Combatant {
                         id: *target,
-                        attributes: *attributes_t,
-                        health: health_t.clone(),
+                        attributes: attributes_t.effectiv_attributes(health_t),
                         protection: protection_t.clone(),
                     }),
+                    data: attack.data.clone(),
                 },
                 &mut deck.0,
             );

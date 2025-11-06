@@ -8,14 +8,14 @@ use crate::style::{TextStyle, WINDOW_BACKGROUND_HL, WINDOW_BACKGROUND_TANSPARENT
 use crate::{GameState, style::WINDOW_BACKGROUND};
 
 use super::actor::{
-    ActivationEndedEvent, Active, AttackData, CombatFinishedEvent, Controller, PossibleUserActions,
-    Team,
+    ActivationEndedEvent, Active, AttackCommandData, CombatFinishedEvent, Controller,
+    PossibleUserActions, Team,
 };
 use super::combat_resolution::CombatConsequence;
 use super::fx::FxRunning;
 use super::{
     OnCombatState, ScrollBounds, Visual,
-    actor::{Action, Activation, Activations, Actor},
+    actor::{Action, Activations, Actor},
     flow::{TurnNumber, TurnPhase},
     map::{HexMap, MapPos},
 };
@@ -450,8 +450,8 @@ fn describe_actor(
     activations: (Option<&Active>, &Activations),
     items: &Items,
 ) -> String {
-    let active_activations_txt = if let Some(Active(activation)) = activations.0 {
-        card_descr(&activation.0)
+    let active_activations_txt = if let Some(Active(activation_card)) = activations.0 {
+        card_descr(&activation_card)
     } else {
         " - ".to_string()
     };
@@ -464,7 +464,7 @@ fn describe_actor(
             .remaining()
             .iter()
             .rev()
-            .map(|a| card_descr(&a.0))
+            .map(card_descr)
             .collect::<Vec<_>>()
             .join(", ")
     };
@@ -624,13 +624,13 @@ fn insert_activation_indicator_for_entity(
     active: Option<&Active>,
 ) {
     commands.entity(entity).with_children(|parent| {
-        if let Some(Active(Activation(card))) = active {
+        if let Some(Active(card)) = active {
             spawn_activation_indicators(parent, &card, (0.0, 72.0));
         }
 
         let num_remaining = activations.remaining().len();
         let card_size = 32;
-        for (idx, Activation(card)) in activations.remaining().iter().enumerate() {
+        for (idx, card) in activations.remaining().iter().enumerate() {
             let offset_x = (idx * card_size) as f32 - (card_size / 2 * (num_remaining - 1)) as f32;
 
             spawn_activation_indicators(parent, card, (offset_x, -48.0));
@@ -696,7 +696,7 @@ pub fn update_action_buttons(
 fn button_text_for_action(action: &Action) -> String {
     match action {
         Action::MoveAlong { .. } => "Move",
-        Action::Attack(AttackData { name, .. }) => name,
+        Action::Attack(AttackCommandData { name, .. }) => name,
         Action::NoOp(..) => "Do Nothing",
         Action::EndPlanningPhase(..) => "Start the Action",
         Action::AssignActivation { .. } => "Assign Activation",
@@ -727,7 +727,9 @@ pub fn handle_combat_finished_event(
             .map({
                 |(_, c)| match c {
                     CombatConsequence::ArmorBreak => "Armor -1".to_string(),
-                    CombatConsequence::ClumsyAttack => "Fumble".to_string(),
+                    CombatConsequence::ClumsyAttack => {
+                        format!("{} was thrown off balance", attacker_name)
+                    }
                     CombatConsequence::Wound { damage } => {
                         let dmg: u8 = damage.iter().map(|c| c.value_high()).sum();
                         format!("Hit for {} damage", dmg)

@@ -1,46 +1,62 @@
-use super::{AttributeType, Attributes, Card, Deck};
+use super::{ActionCheck, Card, Deck, EffectiveAttributes};
 
-#[derive(Clone, Debug)]
-pub struct SkillCheck {
-    pub target_number: u8,
-    pub attribute: AttributeType,
+pub enum Complication {
+    None,
+    Minor,
+    Major,
 }
 
-impl SkillCheck {
-    pub fn perform_check(self, deck: &mut Deck, attr_values: &Attributes) -> SkillCheckResult {
-        let av = attr_values.get(self.attribute);
-        let flip = deck.deal();
-        let result = (flip.value_low() as i8 + av).try_into().unwrap_or(0);
-
-        SkillCheckResult {
-            // flip,
-            result,
-            // attr_values: *attr_values,
-            check: self,
+impl Complication {
+    fn increase(self) -> Self {
+        match self {
+            Self::None => Self::Minor,
+            _ => Self::Major,
         }
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct SkillCheckResult {
-    check: SkillCheck,
-    // attr_values: AttributeValues,
-    result: u8,
-    // flip: Card,
+#[derive(Debug)]
+pub struct DC(pub u8);
+
+pub struct CheckResult {
+    // pub cards: Vec<Card>,
+    pub success: bool,
+    pub complication: Complication,
 }
 
-impl SkillCheckResult {
-    pub fn is_success(&self) -> bool {
-        self.result >= self.check.target_number
+pub fn perform_action_check(
+    action: ActionCheck,
+    effort: Card,
+    attributes: &EffectiveAttributes,
+    deck: &mut Deck,
+) -> CheckResult {
+    println!(
+        "[DEBUG] perform_action_check - action={:?}, effort={:?}, attributes={:?}",
+        action, effort, attributes
+    );
+
+    let flip = deck.deal();
+    let effective_attributes = attributes.0.action_mod(&effort, 1).action_mod(&flip, 1);
+    let dc = action.difficulty(&effort, &effective_attributes);
+    let mut action_quality = flip.value_high();
+    let mut complication = Complication::None;
+
+    if action.risk_complication && action_quality < dc.0 {
+        let bonus_flip = deck.deal();
+        if bonus_flip.value_high() > action_quality {
+            action_quality += bonus_flip.value_high();
+        }
+        complication = complication.increase();
     }
 
-    // pub fn magnitude(&self) -> u8 {
-    //     (self.result as i16 - self.check.target_number as i16).unsigned_abs() as u8
-    // }
+    let success = action_quality >= dc.0;
 
-    // pub fn result(&self) -> u8 {
-    //     self.result
-    // }
+    println!("\t - dc={:?}, flip={:?}, success={:?}", dc, flip, success);
+
+    CheckResult {
+        success,
+        complication,
+    }
 }
 
 #[derive(Debug)]

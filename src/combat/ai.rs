@@ -4,7 +4,8 @@ use crate::core::Attacks;
 
 use super::{
     actor::{
-        Action, ActionTriggeredEvent, Active, ActorActivatedEvent, AttackData, Controller, Team,
+        Action, ActionTriggeredEvent, Active, ActorActivatedEvent, AttackCommandData, Controller,
+        Team,
     },
     map::{HexMap, MapPos, Path},
 };
@@ -51,12 +52,9 @@ fn choose_ai_action(
         // 1. check if actor can attack an enemy
         for attack_template in attacks.0.iter() {
             if attack_template.can_attack(p.len() as i32 - 1) {
-                commands.trigger(ActionTriggeredEvent(Action::Attack(AttackData::new(
-                    *actor,
-                    target,
-                    attack_template,
-                    *activation,
-                ))));
+                commands.trigger(ActionTriggeredEvent(Action::Attack(
+                    AttackCommandData::new(*actor, target, attack_template, *activation, false),
+                )));
                 return Ok(());
             }
         }

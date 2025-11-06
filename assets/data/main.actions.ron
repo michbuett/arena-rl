@@ -1,16 +1,16 @@
 ([
     ("melee-attack-bite-01", MeleeAttack(
         name: "Bite",
-        attribute: PhysicalStr,
         damage: 1,
         penetration: 0,
-        difficulty: 3,
+        req_attributes: [(PhysicalStr, 1)], 
+        req_effort: (Some(5), Some(9)),
     )),
     ("melee-attack-sword-01", MeleeAttack(
         name: "Swing Sword",
-        attribute: PhysicalStr,
         damage: 2,
         penetration: 0,
-        difficulty: 5,
+        req_attributes: [(PhysicalStr, 2)], 
+        req_effort: (Some(6), Some(10)),
     )),
 ])

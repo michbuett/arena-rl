@@ -1,22 +1,19 @@
-use std::cmp::{max, min};
+// use std::cmp::{max, min};
 
 use bevy::prelude::Entity;
 
 use crate::core::{
-    AttributeType, Attributes, Card, Deck, Health, ProgressCheckNew, Protection, SkillCheck,
+    ActionCheck, AttackData, Card, Complication, Deck, EffectiveAttributes, ProgressCheckNew,
+    Protection, perform_action_check,
 };
-
-use super::actor::Activation;
 
 #[derive(Debug)]
 pub struct Attack {
-    pub speed: Activation,
-    pub attribute: AttributeType,
-    pub difficulty: u8,
-    pub damage: u8,
-    pub penetration: u8,
+    pub effort: Card,
     pub attacker: Combatant,
     pub target: Target,
+    pub risky_complication: bool,
+    pub data: AttackData,
 }
 
 #[derive(Debug)]
@@ -27,8 +24,7 @@ pub enum Target {
 #[derive(Debug)]
 pub struct Combatant {
     pub id: Entity,
-    pub attributes: Attributes,
-    pub health: Health,
+    pub attributes: EffectiveAttributes,
     pub protection: Protection,
 }
 
@@ -42,7 +38,7 @@ pub enum CombatConsequence {
     /// Makes you more vulnarable (e.g. for counter attacks)
     // TODO: Stumble,
 
-    /// Makes your attack easier to be avoided
+    /// A clumsy attack thows you off balance
     ClumsyAttack,
 
     ArmorBreak,
@@ -63,74 +59,33 @@ pub fn handle_attack(attack: Attack, deck: &mut Deck) -> CombatResult {
 
 pub fn handle_melee_attack(attack: &Attack, target: &Combatant, deck: &mut Deck) -> CombatResult {
     let mut result: CombatResult = vec![];
-    let fumble_effect = perform_quality_check(&attack, deck);
-    let hit_effect = perform_hit_check(&attack, &target.protection, deck, &fumble_effect);
+    let check = ActionCheck {
+        req_attributes: attack.data.req_attributes,
+        req_effort: attack.data.req_effort,
+        risk_complication: attack.risky_complication,
+    };
 
-    if let Some(c) = fumble_effect {
-        result.push((attack.attacker.id, c));
+    let quality_check_result =
+        perform_action_check(check, attack.effort, &attack.attacker.attributes, deck);
+
+    match quality_check_result.complication {
+        Complication::None => {}
+        _ => {
+            result.push((attack.attacker.id, CombatConsequence::ClumsyAttack));
+        }
     }
+
+    let hit_effect = if quality_check_result.success {
+        determine_damage(attack, &target.protection, deck)
+    } else {
+        vec![]
+    };
 
     for c in hit_effect {
         result.push((target.id, c));
     }
 
     result
-}
-
-fn perform_quality_check(attack: &Attack, deck: &mut Deck) -> Option<CombatConsequence> {
-    let target_number = if attack.speed.suite().matches(&attack.attribute) {
-        min(attack.difficulty, attack.speed.difficulty())
-    } else {
-        max(attack.difficulty, attack.speed.difficulty())
-    };
-
-    let fumble_check = SkillCheck {
-        attribute: attack.attribute,
-        target_number,
-    };
-
-    let attributes = attack
-        .attacker
-        .health
-        .current_attribute_values(attack.attacker.attributes);
-    let fumble_result = fumble_check.perform_check(deck, &attributes);
-    if !fumble_result.is_success() {
-        Some(CombatConsequence::ClumsyAttack)
-    } else {
-        None
-    }
-}
-
-const TO_HIT_DIFFICULY_DEFAULT: u8 = 7;
-const TO_HIT_DIFFICULY_HARD: u8 = 9;
-
-fn perform_hit_check(
-    attack: &Attack,
-    protection: &Protection,
-    deck: &mut Deck,
-    fumble_effect: &Option<CombatConsequence>,
-) -> Vec<CombatConsequence> {
-    let target_number = if matches!(fumble_effect, Some(CombatConsequence::ClumsyAttack)) {
-        TO_HIT_DIFFICULY_HARD
-    } else {
-        TO_HIT_DIFFICULY_DEFAULT
-    };
-
-    let hit_check = SkillCheck {
-        target_number,
-        attribute: attack.attribute,
-    };
-
-    let attributes = attack
-        .attacker
-        .health
-        .current_attribute_values(attack.attacker.attributes);
-    let hit_result = hit_check.perform_check(deck, &attributes);
-    if hit_result.is_success() {
-        determine_damage(attack, protection, deck)
-    } else {
-        vec![]
-    }
 }
 
 fn determine_damage(
@@ -141,11 +96,11 @@ fn determine_damage(
     let mut result = vec![];
     let resistence = protection
         .total_resistance()
-        .checked_sub(attack.penetration)
+        .checked_sub(attack.data.penetration)
         .unwrap_or(0);
 
     let damage_result = ProgressCheckNew {
-        num_cards: attack.damage,
+        num_cards: attack.data.damage,
         resistence,
     }
     .perform_check(deck);

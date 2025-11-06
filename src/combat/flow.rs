@@ -100,7 +100,7 @@ pub fn handle_turn_phase_perform_actions(
             actor_to_activate = actor_to_activate.map_or(
                 Some((entity, initiative_value)),
                 |(id_so_far, ini_so_far)| {
-                    if initiative_value > ini_so_far {
+                    if initiative_value < ini_so_far {
                         Some((entity, initiative_value))
                     } else {
                         Some((id_so_far, ini_so_far))
