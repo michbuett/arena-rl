@@ -642,7 +642,7 @@ pub fn handle_combat_finished_event(
         ..
     } = trigger.event();
 
-    for (e, c) in combat_result.iter() {
+    for (e, c) in combat_result.consequences.iter() {
         let (mut health, mut protection, mut items) = health_q.get_mut(*e)?;
         match c {
             CombatConsequence::Wound { damage } => {

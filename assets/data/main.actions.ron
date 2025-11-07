@@ -3,7 +3,7 @@
         name: "Bite",
         damage: 1,
         penetration: 0,
-        req_attributes: [(PhysicalStr, 1)], 
+        req_attributes: [(PhysicalAg, 1)], 
         req_effort: (Some(5), Some(9)),
     )),
     ("melee-attack-sword-01", MeleeAttack(

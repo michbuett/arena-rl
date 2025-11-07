@@ -1,7 +1,7 @@
 use bevy::{asset::Asset, prelude::*, reflect::TypePath};
 use serde::Deserialize;
 
-use super::{Card, DC, Suite};
+use super::{Card, Suite, TN};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize)]
 pub enum AttributeType {
@@ -109,9 +109,9 @@ pub struct ActionCheck {
 }
 
 impl ActionCheck {
-    pub fn difficulty(&self, effort: &Card, attributes: &Attributes) -> DC {
+    pub fn difficulty(&self, effort: &Card, attributes: &Attributes) -> TN {
         let result = 8 + self.req_effort.dc_mod(effort) + self.req_attributes.dc_mod(attributes);
-        DC(result.clamp(0, 20) as u8)
+        TN(result.clamp(0, 20) as u8)
     }
 }
 

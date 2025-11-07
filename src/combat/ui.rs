@@ -719,28 +719,42 @@ pub fn handle_combat_finished_event(
     let [(attacker_name, _), (target_name, _)] = actor_data_q.get_many([*attacker, *target])?;
     let combat_log_ct = log_container_q.single()?;
 
-    let effect_txt = if result.is_empty() {
-        "Miss".to_string()
+    let effect_txt = if result.attack_quality_result.success {
+        if result.consequences.is_empty() {
+            "Blocked".to_string()
+        } else {
+            result
+                .consequences
+                .iter()
+                .map({
+                    |(_, c)| match c {
+                        CombatConsequence::ArmorBreak => "Armor -1".to_string(),
+                        CombatConsequence::ClumsyAttack => {
+                            format!("{} was thrown off balance", attacker_name)
+                        }
+                        CombatConsequence::Wound { damage } => {
+                            let dmg: u8 = damage.iter().map(|c| c.value_high()).sum();
+                            format!("Hit for {} damage", dmg)
+                        }
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
     } else {
-        result
-            .iter()
-            .map({
-                |(_, c)| match c {
-                    CombatConsequence::ArmorBreak => "Armor -1".to_string(),
-                    CombatConsequence::ClumsyAttack => {
-                        format!("{} was thrown off balance", attacker_name)
-                    }
-                    CombatConsequence::Wound { damage } => {
-                        let dmg: u8 = damage.iter().map(|c| c.value_high()).sum();
-                        format!("Hit for {} damage", dmg)
-                    }
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
+        "Miss".to_string()
     };
 
-    let txt = format!("{} attacks {}: {}", attacker_name, target_name, effect_txt);
+    let attack_details_txt = format!(
+        "{} VS {}",
+        short_format_card(&result.attack_quality_result.flip),
+        result.attack_quality_result.tn.0
+    );
+
+    let txt = format!(
+        "{} attacks {}: {}\n  AF: {}",
+        attacker_name, target_name, effect_txt, attack_details_txt
+    );
     let log_entry = commands
         .spawn((
             Node {
@@ -765,6 +779,17 @@ pub fn handle_combat_finished_event(
     }
 
     Ok(())
+}
+
+fn short_format_card(card: &Card) -> String {
+    let val = card.value_high();
+    let suite = match card.suite() {
+        Suite::Clubs => "C",
+        Suite::Spades => "S",
+        Suite::Hearts => "H",
+        Suite::Diamonds => "D",
+    };
+    format!("[{} {}]", val, suite)
 }
 
 fn update_player_hand_window(

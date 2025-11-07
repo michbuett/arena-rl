@@ -41,7 +41,7 @@ pub fn handle_combat_finished_event(
         ))
         .wait(200);
 
-    for (entity, consequence) in combat_result {
+    for (entity, consequence) in combat_result.consequences.iter() {
         let (mpos, health) = actor_data_q.get(*entity)?;
 
         fx_seq = match consequence {

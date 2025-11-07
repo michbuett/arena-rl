@@ -1,5 +1,6 @@
 use super::{ActionCheck, Card, Deck, EffectiveAttributes};
 
+#[derive(Debug)]
 pub enum Complication {
     None,
     Minor,
@@ -16,10 +17,13 @@ impl Complication {
 }
 
 #[derive(Debug)]
-pub struct DC(pub u8);
+pub struct TN(pub u8);
 
+#[derive(Debug)]
 pub struct CheckResult {
     // pub cards: Vec<Card>,
+    pub tn: TN,
+    pub flip: Card,
     pub success: bool,
     pub complication: Complication,
 }
@@ -30,18 +34,18 @@ pub fn perform_action_check(
     attributes: &EffectiveAttributes,
     deck: &mut Deck,
 ) -> CheckResult {
-    println!(
-        "[DEBUG] perform_action_check - action={:?}, effort={:?}, attributes={:?}",
-        action, effort, attributes
-    );
+    // println!(
+    //     "[DEBUG] perform_action_check - action={:?}, effort={:?}, attributes={:?}",
+    //     action, effort, attributes
+    // );
 
     let flip = deck.deal();
     let effective_attributes = attributes.0.action_mod(&effort, 1).action_mod(&flip, 1);
-    let dc = action.difficulty(&effort, &effective_attributes);
+    let tn = action.difficulty(&effort, &effective_attributes);
     let mut action_quality = flip.value_high();
     let mut complication = Complication::None;
 
-    if action.risk_complication && action_quality < dc.0 {
+    if action.risk_complication && action_quality < tn.0 {
         let bonus_flip = deck.deal();
         if bonus_flip.value_high() > action_quality {
             action_quality += bonus_flip.value_high();
@@ -49,11 +53,13 @@ pub fn perform_action_check(
         complication = complication.increase();
     }
 
-    let success = action_quality >= dc.0;
+    let success = action_quality >= tn.0;
 
-    println!("\t - dc={:?}, flip={:?}, success={:?}", dc, flip, success);
+    // println!("\t - dc={:?}, flip={:?}, success={:?}", tn, flip, success);
 
     CheckResult {
+        tn,
+        flip,
         success,
         complication,
     }

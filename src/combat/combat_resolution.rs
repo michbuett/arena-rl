@@ -3,8 +3,8 @@
 use bevy::prelude::Entity;
 
 use crate::core::{
-    ActionCheck, AttackData, Card, Complication, Deck, EffectiveAttributes, ProgressCheckNew,
-    Protection, perform_action_check,
+    ActionCheck, AttackData, Card, CheckResult, Complication, Deck, EffectiveAttributes,
+    ProgressCheckNew, Protection, perform_action_check,
 };
 
 #[derive(Debug)]
@@ -44,7 +44,13 @@ pub enum CombatConsequence {
     ArmorBreak,
 }
 
-pub type CombatResult = Vec<(Entity, CombatConsequence)>;
+#[derive(Debug)]
+pub struct CombatResult {
+    pub attack_quality_result: CheckResult,
+    pub consequences: Vec<(Entity, CombatConsequence)>,
+}
+
+// pub type CombatResult = Vec<(Entity, CombatConsequence)>;
 
 pub fn handle_attack(attack: Attack, deck: &mut Deck) -> CombatResult {
     // println!("[DEBUG] handle_attack - attack={:?}", attack);
@@ -58,34 +64,37 @@ pub fn handle_attack(attack: Attack, deck: &mut Deck) -> CombatResult {
 }
 
 pub fn handle_melee_attack(attack: &Attack, target: &Combatant, deck: &mut Deck) -> CombatResult {
-    let mut result: CombatResult = vec![];
+    let mut consequences = vec![];
     let check = ActionCheck {
         req_attributes: attack.data.req_attributes,
         req_effort: attack.data.req_effort,
         risk_complication: attack.risky_complication,
     };
 
-    let quality_check_result =
+    let attack_quality_result =
         perform_action_check(check, attack.effort, &attack.attacker.attributes, deck);
 
-    match quality_check_result.complication {
+    match attack_quality_result.complication {
         Complication::None => {}
         _ => {
-            result.push((attack.attacker.id, CombatConsequence::ClumsyAttack));
+            consequences.push((attack.attacker.id, CombatConsequence::ClumsyAttack));
         }
     }
 
-    let hit_effect = if quality_check_result.success {
+    let hit_effect = if attack_quality_result.success {
         determine_damage(attack, &target.protection, deck)
     } else {
         vec![]
     };
 
     for c in hit_effect {
-        result.push((target.id, c));
+        consequences.push((target.id, c));
     }
 
-    result
+    CombatResult {
+        consequences,
+        attack_quality_result,
+    }
 }
 
 fn determine_damage(
