@@ -8,7 +8,6 @@ mod generator;
 mod map;
 mod ui;
 
-use actor::ActorActivatedEvent;
 use ai::combat_ai_plugin;
 use bevy::prelude::*;
 use generator::{ActorGenerator, setup_generators};
@@ -16,12 +15,8 @@ use generator::{ActorGenerator, setup_generators};
 use crate::{GameState, assets::Visual, core::Deck, despawn_screen};
 
 use self::{
-    actor::{
-        ActionSelectedEvent, ActionTriggeredEvent, ActivationEndedEvent, ActorBundle,
-        AssignActivationCommand, AttackCommand, BeginActivationCommand, CombatFinishedEvent,
-        MoveToCommand, Team, TeamBundle,
-    },
-    flow::{ProgressCombatTurnCommand, TurnPhase, handle_turn_phase_start_turn, setup_combat_flow},
+    actor::{ActorBundle, Team, TeamBundle},
+    flow::{TurnPhase, handle_turn_phase_start_turn, setup_combat_flow},
     map::{HexMap, MapPos, update_obstacles_in_map},
     ui::combat_ui_plugin,
 };
@@ -38,16 +33,16 @@ struct GameDeck(pub Deck);
 pub fn combat_plugin(app: &mut App) {
     app.add_sub_state::<TurnPhase>()
         .add_plugins((combat_ui_plugin, combat_ai_plugin))
-        .add_event::<ActionTriggeredEvent>()
-        .add_event::<ActionSelectedEvent>()
-        .add_event::<ActorActivatedEvent>()
-        .add_event::<CombatFinishedEvent>()
-        .add_event::<BeginActivationCommand>()
-        .add_event::<ActivationEndedEvent>()
-        .add_event::<MoveToCommand>()
-        .add_event::<AttackCommand>()
-        .add_event::<AssignActivationCommand>()
-        .add_event::<ProgressCombatTurnCommand>()
+        // .add_event::<ActionTriggeredEvent>()
+        // .add_event::<ActionSelectedEvent>()
+        // .add_event::<ActorActivatedEvent>()
+        // .add_event::<CombatFinishedEvent>()
+        // .add_event::<BeginActivationCommand>()
+        // .add_event::<ActivationEndedEvent>()
+        // .add_event::<MoveToCommand>()
+        // .add_event::<AttackCommand>()
+        // .add_event::<AssignActivationCommand>()
+        // .add_event::<ProgressCombatTurnCommand>()
         .add_observer(actor::handle_actor_activated_event)
         .add_observer(actor::handle_action_selected_event)
         .add_observer(actor::handle_action_triggered_event)

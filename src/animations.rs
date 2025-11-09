@@ -29,7 +29,7 @@ fn update_sprite_animation(
     for (mut sprite, mut anim) in animations.iter_mut() {
         anim.timer.tick(time.delta());
 
-        if anim.timer.finished() {
+        if anim.timer.is_finished() {
             if anim.current_idx < anim.indices.len() - 1 {
                 anim.current_idx += 1;
             } else {
@@ -82,7 +82,7 @@ fn update_movement_animation(
     for (e, mut anim, mut transform) in query.iter_mut() {
         anim.timer.tick(time.delta());
 
-        if anim.timer.finished() {
+        if anim.timer.is_finished() {
             // animation completed -> remove component
             transform.translation = *anim.steps.last().unwrap();
             commands.entity(e).remove::<MovementAnimation>();
@@ -177,7 +177,7 @@ fn update_fade_animation(
             text_color.set_alpha(new_alpha);
         }
 
-        if anim.timer.finished() {
+        if anim.timer.is_finished() {
             commands.entity(entity).remove::<FadeAnimation>();
         }
     }
@@ -213,7 +213,7 @@ fn update_scale_animation(
 
         transform.scale = new_scale * Vec3::ONE;
 
-        if anim.timer.finished() {
+        if anim.timer.is_finished() {
             commands.entity(entity).remove::<ScaleAnimation>();
         }
     }

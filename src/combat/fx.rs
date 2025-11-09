@@ -94,7 +94,7 @@ pub fn update_check_fx_ready(
     for (entity, mut fx) in fx_q.iter_mut() {
         fx.timer.tick(time.delta());
 
-        if fx.timer.finished() {
+        if fx.timer.is_finished() {
             // Timed effect is ready
             // => trigger the effect by adding/updating the neccesary components
             match &fx.effect {

@@ -15,7 +15,7 @@ pub fn combat_ai_plugin(app: &mut App) {
 }
 
 fn choose_ai_action(
-    trigger: Trigger<ActorActivatedEvent>,
+    trigger: On<ActorActivatedEvent>,
     activated_actor_q: Query<(&Team, &MapPos, &Attacks, &Controller, &Active)>,
     other_actors_q: Query<(Entity, &Team, &MapPos)>,
     map: Res<HexMap>,
@@ -61,17 +61,17 @@ fn choose_ai_action(
 
         // 2. if unable to attack, then try to move closer
         let path = p.drain(0..p.len() - 1).collect();
-        commands.trigger_targets(
+        commands.trigger(
             ActionTriggeredEvent(Action::MoveAlong {
                 actor: *actor,
                 path,
             }),
-            *actor,
+            // *actor,
         );
         return Ok(());
     }
 
     // 3. if unable to move closer, then skip action
-    commands.trigger_targets(ActionTriggeredEvent(Action::NoOp(*actor)), *actor);
+    commands.trigger(ActionTriggeredEvent(Action::NoOp(*actor)));
     Ok(())
 }

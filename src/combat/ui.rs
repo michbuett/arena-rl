@@ -75,7 +75,8 @@ pub struct PlayerHandWindow;
 pub struct PlayerHandCard(usize);
 
 pub fn combat_ui_plugin(app: &mut App) {
-    app.add_event::<MapPosSelectedEvent>()
+    app
+        // .add_event::<MapPosSelectedEvent>()
         .add_observer(handle_combat_finished_event)
         .add_observer(handle_map_pos_selected_event)
         .add_observer(update_indicators_when_activation_ended)
@@ -195,7 +196,7 @@ fn process_mouse_input(
 
     mut commands: Commands,
     mut mouse_button_input: ResMut<ButtonInput<MouseButton>>,
-    mut mouse_motion_evr: EventReader<MouseMotion>,
+    mut mouse_motion_evr: MessageReader<MouseMotion>,
     mut camera_transform_query: Query<&mut Transform, With<Camera>>,
     mut scroll_state: ResMut<ScrollState>,
 ) -> Result<(), BevyError> {
@@ -292,7 +293,7 @@ fn move_camera(camera_transform: &mut Transform, dx: f32, dy: f32, scroll_bounds
 }
 
 fn handle_map_pos_selected_event(
-    trigger: Trigger<MapPosSelectedEvent>,
+    trigger: On<MapPosSelectedEvent>,
     description_q: Query<(&MapPos, &Description)>,
     details_window_q: Query<Entity, With<DetailsWindow>>,
     mut details_window_text_q: Query<&mut Text, With<DetailsWindowText>>,
@@ -577,7 +578,7 @@ fn card_visual_name(card: &Card) -> String {
 }
 
 fn update_indicators_when_activation_ended(
-    trigger: Trigger<ActivationEndedEvent>,
+    trigger: On<ActivationEndedEvent>,
     actor_q: Query<&Activations>,
     activation_indicator_q: Query<(Entity, &ChildOf), With<ActivationIndicator>>,
     mut commands: Commands,
@@ -696,7 +697,7 @@ pub fn update_action_buttons(
                     .spawn((
                         Name::new(format!("Button [{}]", txt)),
                         BackgroundColor(background_color),
-                        BorderColor(border_color),
+                        BorderColor::all(border_color),
                         Node {
                             display: Display::Block,
                             width: Val::Percent(100.0),
@@ -732,7 +733,7 @@ fn button_text_for_action(action: &Action) -> String {
 }
 
 pub fn handle_combat_finished_event(
-    trigger: Trigger<CombatFinishedEvent>,
+    trigger: On<CombatFinishedEvent>,
     actor_data_q: Query<(&Name, &Health)>,
     log_container_q: Query<Entity, With<CombatLogContainer>>,
     children_q: Query<&Children>,
@@ -819,7 +820,7 @@ fn short_format_cards(cards: &Vec<Card>) -> String {
                 Suite::Hearts => "H",
                 Suite::Diamonds => "D",
             };
-            format!("[{}{}]", val, suite)
+            format!("{}{}", val, suite)
         })
         .collect::<Vec<_>>()
         .join(", ")
@@ -907,11 +908,13 @@ fn update_player_hand_window(
 }
 
 fn on_click_hand_card(
-    click: Trigger<Pointer<Click>>,
+    click: On<Pointer<Click>>,
     hand_cards_q: Query<(&PlayerHandCard, &Team)>,
     mut hand_q: Query<Mut<Hand>>,
 ) -> Result<(), BevyError> {
-    let (PlayerHandCard(index), Team(team_entity)) = hand_cards_q.get(click.target())?;
+    let Pointer { entity, .. } = click.event();
+    let (PlayerHandCard(index), Team(team_entity)) = hand_cards_q.get(*entity)?;
+    // let (PlayerHandCard(index), Team(team_entity)) = hand_cards_q.get(click.target())?;
     let mut hand = hand_q.get_mut(*team_entity)?;
 
     hand.toggle_selection(*index);
@@ -920,7 +923,7 @@ fn on_click_hand_card(
 }
 
 fn toggle_risk_complication(
-    mut event: Trigger<Pointer<Click>>,
+    mut event: On<Pointer<Click>>,
     active_actor_q: Query<(Entity, &Active, Option<&RiskComplications>)>,
     mut rc_toggle_text_q: Query<Mut<Text>, With<RiskComplicationsToggleText>>,
     mut commands: Commands,

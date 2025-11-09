@@ -11,7 +11,7 @@ use super::{
 };
 
 pub fn handle_combat_finished_event(
-    trigger: Trigger<CombatFinishedEvent>,
+    trigger: On<CombatFinishedEvent>,
     actor_data_q: Query<(&MapPos, &Health)>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {

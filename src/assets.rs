@@ -86,12 +86,18 @@ enum AssetLoadedEvent {
     SpriteConfigLoaded,
 }
 
+#[derive(EntityEvent, Clone, Copy)]
+struct SpriteConfigLoadedEvent {
+    entity: Entity,
+}
+
 #[derive(Event, Clone, Copy)]
 struct AllAssetsLoadedEvent;
 
 pub fn assets_plugin(app: &mut App) {
-    app.add_event::<AssetLoadedEvent>()
-        .add_event::<AllAssetsLoadedEvent>()
+    app
+        // .add_message::<AssetLoadedEvent>()
+        // .add_message::<AllAssetsLoadedEvent>()
         .init_asset::<AttackTemplates>()
         .init_asset::<ActorTemplates>()
         .init_asset::<RawSpriteConfig>()
@@ -165,8 +171,12 @@ fn check_asset_loading_state(
                 commands.entity(entity).remove::<Loading>();
 
                 if let Some(OnLoaded(ev)) = on_loaded {
-                    commands.trigger_targets(*ev, entity);
-                    all_loaded = false;
+                    match ev {
+                        AssetLoadedEvent::SpriteConfigLoaded => {
+                            commands.trigger(SpriteConfigLoadedEvent { entity });
+                            all_loaded = false;
+                        }
+                    }
                 }
             }
 
@@ -186,27 +196,24 @@ fn check_asset_loading_state(
 }
 
 fn handle_on_loaded(
-    trigger: Trigger<AssetLoadedEvent>,
+    trigger: On<SpriteConfigLoadedEvent>,
     asset_server: Res<AssetServer>,
     raw_sprite_config: Res<Assets<RawSpriteConfig>>,
     loading_assets_q: Query<&AssetHandle>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
-    match trigger.event() {
-        AssetLoadedEvent::SpriteConfigLoaded => {
-            let AssetHandle(handle) = loading_assets_q.get(trigger.target())?;
-            let typed_handle = handle.clone().typed::<RawSpriteConfig>();
-            let Some(rsc) = raw_sprite_config.get(typed_handle.id()) else {
-                panic!("Could not get RawSpriteConfig asset");
-            };
+    let SpriteConfigLoadedEvent { entity } = trigger.event();
+    let AssetHandle(handle) = loading_assets_q.get(*entity)?;
+    let typed_handle = handle.clone().typed::<RawSpriteConfig>();
+    let Some(rsc) = raw_sprite_config.get(typed_handle.id()) else {
+        panic!("Could not get RawSpriteConfig asset");
+    };
 
-            for (_, psc) in rsc.0.iter() {
-                for f in psc.files.iter() {
-                    commands.spawn(AssetHandle(
-                        asset_server.load::<Image>(combat_sprite_path(f)).untyped(),
-                    ));
-                }
-            }
+    for (_, psc) in rsc.0.iter() {
+        for f in psc.files.iter() {
+            commands.spawn(AssetHandle(
+                asset_server.load::<Image>(combat_sprite_path(f)).untyped(),
+            ));
         }
     }
 
@@ -214,7 +221,7 @@ fn handle_on_loaded(
 }
 
 fn handle_all_assets_loaded_event(
-    _trigger: Trigger<AllAssetsLoadedEvent>,
+    _trigger: On<AllAssetsLoadedEvent>,
     asset_server: Res<AssetServer>,
     raw_sprite_config: Res<Assets<RawSpriteConfig>>,
 

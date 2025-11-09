@@ -204,8 +204,8 @@ pub struct CombatFinishedEvent {
     pub result: CombatResult,
 }
 
-#[derive(Debug, Event)]
-pub struct BeginActivationCommand;
+#[derive(Debug, EntityEvent)]
+pub struct BeginActivationCommand(pub Entity);
 
 #[derive(Debug, Event)]
 pub struct ActivationEndedEvent(pub Entity);
@@ -285,15 +285,12 @@ pub fn clear_user_actions_on_turn_phase_change(mut commands: Commands) {
     commands.remove_resource::<PossibleUserActions>();
 }
 
-pub fn handle_actor_activated_event(
-    _trigger: Trigger<ActorActivatedEvent>,
-    mut commands: Commands,
-) {
+pub fn handle_actor_activated_event(_trigger: On<ActorActivatedEvent>, mut commands: Commands) {
     commands.remove_resource::<PossibleUserActions>();
 }
 
 pub fn handle_map_pos_selected_event(
-    trigger: Trigger<MapPosSelectedEvent>,
+    trigger: On<MapPosSelectedEvent>,
     player_actions: Option<Res<PossibleUserActions>>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
@@ -457,7 +454,7 @@ fn find_enemy_at(
 }
 
 pub fn handle_action_selected_event(
-    trigger: Trigger<ActionSelectedEvent>,
+    trigger: On<ActionSelectedEvent>,
     selected_map_pos: Option<ResMut<PossibleUserActions>>,
 ) {
     if let Some(mut sel_mp) = selected_map_pos {
@@ -467,7 +464,7 @@ pub fn handle_action_selected_event(
 }
 
 pub fn handle_action_triggered_event(
-    trigger: Trigger<ActionTriggeredEvent>,
+    trigger: On<ActionTriggeredEvent>,
     mut commands: Commands,
     mut team_ready_q: Query<Mut<TeamReady>>,
 ) -> Result<(), BevyError> {
@@ -516,12 +513,12 @@ pub fn handle_action_triggered_event(
 }
 
 pub fn handle_begin_activation_command(
-    trigger: Trigger<BeginActivationCommand>,
+    trigger: On<BeginActivationCommand>,
     mut commands: Commands,
     mut actor_activation_q: Query<(Mut<Activations>, &Name)>,
 ) -> Result<(), BevyError> {
-    let e = trigger.target();
-    let (mut activation, _name) = actor_activation_q.get_mut(e)?;
+    let BeginActivationCommand(e) = trigger.event();
+    let (mut activation, _name) = actor_activation_q.get_mut(*e)?;
 
     // info!(
     //     "[actor::handle_begin_activation_command] {} (entity={:?})",
@@ -531,13 +528,13 @@ pub fn handle_begin_activation_command(
 
     let activation = activation.activate_next();
 
-    commands.entity(e).insert(Active(activation));
-    commands.trigger(ActorActivatedEvent(e));
+    commands.entity(*e).insert(Active(activation));
+    commands.trigger(ActorActivatedEvent(*e));
 
     Ok(())
 }
 
-pub fn handle_move_to_command(trigger: Trigger<MoveToCommand>, mut commands: Commands) {
+pub fn handle_move_to_command(trigger: On<MoveToCommand>, mut commands: Commands) {
     let MoveToCommand(actor, path) = trigger.event();
 
     if path.is_empty() {
@@ -556,7 +553,7 @@ pub fn handle_move_to_command(trigger: Trigger<MoveToCommand>, mut commands: Com
 }
 
 pub fn handle_attack_command(
-    trigger: Trigger<AttackCommand>,
+    trigger: On<AttackCommand>,
     combat_data_q: Query<(
         &Health,
         &Attributes,
@@ -614,7 +611,7 @@ pub fn handle_attack_command(
 }
 
 pub fn handle_assign_activation_command(
-    trigger: Trigger<AssignActivationCommand>,
+    trigger: On<AssignActivationCommand>,
     mut actor_q: Query<(Mut<Activations>, &Team, &Name)>,
     mut team_q: Query<Mut<Hand>>,
 ) -> Result<(), BevyError> {
@@ -634,7 +631,7 @@ pub fn handle_assign_activation_command(
 }
 
 pub fn handle_combat_finished_event(
-    trigger: Trigger<CombatFinishedEvent>,
+    trigger: On<CombatFinishedEvent>,
     mut health_q: Query<(Mut<Health>, Mut<Protection>, Mut<Items>)>,
 ) -> Result<(), BevyError> {
     let CombatFinishedEvent {

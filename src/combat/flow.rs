@@ -24,9 +24,6 @@ pub fn setup_combat_flow(mut commands: Commands) {
     commands.insert_resource(TurnNumber(1));
 }
 
-#[derive(Event)]
-pub struct ProgressCombatTurnCommand;
-
 pub fn handle_turn_phase_start_turn(
     mut deck: ResMut<GameDeck>,
     mut teams_q: Query<(Mut<Hand>, Mut<TeamReady>, &Controller)>,
@@ -112,7 +109,7 @@ pub fn handle_turn_phase_perform_actions(
 
     // println!("ACTIVATE:{:?}", actor_to_activate);
     if let Some((entity, _)) = actor_to_activate {
-        commands.trigger_targets(BeginActivationCommand, entity);
+        commands.trigger(BeginActivationCommand(entity));
     } else {
         // There are no more actors to activate
         turn_number.0 += 1;

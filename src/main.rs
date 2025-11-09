@@ -7,7 +7,7 @@ mod style;
 
 use std::time::Duration;
 
-use bevy::{prelude::*, render::camera::ScalingMode, window::PrimaryWindow};
+use bevy::{camera::ScalingMode, prelude::*, window::PrimaryWindow};
 
 #[derive(Clone, Copy, Default, Eq, PartialEq, Debug, Hash, States)]
 pub enum GameState {
@@ -78,7 +78,7 @@ fn update_end_of_live_removal(
     for (e, mut eol) in eol_q.iter_mut() {
         eol.0.tick(time.delta());
 
-        if eol.0.finished() {
+        if eol.0.is_finished() {
             commands.entity(e).insert(MarkedForDeath);
         }
     }
