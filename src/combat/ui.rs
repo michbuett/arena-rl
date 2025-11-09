@@ -9,7 +9,7 @@ use crate::{GameState, style::WINDOW_BACKGROUND};
 
 use super::actor::{
     ActivationEndedEvent, Active, AttackCommandData, CombatFinishedEvent, Controller,
-    PossibleUserActions, Team,
+    PossibleUserActions, RiskComplications, Team,
 };
 use super::combat_resolution::CombatConsequence;
 use super::fx::FxRunning;
@@ -638,10 +638,14 @@ fn insert_activation_indicator_for_entity(
     });
 }
 
+#[derive(Component)]
+pub struct RiskComplicationsToggleText;
+
 pub fn update_action_buttons(
     mut commands: Commands,
     player_actions: Option<Res<PossibleUserActions>>,
     button_container_q: Query<Entity, With<ActionButtonContainer>>,
+    active_actor_q: Query<(&Active, Option<&RiskComplications>)>,
 ) {
     let Ok(container_entity) = button_container_q.single() else {
         // container does not exist
@@ -652,6 +656,29 @@ pub fn update_action_buttons(
     commands
         .entity(container_entity)
         .despawn_related::<Children>();
+
+    if let Some((_, risk_complications)) = active_actor_q.iter().next() {
+        let txt = risk_complication_toggle_txt(risk_complications.is_some());
+
+        commands.entity(container_entity).with_children(|parent| {
+            parent
+                .spawn((
+                    Name::from("Action Stance Selector"),
+                    BackgroundColor(WINDOW_BACKGROUND.into()),
+                    BorderRadius::top(Val::Px(20.)),
+                    Node {
+                        display: Display::Block,
+                        width: Val::Percent(100.0),
+                        margin: UiRect::vertical(Val::Px(5.0)),
+                        padding: UiRect::all(Val::Px(10.0)),
+                        ..Default::default()
+                    },
+                    OnCombatState,
+                    children![(text(txt, TextStyle::UiNormal), RiskComplicationsToggleText),],
+                ))
+                .observe(toggle_risk_complication);
+        });
+    }
 
     if let Some(player_actions) = player_actions {
         commands.entity(container_entity).with_children(|parent| {
@@ -746,14 +773,14 @@ pub fn handle_combat_finished_event(
     };
 
     let attack_details_txt = format!(
-        "{} VS {}",
-        short_format_card(&result.attack_quality_result.flip),
+        "{} VS T:{}",
+        short_format_cards(&result.attack_quality_result.cards),
         result.attack_quality_result.tn.0
     );
 
     let txt = format!(
-        "{} attacks {}: {}\n  AF: {}",
-        attacker_name, target_name, effect_txt, attack_details_txt
+        "{} attacks {}: {}\n{}",
+        attacker_name, target_name, attack_details_txt, effect_txt
     );
     let log_entry = commands
         .spawn((
@@ -781,15 +808,21 @@ pub fn handle_combat_finished_event(
     Ok(())
 }
 
-fn short_format_card(card: &Card) -> String {
-    let val = card.value_high();
-    let suite = match card.suite() {
-        Suite::Clubs => "C",
-        Suite::Spades => "S",
-        Suite::Hearts => "H",
-        Suite::Diamonds => "D",
-    };
-    format!("[{} {}]", val, suite)
+fn short_format_cards(cards: &Vec<Card>) -> String {
+    cards
+        .iter()
+        .map(|card| {
+            let val = card.value_high();
+            let suite = match card.suite() {
+                Suite::Clubs => "C",
+                Suite::Spades => "S",
+                Suite::Hearts => "H",
+                Suite::Diamonds => "D",
+            };
+            format!("[{}{}]", val, suite)
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn update_player_hand_window(
@@ -884,4 +917,37 @@ fn on_click_hand_card(
     hand.toggle_selection(*index);
 
     Ok(())
+}
+
+fn toggle_risk_complication(
+    mut event: Trigger<Pointer<Click>>,
+    active_actor_q: Query<(Entity, &Active, Option<&RiskComplications>)>,
+    mut rc_toggle_text_q: Query<Mut<Text>, With<RiskComplicationsToggleText>>,
+    mut commands: Commands,
+) -> Result<(), BevyError> {
+    let Some((e, _, risk_complications)) = active_actor_q.iter().next() else {
+        return Ok(());
+    };
+
+    if risk_complications.is_some() {
+        commands.entity(e).remove::<RiskComplications>();
+    } else {
+        commands.entity(e).insert(RiskComplications);
+    }
+
+    let mut text = rc_toggle_text_q.single_mut()?;
+    text.0 = risk_complication_toggle_txt(!risk_complications.is_some());
+
+    event.propagate(false);
+
+    Ok(())
+}
+
+fn risk_complication_toggle_txt(risk_complications: bool) -> String {
+    if risk_complications {
+        "Push Your Luck"
+    } else {
+        "Play Save"
+    }
+    .to_string()
 }

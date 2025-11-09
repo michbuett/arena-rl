@@ -53,7 +53,7 @@ fn choose_ai_action(
         for attack_template in attacks.0.iter() {
             if attack_template.can_attack(p.len() as i32 - 1) {
                 commands.trigger(ActionTriggeredEvent(Action::Attack(
-                    AttackCommandData::new(*actor, target, attack_template, *activation, false),
+                    AttackCommandData::new(*actor, target, attack_template, *activation),
                 )));
                 return Ok(());
             }

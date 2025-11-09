@@ -21,9 +21,8 @@ pub struct TN(pub u8);
 
 #[derive(Debug)]
 pub struct CheckResult {
-    // pub cards: Vec<Card>,
     pub tn: TN,
-    pub flip: Card,
+    pub cards: Vec<Card>,
     pub success: bool,
     pub complication: Complication,
 }
@@ -44,12 +43,16 @@ pub fn perform_action_check(
     let tn = action.difficulty(&effort, &effective_attributes);
     let mut action_quality = flip.value_high();
     let mut complication = Complication::None;
+    let mut cards = vec![flip];
 
     if action.risk_complication && action_quality < tn.0 {
         let bonus_flip = deck.deal();
+
         if bonus_flip.value_high() > action_quality {
-            action_quality += bonus_flip.value_high();
+            action_quality = bonus_flip.value_high();
         }
+
+        cards.push(bonus_flip);
         complication = complication.increase();
     }
 
@@ -59,7 +62,7 @@ pub fn perform_action_check(
 
     CheckResult {
         tn,
-        flip,
+        cards,
         success,
         complication,
     }

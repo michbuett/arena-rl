@@ -102,6 +102,9 @@ impl Activations {
     }
 }
 
+#[derive(Debug, Clone, Copy, Component)]
+pub struct RiskComplications;
+
 #[derive(Bundle)]
 pub struct ActorBundle {
     pub actor: Actor,
@@ -228,7 +231,6 @@ pub struct AttackCommandData {
     pub target: AttackTarget,
     pub name: String,
     pub activation: Card,
-    pub risk_complication: bool,
     pub data: AttackData,
 }
 
@@ -243,7 +245,6 @@ impl AttackCommandData {
         target: Entity,
         attack_template: &AttackOption,
         activation: Card,
-        risky: bool,
     ) -> Self {
         let target = match attack_template.target_type {
             AttackTargetType::MeleeSingle => AttackTarget::MeleeAttack { target },
@@ -254,7 +255,6 @@ impl AttackCommandData {
             target,
             name: attack_template.name.clone(),
             activation,
-            risk_complication: risky,
             data: attack_template.data,
         }
     }
@@ -382,13 +382,8 @@ pub fn collect_actions_for_performin_actions(
 
                 for attack_option in attacks.0.iter() {
                     if attack_option.can_attack(distance) {
-                        let attack = AttackCommandData::new(
-                            entity,
-                            target,
-                            attack_option,
-                            activation,
-                            false,
-                        );
+                        let attack =
+                            AttackCommandData::new(entity, target, attack_option, activation);
                         actions.push((Some(hex), Action::Attack(attack)));
                     }
                 }
@@ -562,7 +557,12 @@ pub fn handle_move_to_command(trigger: Trigger<MoveToCommand>, mut commands: Com
 
 pub fn handle_attack_command(
     trigger: Trigger<AttackCommand>,
-    combat_data_q: Query<(&Health, &Attributes, &Protection)>,
+    combat_data_q: Query<(
+        &Health,
+        &Attributes,
+        &Protection,
+        Option<&RiskComplications>,
+    )>,
     mut deck: ResMut<GameDeck>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
@@ -577,14 +577,14 @@ pub fn handle_attack_command(
             // );
 
             let [
-                (health_a, attributes_a, protection_a),
-                (health_t, attributes_t, protection_t),
+                (health_a, attributes_a, protection_a, risk_complications),
+                (health_t, attributes_t, protection_t, _),
             ] = combat_data_q.get_many([attacker, *target])?;
 
             let combat_result = handle_attack(
                 Attack {
                     effort: attack.activation,
-                    risky_complication: attack.risk_complication,
+                    risky_complication: risk_complications.is_some(),
                     attacker: Combatant {
                         id: attacker,
                         attributes: attributes_a.effectiv_attributes(health_a),
