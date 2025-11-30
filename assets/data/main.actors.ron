@@ -1,31 +1,30 @@
 ([
     ("sucker", (
         name: "Sucker",
-        attacks: ["melee-attack-bite-01"],
+        attacks: ["charge", "dodge"],
         visual: ["monster-sucker_1"],
         attributes: (
-            physical_strength: 0,
-            physical_agility: 2,
-            mental_strength: -1,
-            mental_agility: -1,
+            physical_strength: 3,
+            physical_agility: 5,
+            mental_strength: 2,
+            mental_agility: 2,
         )
     )),
 
     ("player", (
         name: "Player",
-        attacks: ["melee-attack-sword-01", "melee-attack-sword-02"],
+        attacks: ["charge", "attack-sword-01", "move", "dodge"],
         visual: [
             "body-heavy_1",
             "head-heavy_1",
             "melee-1h_2",
         ],
         attributes: (
-            physical_strength: 2,
-            physical_agility: 1,
-            mental_strength: 0,
-            mental_agility: 0,
+            physical_strength: 5,
+            physical_agility: 4,
+            mental_strength: 3,
+            mental_agility: 3,
         ),
         feats: Some(["armor-body-medium"]),
     )),
 ])
-

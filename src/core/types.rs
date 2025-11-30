@@ -1,7 +1,7 @@
-use bevy::{asset::Asset, prelude::*, reflect::TypePath};
+use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::{Card, Suite, TN};
+use super::{ActionKeyword, CheckResult, Effect, FeatKey, FeatType, KeywordSet, Magnitude};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize)]
 pub enum AttributeType {
@@ -19,182 +19,208 @@ pub struct Attributes {
     pub mental_agility: i8,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct EffectiveAttributes(pub Attributes);
-
 impl Attributes {
-    pub fn action_mod(mut self, card: &Card, modifier: i8) -> Self {
-        match card.suite() {
-            Suite::Clubs => {
-                self.physical_strength += modifier;
-            }
-            Suite::Spades => {
-                self.physical_agility += modifier;
-            }
-            Suite::Hearts => {
-                self.mental_strength += modifier;
-            }
-            Suite::Diamonds => {
-                self.mental_agility += modifier;
-            }
+    pub fn get(&self, attribute: AttributeType) -> i8 {
+        match attribute {
+            AttributeType::PhysicalStr => self.physical_strength,
+            AttributeType::PhysicalAg => self.physical_agility,
+            AttributeType::MentalStr => self.mental_strength,
+            AttributeType::MentalAg => self.mental_agility,
         }
-        self
-    }
-
-    pub fn effectiv_attributes(&self, health: &Health) -> EffectiveAttributes {
-        let mut result = *self;
-        for card in health.wounds.iter() {
-            result = result.action_mod(card, -1);
-        }
-        EffectiveAttributes(result)
     }
 }
 
 #[derive(Debug, Clone, Deserialize, Asset, TypePath)]
 pub struct ActorTemplates(pub Vec<(String, ActorTemplate)>);
 
-#[derive(Debug, Clone, Deserialize, Asset, TypePath)]
-pub struct AttackTemplates(pub Vec<(String, AttackOptionTemplate)>);
+#[derive(Debug, Clone, Deserialize)]
+pub struct ActionEffects(Vec<(ActionEffectTrigger, Magnitude, ActionEffect)>);
 
-#[derive(Debug, Clone, Copy)]
-pub struct AttributeRequirements([i8; 4]);
-impl AttributeRequirements {
-    fn dc_mod(&self, attributes: &Attributes) -> i32 {
-        let y = [
-            attributes.physical_strength,
-            attributes.physical_agility,
-            attributes.mental_strength,
-            attributes.mental_agility,
-        ];
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+pub enum ActionEffectTrigger {
+    // Always,
+    Success,
+    Complication,
+}
 
-        self.0
+impl ActionEffects {
+    pub fn effects_for_result(
+        &self,
+        check_result: &CheckResult,
+    ) -> Vec<(ActionEffectTrigger, ActionEffect)> {
+        // let mut result = self.effects_for_trigger(ActionEffectTrigger::Always, Magnitude::None);
+        let mut result = vec![];
+
+        if check_result.is_success() {
+            result.append(
+                &mut self.effects_for_trigger(ActionEffectTrigger::Success, check_result.success),
+            );
+        }
+
+        if check_result.has_complication() {
+            result.append(
+                &mut self.effects_for_trigger(
+                    ActionEffectTrigger::Complication,
+                    check_result.complication,
+                ),
+            );
+        }
+
+        result
+    }
+
+    fn effects_for_trigger(
+        &self,
+        trigger: ActionEffectTrigger,
+        magnitude: Magnitude,
+    ) -> Vec<(ActionEffectTrigger, ActionEffect)> {
+        let result = self
+            .0
             .iter()
-            .zip(y.iter())
-            .map(|(req_attr_val, eff_val)| {
-                if eff_val < req_attr_val {
-                    1
-                } else if *req_attr_val > 0 && eff_val > req_attr_val {
-                    -1
-                } else {
-                    0
+            .filter_map(|(tr, mg, eff)| {
+                if *tr == trigger && *mg <= magnitude {
+                    return Some((*tr, eff.clone()));
                 }
+                None
             })
-            .sum::<i32>()
-            .clamp(i32::MIN, 1)
+            .fold(vec![], fold_effects);
+        // .collect();
+
+        result
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct EffortRequirements(i8, i8);
-impl EffortRequirements {
-    fn dc_mod(&self, effort: &Card) -> i32 {
-        let EffortRequirements(req_effort_min, req_effort_max) = self;
-        let effort_val = effort.value_high() as i8;
+fn fold_effects(
+    mut list_so_far: Vec<(ActionEffectTrigger, ActionEffect)>,
+    (trigger, eff): (ActionEffectTrigger, ActionEffect),
+) -> Vec<(ActionEffectTrigger, ActionEffect)> {
+    if let Some(idx) = list_so_far
+        .iter()
+        .position(|(t, e)| trigger == *t && e.can_combine(&eff))
+    {
+        let (t, e) = list_so_far.get(idx).unwrap();
+        list_so_far.insert(idx, (*t, eff.try_combine(e).unwrap()));
+    } else {
+        list_so_far.push((trigger, eff));
+    }
+    list_so_far
+}
+// fn filter_action_effect(
+//     eff: &ActionEffect,
+//     trigger: &ActionEffectTrigger,
+//     check_result: &CheckResult,
+// ) -> Option<ActionEffect> {
+//     // if check_result.complication
+//     match (trigger, &check_result.success, &check_result.complication) {
+//         (ActionEffectTrigger::Always, _, _) => Some(eff.clone()),
 
-        if effort_val < *req_effort_min {
-            1
-        } else if effort_val >= *req_effort_max {
-            -1
-        } else {
-            0
+//         (ActionEffectTrigger::Success, Magnitude::Minor, _)
+//         | (ActionEffectTrigger::SuccessNormal, Magnitude::Normal, _)
+//         | (ActionEffectTrigger::SuccessMajor, Magnitude::Major, _) => Some(eff.clone()),
+
+//         (ActionEffectTrigger::ComplicationMajor, _, Magnitude::Minor)
+//         | (ActionEffectTrigger::ComplicationNormal, _, Magnitude::Normal)
+//         | (ActionEffectTrigger::Complication, _, Magnitude::Major) => Some(eff.clone()),
+
+//         _ => None,
+//     }
+// }
+
+impl From<RawActionEffects> for ActionEffects {
+    fn from(value: RawActionEffects) -> Self {
+        use ActionEffectTrigger::*;
+        use Magnitude::*;
+        match value {
+            RawActionEffects::Always(eff) => Self(vec![(Success, Normal, eff)]),
+            RawActionEffects::LowNormalHigh(e1, e2, e3) => Self(vec![
+                (Success, Minor, e1),
+                (Success, Normal, e2),
+                (Success, Major, e3),
+            ]),
         }
     }
 }
+// impl From<Vec<(ActionEffectTrigger, Magnitude, ActionEffect)>> for ActionEffects {
+//     fn from(value: Vec<(ActionEffectTrigger, Magnitude, ActionEffect)>) -> Self {
+//         Self(value)
+//     }
+// }
 
-#[derive(Debug, Clone)]
-pub struct ActionCheck {
-    pub req_attributes: AttributeRequirements,
-    pub req_effort: EffortRequirements,
-    pub risk_complication: bool,
+// impl From<ActionCheck> for ActionEffects {
+//     fn from(value: ActionCheck) -> Self {
+//         use ActionEffectTrigger::*;
+//         use Magnitude::*;
+//         match value {
+//             ActionCheck::NoCheck(eff) => Self(vec![(Always, None, eff)]),
+//             ActionCheck::Check { effects, .. } => Self(effects.clone()),
+//         }
+//     }
+// }
+
+#[derive(Debug, Clone, Deserialize)]
+pub enum ActionEffect {
+    NoEffect,
+    DamageTarget(u8),
+    Protection(u8),
+    TempEffect {
+        effect: Effect,
+        descr: String,
+        keywords: Vec<ActionKeyword>,
+        turns: u8,
+    },
+    // Multi(Vec<ActionEffect>),
 }
 
-impl ActionCheck {
-    pub fn difficulty(&self, effort: &Card, attributes: &Attributes) -> TN {
-        let result = 8 + self.req_effort.dc_mod(effort) + self.req_attributes.dc_mod(attributes);
-        TN(result.clamp(0, 20) as u8)
+impl ActionEffect {
+    fn try_combine(&self, other: &ActionEffect) -> Option<ActionEffect> {
+        match (self, other) {
+            (Self::Protection(p1), Self::Protection(p2)) => Some(Self::Protection(p1 + p2)),
+            (Self::DamageTarget(p1), Self::DamageTarget(p2)) => Some(Self::DamageTarget(p1 + p2)),
+            _ => None,
+        }
+    }
+
+    fn can_combine(&self, other: &ActionEffect) -> bool {
+        self.try_combine(other).is_some()
     }
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub enum AttackOptionTemplate {
-    MeleeAttack {
-        name: String,
-        damage: u8,
-        penetration: u8,
-        req_attributes: Vec<(AttributeType, i8)>,
-        req_effort: (Option<i8>, Option<i8>),
+pub enum ActionFx {
+    SelfTxt(String),
+    SingleTargetMeleeAttack(String),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RawActionTemplate {
+    // pub attribute: AttributeType,
+    // pub effect: RawActionEffects,
+    pub fx: ActionFx,
+    // pub keywords: Vec<ActionKeyword>,
+    pub name: String,
+    pub check: ActionCheck,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub enum ActionCheck {
+    NoCheck(ActionEffects),
+    Check {
+        effects: ActionEffects,
+        // effects: Vec<(ActionEffectTrigger, Magnitude, ActionEffect)>,
+        // effect: (ActionEffect, ActionEffect, ActionEffect),
+        // complication: (ActionEffect, ActionEffect, ActionEffect),
+        risky: bool,
+        attribute: AttributeType,
+        keywords: KeywordSet<ActionKeyword>,
     },
 }
 
-impl AttackOptionTemplate {
-    pub fn into_attack_option(self) -> AttackOption {
-        match self {
-            AttackOptionTemplate::MeleeAttack {
-                name,
-                damage,
-                penetration,
-                req_attributes,
-                req_effort,
-            } => {
-                let mut ra = [i8::MIN; 4];
-
-                for (attr, min) in req_attributes.iter() {
-                    match attr {
-                        AttributeType::PhysicalStr => ra[0] = *min,
-                        AttributeType::PhysicalAg => ra[1] = *min,
-                        AttributeType::MentalStr => ra[2] = *min,
-                        AttributeType::MentalAg => ra[3] = *min,
-                    }
-                }
-
-                AttackOption {
-                    name,
-                    target_type: AttackTargetType::MeleeSingle,
-                    data: AttackData {
-                        damage,
-                        penetration,
-                        req_attributes: AttributeRequirements(ra),
-                        req_effort: EffortRequirements(
-                            req_effort.0.unwrap_or(i8::MIN),
-                            req_effort.1.unwrap_or(i8::MAX),
-                        ),
-                    },
-                }
-            }
-        }
-    }
+/// An abstraction to make defining the effects for an action more convinient
+#[derive(Debug, Clone, Deserialize)]
+pub enum RawActionEffects {
+    Always(ActionEffect),
+    LowNormalHigh(ActionEffect, ActionEffect, ActionEffect),
 }
-
-#[derive(Debug, Clone, Copy)]
-pub struct AttackData {
-    pub damage: u8,
-    pub penetration: u8,
-    pub req_attributes: AttributeRequirements,
-    pub req_effort: EffortRequirements,
-}
-
-#[derive(Debug, Clone)]
-pub enum AttackTargetType {
-    MeleeSingle,
-}
-
-#[derive(Debug, Clone)]
-pub struct AttackOption {
-    pub name: String,
-    pub data: AttackData,
-    pub target_type: AttackTargetType,
-}
-
-impl AttackOption {
-    pub fn can_attack(&self, distance: i32) -> bool {
-        match self.target_type {
-            AttackTargetType::MeleeSingle => distance == 1,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Component)]
-pub struct Attacks(pub Vec<AttackOption>);
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ActorTemplate {
@@ -204,38 +230,13 @@ pub struct ActorTemplate {
     pub feats: Option<Vec<String>>,
 }
 
-#[derive(Debug, Component, Clone, Deserialize, Asset, TypePath)]
-pub struct Feats(pub Vec<(String, Feat)>);
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Feat {
-    pub name: String,
-    pub source: FeatSource,
-    pub effects: Vec<Effect>,
-}
-
-// #[derive(Debug, Clone, Deserialize)]
-// pub struct FeatKey(pub String);
-
-#[derive(Debug, Clone, Copy, Deserialize)]
-pub enum FeatSource {
-    Intrinsic,
-    Item,
-    // Temporary(u8),
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub enum Effect {
-    Resistance(u8),
-}
-
-// #[derive(Debug, Clone, Copy, Deserialize)]
-// pub struct Keyword(u8);
+#[derive(Component, Debug, Clone)]
+pub struct ActiveDefence(pub Resistance);
 
 #[derive(Component, Debug, Clone)]
-pub struct Protection(pub Vec<Resistance>);
+pub struct PassiveDefence(pub Vec<Resistance>);
 
-impl Protection {
+impl PassiveDefence {
     pub fn total_resistance(&self) -> u8 {
         self.0.iter().map(|r| r.resistance).sum()
     }
@@ -243,12 +244,12 @@ impl Protection {
 
 #[derive(Debug, Clone)]
 pub struct Resistance {
-    pub source: (String, FeatSource),
+    pub source: (String, FeatType),
     pub resistance: u8,
 }
 
 impl Resistance {
-    pub fn new(source: (String, FeatSource), resistance: u8) -> Self {
+    pub fn new(source: (String, FeatType), resistance: u8) -> Self {
         Self { source, resistance }
     }
 }
@@ -257,7 +258,8 @@ pub struct Items(pub Vec<Item>);
 
 #[derive(Debug)]
 pub struct Item {
-    pub key: String,
+    pub feat_ref: String,
+    pub key: FeatKey,
     pub name: String,
     pub state: ItemState,
 }
@@ -272,19 +274,23 @@ pub enum ItemState {
 #[derive(Component, Debug, Clone)]
 pub struct Health {
     pub max_health: u8,
-    pub wounds: Vec<Card>,
+    pub damage_taken: u8,
 }
 
 impl Health {
     pub fn new(max_health: u8) -> Self {
         Self {
             max_health,
-            wounds: vec![],
+            damage_taken: 0,
         }
     }
 
+    pub fn damage(&mut self, amount: u8) {
+        self.damage_taken += amount;
+    }
+
     pub fn damage_total(&self) -> u8 {
-        self.wounds.iter().map(|c| c.value_high()).sum()
+        self.damage_taken
     }
 
     pub fn is_alive(&self) -> bool {

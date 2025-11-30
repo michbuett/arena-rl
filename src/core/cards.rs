@@ -67,21 +67,14 @@ impl Card {
             8 => CardValue::Eight,
             9 => CardValue::Nine,
             10 => CardValue::Ten,
-            v @ _ => panic!("Invalid card value {}", v),
+            v => panic!("Invalid card value {v}"),
         };
 
         Self { value, suite }
     }
 
-    pub fn value_low(&self) -> u8 {
+    pub fn value(&self) -> u8 {
         self.value as u8 + 1
-    }
-
-    pub fn value_high(&self) -> u8 {
-        match self.value {
-            CardValue::Ace => 11,
-            _ => self.value_low(),
-        }
     }
 
     pub fn suite(&self) -> Suite {
@@ -129,7 +122,7 @@ impl Deck {
     }
 
     fn rnd_shuffle() -> Vec<Card> {
-        let suites = vec![Suite::Clubs, Suite::Spades, Suite::Hearts, Suite::Diamonds];
+        let suites = [Suite::Clubs, Suite::Spades, Suite::Hearts, Suite::Diamonds];
         let mut cards = Vec::new();
 
         for _ in 0..NUM_DECKS_PER_GAME {

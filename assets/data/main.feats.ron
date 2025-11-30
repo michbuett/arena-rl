@@ -1,7 +1,7 @@
 ([
     ("armor-body-medium", (
         name: "Medium Armor",
-        source: Item,
+        feat_type: Item,
         effects: [Resistance(2)],
     )),
 ])

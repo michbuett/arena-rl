@@ -4,20 +4,23 @@ use bevy::prelude::*;
 
 use crate::{
     assets::Visual,
+    combat::commands::{ManeuverTemplate, ManeuverTemplates},
     core::{
-        ActorTemplate, ActorTemplates, AttackOption, AttackTemplates, Attacks, Deck, Effect, Feat,
-        Feats, Health, Item, ItemState, Items, ProgressCheck, Protection, Resistance,
+        ActiveEffects, ActorTemplate, ActorTemplates, Effect, Feat, FeatStore, Feats, Health, Item,
+        ItemState, Items, PassiveDefence, Resistance,
     },
 };
 
+use super::commands::ActorManeuvers;
+
 pub fn setup_generators(
-    action_templates_assets: Res<Assets<AttackTemplates>>,
+    maneuver_templates_assets: Res<Assets<ManeuverTemplates>>,
     actor_templates_assets: Res<Assets<ActorTemplates>>,
     feats_assets: Res<Assets<Feats>>,
     mut commands: Commands,
 ) {
     commands.insert_resource(ActorGenerator::new(
-        &action_templates_assets,
+        &maneuver_templates_assets,
         &actor_templates_assets,
         &feats_assets,
     ));
@@ -25,23 +28,23 @@ pub fn setup_generators(
 
 #[derive(Resource)]
 pub struct ActorGenerator {
-    action_templates: HashMap<String, AttackOption>,
+    maneuver_templates: HashMap<String, ManeuverTemplate>,
     actor_templates: HashMap<String, ActorTemplate>,
     feat_templates: HashMap<String, Feat>,
+    feat_store: FeatStore,
 }
 
 impl ActorGenerator {
     pub fn new(
-        action_templates_assets: &Res<Assets<AttackTemplates>>,
+        maneuver_templates_assets: &Res<Assets<ManeuverTemplates>>,
         actor_templates_assets: &Res<Assets<ActorTemplates>>,
         feats_assets: &Res<Assets<Feats>>,
     ) -> Self {
-        let action_templates: HashMap<String, AttackOption> = HashMap::from_iter(
-            action_templates_assets
+        let maneuver_templates: HashMap<String, ManeuverTemplate> = HashMap::from_iter(
+            maneuver_templates_assets
                 .iter()
                 .flat_map(|(_, fl)| fl.0.iter())
-                .cloned()
-                .map(|(key, aot)| (key.to_string(), aot.into_attack_option())),
+                .map(|(key, raw_template)| (key.into(), raw_template.clone().into())),
         );
 
         let actor_templates: HashMap<String, ActorTemplate> = HashMap::from_iter(
@@ -54,67 +57,105 @@ impl ActorGenerator {
         let feat_templates: HashMap<String, Feat> =
             HashMap::from_iter(feats_assets.iter().flat_map(|(_, fl)| fl.0.iter()).cloned());
 
+        let feat_store = FeatStore::new(feats_assets);
+
         Self {
-            action_templates,
+            maneuver_templates,
             actor_templates,
             feat_templates,
+            feat_store,
         }
     }
 
     pub fn generate_actor(&self, template_name: &str) -> impl Bundle {
         let Some(actor_template) = self.actor_templates.get(template_name) else {
-            panic!("Unknown actor template '{}'", template_name);
+            panic!("Unknown actor template '{template_name}'");
         };
 
-        let attack_options = actor_template
+        let maneuver_templates = actor_template
             .attacks
             .iter()
-            .map(|attack_name| self.action_templates.get(attack_name).cloned())
-            .flatten()
+            .filter_map(|name| self.maneuver_templates.get(name).cloned())
             .collect::<Vec<_>>();
 
-        let attrubute_values = actor_template.attributes.clone();
-        let mut deck = Deck::new_rnd();
-        let max_health_mod = ProgressCheck::base()
-            .modify_magnitude(attrubute_values.physical_strength)
-            .perform_check(&mut deck)
-            .sum();
+        let attrubute_values = actor_template.attributes;
+        let max_health = (attrubute_values.physical_strength + attrubute_values.mental_strength)
+            .clamp(3, i8::MAX) as u8;
 
         let mut resistances: Vec<Resistance> = vec![];
         let mut items: Vec<Item> = vec![];
+        let mut modifier_effects = vec![];
 
         if let Some(feat_list) = actor_template.feats.as_ref() {
-            for feat_name in feat_list.iter() {
-                if let Some(feat) = self.feat_templates.get(feat_name) {
-                    if matches!(feat.source, crate::core::FeatSource::Item) {
-                        items.push(Item {
-                            key: feat_name.to_string(),
-                            name: feat.name.to_string(),
-                            state: ItemState::New,
-                        });
-                    }
+            for feat_ref in feat_list.iter() {
+                let Some(key) = self.feat_store.find_key(feat_ref) else {
+                    warn!("Unknown feat '{}'", feat_ref);
+                    continue;
+                };
 
+                let descr = self.feat_store.description(key);
+                if matches!(descr.feat_type, crate::core::FeatType::Item) {
+                    items.push(Item {
+                        key,
+                        feat_ref: feat_ref.to_string(),
+                        name: descr.name.to_string(),
+                        state: ItemState::New,
+                    });
+                }
+
+                modifier_effects.push(self.feat_store.effect(key).clone());
+                // println!("Effects: {:?}", self.feat_store.effect(key));
+                // let eff = self.feat_store.effect(key);
+
+                if let Some(feat) = self.feat_templates.get(feat_ref) {
                     for eff in feat.effects.iter() {
-                        match eff {
-                            Effect::Resistance(resistance) => {
-                                let source = (feat_name.to_string(), feat.source);
-                                resistances.push(Resistance::new(source, *resistance));
-                            }
+                        if let Effect::Resistance(resistance) = eff {
+                            let source = (feat_ref.to_string(), feat.feat_type);
+                            resistances.push(Resistance::new(source, *resistance));
                         }
                     }
                 } else {
-                    warn!("Unknown feat '{}'", feat_name);
+                    warn!("Unknown feat '{}'", feat_ref);
                 }
             }
         }
 
         (
             Visual::from(&actor_template.visual),
-            Attacks(attack_options),
-            Protection(resistances),
+            ActorManeuvers(maneuver_templates),
+            ActiveEffects::new(&modifier_effects),
+            PassiveDefence(resistances),
             Items(items),
-            actor_template.attributes.clone(),
-            Health::new(10 + max_health_mod),
+            actor_template.attributes,
+            Health::new(10 + max_health),
         )
     }
+
+    pub fn feat_store(&self) -> &FeatStore {
+        &self.feat_store
+    }
+}
+
+#[test]
+fn test_feats_syntax() {
+    use bevy::asset::ron;
+    let raw_string = std::fs::read_to_string("assets/data/main.feats.ron").unwrap();
+    let data: Feats = ron::from_str(&raw_string).unwrap();
+    assert!(data.0.len() > 0);
+}
+
+#[test]
+fn test_actor_templates_syntax() {
+    use bevy::asset::ron;
+    let raw_string = std::fs::read_to_string("assets/data/main.actors.ron").unwrap();
+    let data: ActorTemplates = ron::from_str(&raw_string).unwrap();
+    assert!(data.0.len() > 0);
+}
+
+#[test]
+fn test_maneuver_templates_syntax() {
+    use bevy::asset::ron;
+    let raw_string = std::fs::read_to_string("assets/data/main.maneuvers.ron").unwrap();
+    let data: ManeuverTemplates = ron::from_str(&raw_string).unwrap();
+    assert!(data.0.len() > 0);
 }

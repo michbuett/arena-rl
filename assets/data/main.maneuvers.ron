@@ -1,0 +1,159 @@
+([("charge", (
+    name: "Charge",
+    keywords: [Action],
+    actions: [(
+        kind: Action (
+            target: Oneself,
+            template: (
+                name: "Charge Vulnerability",
+                fx: SelfTxt("Charge!"),
+                check: NoCheck(([
+                    (Success, Normal, TempEffect(
+                        effect: BoonOrBane(-1),
+                        turns: 1,
+                        keywords: [Reaction, Physical, Melee],
+                        descr: "Vulnerable (-1 to defence)"
+                    ))
+                ])),
+            ),
+        ),
+        inputs: [(
+            input_id: ("charge_path"),
+            prompt: "Select a path for the charge action",
+            input_kind: Path(length: 3),
+        )],
+    ), (
+        kind: MoveTo(
+            path: ("charge_path"),
+        ),
+        inputs: [],
+    ), (
+        kind: Action (
+            target: SingleActor(target_actor: ("target")),
+            template: (
+                name: "Charge attack",
+                fx: SingleTargetMeleeAttack("fx-hit-1"),
+                check: Check(
+                    effects: ([
+                        (Success, Minor, DamageTarget(3)),
+                        (Success, Normal, DamageTarget(4)),
+                        (Success, Major, DamageTarget(5)),
+                        (Complication, Normal, DamageTarget(1)),
+                        (Complication, Major, DamageTarget(2)),
+                    ]),
+                    risky: true,
+                    keywords: [Action, Physical, Melee],
+                    attribute: PhysicalStr,
+                )
+            ),
+        ),
+        inputs: [(
+            input_id: ("target"),
+            prompt: "Select an enemy to attack",
+            input_kind: TargetActor(
+                filter: [OtherOnly, EnemiesOnly, WithinReach(1)],
+            ),
+        ), (
+            input_id: ("defence"),
+            prompt: "How do you want to defend yourself?",
+            input_kind: Maneuver(
+                actor: ("target"),
+                filter: [Reaction],
+                is_reaction: true,
+            ),
+        )],
+    )],
+)),
+
+("attack-sword-01", (
+        name: "Attack",
+        keywords: [Action],
+        actions: [(
+            kind: Action (
+                target: SingleActor (
+                    target_actor: ("target"),
+                ),
+                template: (
+                    name: "Swing Sword",
+                    fx: SingleTargetMeleeAttack("fx-hit-1"),
+                    check: Check(
+                        effects: ([
+                            (Success, Minor, DamageTarget(4)),
+                            (Success, Normal, DamageTarget(2)),
+                            (Success, Major, DamageTarget(2)),
+                        ]),
+                        risky: false,
+                        keywords: [Action, Physical, Melee],
+                        attribute: PhysicalStr,
+                    )
+                ),
+            ),
+            inputs: [(
+                input_id: ("target"),
+                prompt: "Select an enemy to attack",
+                input_kind: TargetActor (
+                    filter: [OtherOnly, EnemiesOnly, WithinReach(1)],
+                ),
+            ), (
+                input_id: ("defence"),
+                prompt: "How do you want to defend yourself?",
+                input_kind: Maneuver (
+                    actor: ("target"),
+                    filter: [Reaction],
+                    is_reaction: true,
+                ),
+            )],
+        )],
+    )),
+
+    ("move", (
+        name: "Move",
+        keywords: [Action],
+        actions: [(
+            kind: MoveTo (
+                path: ("path"),
+            ),
+            inputs: [(
+                input_id: ("path"),
+                prompt: "Select a path",
+                input_kind: Path (
+                    length: 3,
+                ),
+            )],
+        )],
+    )),
+
+    ("dodge", (
+        name: "Dodge",
+        keywords: [Reaction],
+        actions: [(
+            kind: MoveTo (
+                path: ("dodge_path"),
+            ),
+            inputs: [ (
+                input_id: ("dodge_path"),
+                prompt: "Select a path",
+                input_kind: Path ( length: 2 ),
+            )],
+        ), (
+            kind: Action (
+                target: Oneself,
+                template: (
+                    name: "Dodge",
+                    fx: SelfTxt("Dodge"),
+                    check: Check(
+                        effects: ([
+                            (Success, Minor, Protection(2)),
+                            (Success, Normal, Protection(6)),
+                            (Success, Major, Protection(10)),
+                        ]),
+                        risky: false,
+                        keywords: [Reaction, Physical, Melee],
+                        attribute: PhysicalAg,
+                    )
+                ),
+            ),
+            inputs: [],
+        )],
+    )),
+])

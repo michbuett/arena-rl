@@ -1,22 +1,19 @@
 extern crate rand;
 
 use bevy::prelude::*;
-use rand::seq::IteratorRandom;
-use rand::thread_rng;
 
 use crate::core::{
-    AttackData, AttackOption, AttackTargetType, Attacks, Attributes, Card, FeatSource, Hand,
-    Health, ItemState, Items, Protection,
+    ActionCheck, ActionEffect, ActionEffectTrigger, ActionFx, ActionKeyword, ActiveDefence,
+    ActiveEffects, Attributes, Card, CheckResult, Effect, FeatType, Hand, Health, KeywordSet,
+    PassiveDefence, RawActionTemplate, Resistance, SimpleAction,
 };
 
 use super::GameDeck;
-use super::combat_resolution::{
-    Attack, CombatConsequence, CombatResult, Combatant, Target, handle_attack,
-};
+use super::commands::{StartInputWorkfowCommand, UserInputWorkflow};
 use super::fx::{FxEffect, FxSequence};
 use super::ui::{SelectedMapPos, Z_LAYER_ACTOR};
 use super::{
-    map::{HexMap, MapPos, Obstacle},
+    map::{MapPos, Obstacle},
     ui::{Description, MapPosSelectedEvent},
 };
 
@@ -73,7 +70,7 @@ pub struct Activations {
 
 impl Activations {
     pub fn next_activation_initiative(&self) -> Option<u8> {
-        self.remaining.iter().map(|card| card.value_low()).min()
+        self.remaining.iter().map(|card| card.value()).min()
     }
 
     pub fn activate_next(&mut self) -> Card {
@@ -83,7 +80,7 @@ impl Activations {
             .remaining
             .iter()
             .enumerate()
-            .min_by_key(|(_, c)| c.value_low())
+            .min_by_key(|(_, c)| c.value())
             .unwrap();
 
         self.remaining.remove(index)
@@ -145,11 +142,11 @@ impl ActorBundle {
 #[derive(Resource)]
 pub struct PossibleUserActions {
     selected_action: usize,
-    actions: Vec<(Option<MapPos>, Action)>,
+    actions: Vec<(Option<MapPos>, Order)>,
 }
 
 impl PossibleUserActions {
-    pub fn new(actions: Vec<(Option<MapPos>, Action)>) -> Self {
+    pub fn new(actions: Vec<(Option<MapPos>, Order)>) -> Self {
         assert!(!actions.is_empty());
 
         Self {
@@ -166,43 +163,44 @@ impl PossibleUserActions {
         self.selected_action
     }
 
-    pub fn get_selected_action(&self) -> &Action {
+    pub fn get_selected_action(&self) -> &Order {
         self.actions
             .get(self.selected_action)
             .map(|(_, action)| action)
             .unwrap()
     }
 
-    pub fn get_selected_action_at(&self, target_pos: &MapPos) -> Option<&Action> {
+    pub fn get_selected_action_at(&self, target_pos: &MapPos) -> Option<&Order> {
         self.actions
             .get(self.selected_action)
-            .map(|(pos, action)| {
+            .and_then(|(pos, action)| {
                 if pos.is_some_and(|p| p == *target_pos) {
                     Some(action)
                 } else {
                     None
                 }
             })
-            .flatten()
     }
 
-    pub fn available_actions(&self) -> impl Iterator<Item = &Action> {
+    pub fn available_actions(&self) -> impl Iterator<Item = &Order> {
         self.actions.iter().map(|(_, a)| a)
     }
 }
 
+// #[derive(Debug, Event)]
+// pub struct ActorDataChangedEvent(pub Entity);
+
+// pub fn setup_actor_changed(app: &mut App) {
+//     app.world_mut()
+//         .register_component_hooks::<Health>()
+//         .on_insert(|world, context| println!("Changed {:?}", context));
+// }
+
 #[derive(Debug, Event)]
-pub struct ActionTriggeredEvent(pub Action);
+pub struct ActionTriggeredEvent(pub Order);
 
 #[derive(Debug, Event)]
 pub struct ActionSelectedEvent(pub usize);
-
-#[derive(Debug, Event)]
-pub struct CombatFinishedEvent {
-    pub attacker: Entity,
-    pub target: Entity,
-    pub result: CombatResult,
-}
 
 #[derive(Debug, EntityEvent)]
 pub struct BeginActivationCommand(pub Entity);
@@ -217,7 +215,17 @@ pub struct ActorActivatedEvent(pub Entity);
 pub struct MoveToCommand(Entity, Vec<MapPos>);
 
 #[derive(Debug, Event)]
-pub struct AttackCommand(AttackCommandData);
+pub struct ActionCommand(ActionCommandData);
+
+#[derive(Debug, Event)]
+pub struct ActionFinishedEvent {
+    pub actor: Entity,
+    pub targets: EffectTargets,
+    pub result: CheckResult,
+    pub consequences: Vec<(Entity, ActionConsequence)>,
+    pub action_name: String,
+    pub fx: ActionFx,
+}
 
 #[derive(Debug, Event)]
 pub struct AssignActivationCommand {
@@ -226,59 +234,47 @@ pub struct AssignActivationCommand {
 }
 
 #[derive(Debug, Clone)]
-pub struct AttackCommandData {
-    pub attacker: Entity,
-    pub target: AttackTarget,
+pub struct ActionCommandData {
+    pub actor: Entity,
     pub name: String,
-    pub activation: Card,
-    pub data: AttackData,
+    pub targets: EffectTargets,
+    // pub effect: ActionEffects,
+    // pub keywords: KeywordSet<ActionKeyword>,
+    // pub attribute: AttributeType,
+    pub fx: ActionFx,
+    pub check: ActionCheck,
 }
 
-#[derive(Debug, Clone)]
-pub enum AttackTarget {
-    MeleeAttack { target: Entity },
-}
-
-impl AttackCommandData {
-    pub fn new(
-        attacker: Entity,
-        target: Entity,
-        attack_template: &AttackOption,
-        activation: Card,
+impl ActionCommandData {
+    pub fn from_template(
+        actor: Entity,
+        targets: Vec<Entity>,
+        template: &RawActionTemplate,
     ) -> Self {
-        let target = match attack_template.target_type {
-            AttackTargetType::MeleeSingle => AttackTarget::MeleeAttack { target },
-        };
-
         Self {
-            attacker,
-            target,
-            name: attack_template.name.clone(),
-            activation,
-            data: attack_template.data,
+            actor,
+            targets: EffectTargets(targets),
+            name: template.name.clone(),
+            fx: template.fx.clone(),
+            // effect: template.effect.clone().into(),
+            // keywords: KeywordSet::new(&template.keywords),
+            // attribute: template.attribute,
+            check: template.check.clone(),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum Action {
-    NoOp(Entity),
+pub struct EffectTargets(pub Vec<Entity>);
+
+#[derive(Debug, Clone)]
+pub enum Order {
+    EndActivation,
+    // NoOp(Entity),
     MoveAlong { actor: Entity, path: Vec<MapPos> },
-    Attack(AttackCommandData),
+    Action(ActionCommandData),
     EndPlanningPhase(Team),
     AssignActivation { actor: Entity, card_index: usize },
-}
-
-impl Action {
-    fn active_actor(&self) -> Option<Entity> {
-        match self {
-            Action::NoOp(entity) => Some(*entity),
-            Action::MoveAlong { actor, .. } => Some(*actor),
-            Action::AssignActivation { actor, .. } => Some(*actor),
-            Action::Attack(attack) => Some(attack.attacker),
-            _ => None,
-        }
-    }
 }
 
 pub fn clear_user_actions_on_turn_phase_change(mut commands: Commands) {
@@ -335,100 +331,35 @@ pub fn collect_actions_for_assigning_activations(
             let hand = hands_q.get(team.0)?;
 
             if let Some(card_index) = hand.selected_card() {
-                available_actions.push((Some(hex), Action::AssignActivation { actor, card_index }));
+                available_actions.push((Some(hex), Order::AssignActivation { actor, card_index }));
             }
         }
     }
 
     for (team_entity, TeamReady(is_ready), Controller(is_pc)) in teams_q.iter() {
         if *is_pc && !*is_ready {
-            available_actions.push((None, Action::EndPlanningPhase(Team(team_entity))));
+            available_actions.push((None, Order::EndPlanningPhase(Team(team_entity))));
         }
     }
 
-    if available_actions.len() > 0 {
+    if !available_actions.is_empty() {
         commands.insert_resource(PossibleUserActions::new(available_actions));
     }
 
     Ok(())
 }
 
-pub fn collect_actions_for_performin_actions(
-    user_actions: Option<Res<PossibleUserActions>>,
-    selected_map_pos: Option<ResMut<SelectedMapPos>>,
-    map: Res<HexMap>,
-    active_actor_q: Query<(Entity, &Active, &Controller, &MapPos, &Team, &Attacks), With<Actor>>,
-    target_actor_q: Query<(Entity, &MapPos, &Team), With<Actor>>,
+pub fn on_actor_activated_event(
+    trigger: On<ActorActivatedEvent>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
-    if user_actions.is_some() {
-        // The user actions are already available
-        // => nothing more to do
-        return Ok(());
-    }
+    let ActorActivatedEvent(entity) = trigger.event();
+    let input_workflow = UserInputWorkflow::new(*entity);
 
-    if let Some((entity, actor_pos, team, attacks, activation)) =
-        find_active_player_actor(&active_actor_q)
-    {
-        let mut actions = vec![];
-
-        let hex = selected_map_pos.map(|sel_map_pos| sel_map_pos.0);
-        if let Some(hex) = hex {
-            if let Some(target) = find_enemy_at(&target_actor_q, &team, hex) {
-                let distance = actor_pos.distance(&hex);
-
-                for attack_option in attacks.0.iter() {
-                    if attack_option.can_attack(distance) {
-                        let attack =
-                            AttackCommandData::new(entity, target, attack_option, activation);
-                        actions.push((Some(hex), Action::Attack(attack)));
-                    }
-                }
-
-                if actor_pos.distance(&hex) > 1 {
-                    if let Some(mut path) = map.find_path(actor_pos, hex) {
-                        if path.len() > 1 {
-                            let max_steps = (path.len() - 1).max(3);
-                            let path = path.drain(..max_steps).collect();
-
-                            actions.push((
-                                Some(hex),
-                                Action::MoveAlong {
-                                    actor: entity,
-                                    path,
-                                },
-                            ));
-                        }
-                    }
-                }
-            } else if let Some(path) = map.find_path(actor_pos, hex) {
-                actions.push((
-                    Some(hex),
-                    Action::MoveAlong {
-                        actor: entity,
-                        path,
-                    },
-                ));
-            }
-        }
-
-        actions.push((None, Action::NoOp(entity)));
-
-        commands.insert_resource(PossibleUserActions::new(actions));
-    }
+    commands.insert_resource(input_workflow);
+    commands.trigger(StartInputWorkfowCommand);
 
     Ok(())
-}
-
-fn find_active_player_actor(
-    active_actor_q: &Query<(Entity, &Active, &Controller, &MapPos, &Team, &Attacks), With<Actor>>,
-) -> Option<(Entity, MapPos, Team, Attacks, Card)> {
-    for (entity, Active(activation), controller, map_pos, team, attacks) in active_actor_q.iter() {
-        if controller.is_pc() {
-            return Some((entity, *map_pos, *team, attacks.clone(), *activation));
-        }
-    }
-    None
 }
 
 fn find_actor_at(
@@ -443,16 +374,6 @@ fn find_actor_at(
     None
 }
 
-fn find_enemy_at(
-    q_actor_at: &Query<(Entity, &MapPos, &Team), With<Actor>>,
-    attacker_team: &Team,
-    target_pos: MapPos,
-) -> Option<Entity> {
-    find_actor_at(q_actor_at, target_pos)
-        .filter(|(_, target_team)| target_team != attacker_team)
-        .map(|(entity, _)| entity)
-}
-
 pub fn handle_action_selected_event(
     trigger: On<ActionSelectedEvent>,
     selected_map_pos: Option<ResMut<PossibleUserActions>>,
@@ -465,6 +386,7 @@ pub fn handle_action_selected_event(
 
 pub fn handle_action_triggered_event(
     trigger: On<ActionTriggeredEvent>,
+    active_actor_q: Query<Entity, With<Active>>,
     mut commands: Commands,
     mut team_ready_q: Query<Mut<TeamReady>>,
 ) -> Result<(), BevyError> {
@@ -479,34 +401,31 @@ pub fn handle_action_triggered_event(
     commands.remove_resource::<PossibleUserActions>();
 
     match action {
-        Action::MoveAlong { actor, path } => {
+        Order::EndActivation => {
+            for e in active_actor_q.iter() {
+                commands.entity(e).remove::<Active>();
+                commands.trigger(ActivationEndedEvent(e));
+            }
+        }
+        Order::MoveAlong { actor, path } => {
             commands.trigger(MoveToCommand(*actor, path.clone()));
         }
 
-        Action::Attack(attack) => {
-            commands.trigger(AttackCommand(attack.clone()));
+        Order::Action(data) => {
+            commands.trigger(ActionCommand(data.clone()));
         }
 
-        Action::NoOp(..) => {
-            // Do nothing, but progress ui state so next actor can be activated
-        }
-
-        Action::EndPlanningPhase(Team(id)) => {
+        Order::EndPlanningPhase(Team(id)) => {
             let mut team_ready = team_ready_q.get_mut(*id)?;
             team_ready.0 = true;
         }
 
-        Action::AssignActivation { actor, card_index } => {
+        Order::AssignActivation { actor, card_index } => {
             commands.trigger(AssignActivationCommand {
                 actor: *actor,
                 card_index: *card_index,
             });
         }
-    }
-
-    if let Some(entity) = action.active_actor() {
-        commands.entity(entity).remove::<Active>();
-        commands.trigger(ActivationEndedEvent(entity));
     }
 
     Ok(())
@@ -552,64 +471,6 @@ pub fn handle_move_to_command(trigger: On<MoveToCommand>, mut commands: Commands
         .run(&mut commands);
 }
 
-pub fn handle_attack_command(
-    trigger: On<AttackCommand>,
-    combat_data_q: Query<(
-        &Health,
-        &Attributes,
-        &Protection,
-        Option<&RiskComplications>,
-    )>,
-    mut deck: ResMut<GameDeck>,
-    mut commands: Commands,
-) -> Result<(), BevyError> {
-    let AttackCommand(attack) = trigger.event();
-    let attacker = attack.attacker;
-
-    let combat_finished_event = match &attack.target {
-        AttackTarget::MeleeAttack { target } => {
-            // info!(
-            //     "[handle_attack_command] attacker={:?}, target={:?}",
-            //     attacking_entity, target
-            // );
-
-            let [
-                (health_a, attributes_a, protection_a, risk_complications),
-                (health_t, attributes_t, protection_t, _),
-            ] = combat_data_q.get_many([attacker, *target])?;
-
-            let combat_result = handle_attack(
-                Attack {
-                    effort: attack.activation,
-                    risky_complication: risk_complications.is_some(),
-                    attacker: Combatant {
-                        id: attacker,
-                        attributes: attributes_a.effectiv_attributes(health_a),
-                        protection: protection_a.clone(),
-                    },
-                    target: Target::SingleMelee(Combatant {
-                        id: *target,
-                        attributes: attributes_t.effectiv_attributes(health_t),
-                        protection: protection_t.clone(),
-                    }),
-                    data: attack.data.clone(),
-                },
-                &mut deck.0,
-            );
-
-            CombatFinishedEvent {
-                attacker,
-                target: *target,
-                result: combat_result,
-            }
-        }
-    };
-
-    commands.trigger(combat_finished_event);
-
-    Ok(())
-}
-
 pub fn handle_assign_activation_command(
     trigger: On<AssignActivationCommand>,
     mut actor_q: Query<(Mut<Activations>, &Team, &Name)>,
@@ -630,58 +491,288 @@ pub fn handle_assign_activation_command(
     Ok(())
 }
 
-pub fn handle_combat_finished_event(
-    trigger: On<CombatFinishedEvent>,
-    mut health_q: Query<(Mut<Health>, Mut<Protection>, Mut<Items>)>,
+// pub fn handle_combat_finished_event(
+//     trigger: On<CombatFinishedEvent>,
+//     mut health_q: Query<(
+//         Mut<Health>,
+//         Mut<PassiveDefence>,
+//         Mut<Items>,
+//         Mut<ActiveEffects>,
+//     )>,
+// ) -> Result<(), BevyError> {
+//     let CombatFinishedEvent {
+//         result: combat_result,
+//         ..
+//     } = trigger.event();
+
+//     for (e, c) in combat_result.consequences.iter() {
+//         let (mut health, mut protection, mut items, mut active_effects) = health_q.get_mut(*e)?;
+
+//         match c {
+//             CombatConsequence::Wound { damage } => {
+//                 health.damage(*damage);
+//                 // for card in damage.iter() {
+//                 //     health.wounds.push(*card);
+//                 // }
+//             }
+
+//             CombatConsequence::OffBalance => {
+//                 active_effects.add_temporary_eff(
+//                     Effect::BoonOrBane(-1), // the following attacks will be more difficult
+//                     keyword_set!(ActionKeyword::Action, ActionKeyword::Physical),
+//                     1,
+//                     "Off balance (-1 to attacks)".to_string(),
+//                 );
+//             }
+
+//             CombatConsequence::Vulnerable => {
+//                 active_effects.add_temporary_eff(
+//                     Effect::BoonOrBane(-1), // it becomes harder to defend further attacks
+//                     keyword_set!(ActionKeyword::Reaction, ActionKeyword::Physical),
+//                     1,
+//                     "Vulnerable (-1 to defence)".to_string(),
+//                 );
+//             }
+
+//             CombatConsequence::ArmorBreak => {
+//                 let mut rng = thread_rng();
+//                 let protecting_item = protection
+//                     .0
+//                     .iter()
+//                     .filter_map(|r| {
+//                         if matches!(r.source.1, FeatType::Item) {
+//                             Some(r.source.0.to_string())
+//                         } else {
+//                             None
+//                         }
+//                     })
+//                     .choose(&mut rng);
+
+//                 if let Some(item_name) = protecting_item {
+//                     let resistance = protection
+//                         .0
+//                         .iter_mut()
+//                         .find(|r| r.source.0 == item_name)
+//                         .unwrap();
+
+//                     resistance.resistance = resistance.resistance.checked_sub(1).unwrap_or(0);
+
+//                     let item = items
+//                         .0
+//                         .iter_mut()
+//                         .find(|r| r.feat_ref == item_name)
+//                         .unwrap();
+//                     item.state = if resistance.resistance == 0 {
+//                         ItemState::Broken
+//                     } else {
+//                         ItemState::Damaged
+//                     };
+//                 }
+//             } // _ => {
+//               //     warn!("Not implemented yet: {:?}", c);
+//               // }
+//         }
+//     }
+
+//     Ok(())
+// }
+
+pub fn handle_action_command(
+    trigger: On<ActionCommand>,
+    actor_q: Query<(
+        &Attributes,
+        &ActiveEffects,
+        Option<&Active>,
+        Option<&RiskComplications>,
+    )>,
+    def_q: Query<(&PassiveDefence, Option<&ActiveDefence>)>,
+    mut deck: ResMut<GameDeck>,
+    mut commands: Commands,
 ) -> Result<(), BevyError> {
-    let CombatFinishedEvent {
-        result: combat_result,
-        ..
-    } = trigger.event();
+    let ActionCommand(ActionCommandData {
+        actor,
+        targets,
+        // effect,
+        // keywords,
+        // attribute,
+        name,
+        fx,
+        check,
+    }) = trigger.event();
 
-    for (e, c) in combat_result.consequences.iter() {
-        let (mut health, mut protection, mut items) = health_q.get_mut(*e)?;
-        match c {
-            CombatConsequence::Wound { damage } => {
-                for card in damage.iter() {
-                    health.wounds.push(*card);
-                }
+    let (attributes, active_effects, activation, risky_stance) = actor_q.get(*actor)?;
+    let (action_result, effects) = match check {
+        ActionCheck::NoCheck(eff) => (CheckResult::no_check(), eff),
+        ActionCheck::Check {
+            effects,
+            risky,
+            attribute,
+            keywords,
+        } => {
+            let mut action_check = SimpleAction {
+                attribute: *attribute,
+                risk_complication: *risky || risky_stance.is_some(),
+                attributes: *attributes,
+            }
+            .into_check(active_effects.for_action(*keywords));
+
+            if let Some(Active(effort)) = activation {
+                action_check = action_check.effort(*effort);
             }
 
-            CombatConsequence::ArmorBreak => {
-                let mut rng = thread_rng();
-                let protecting_item = protection
-                    .0
-                    .iter()
-                    .filter_map(|r| {
-                        if matches!(r.source.1, FeatSource::Item) {
-                            Some(r.source.0.to_string())
-                        } else {
-                            None
-                        }
-                    })
-                    .choose(&mut rng);
-
-                if let Some(item_name) = protecting_item {
-                    let resistance = protection
-                        .0
-                        .iter_mut()
-                        .find(|r| r.source.0 == item_name)
-                        .unwrap();
-
-                    resistance.resistance = resistance.resistance.checked_sub(1).unwrap_or(0);
-
-                    let item = items.0.iter_mut().find(|r| r.key == item_name).unwrap();
-                    item.state = if resistance.resistance == 0 {
-                        ItemState::Broken
-                    } else {
-                        ItemState::Damaged
-                    };
-                }
-            }
-            _ => {}
+            let action_result = action_check.perform_check(&mut deck.0);
+            (action_result, effects)
         }
-    }
+    };
+
+    let consequences = effects
+        .effects_for_result(&action_result)
+        .iter()
+        .flat_map(|(tr, eff)| map_action_effect(*actor, targets, *tr, &eff, def_q))
+        .collect();
+
+    commands.trigger(ActionFinishedEvent {
+        actor: *actor,
+        targets: targets.clone(),
+        action_name: name.clone(),
+        consequences,
+        result: action_result,
+        fx: fx.clone(),
+    });
 
     Ok(())
+}
+
+pub fn handle_action_finished_event(
+    trigger: On<ActionFinishedEvent>,
+    mut health_q: Query<(Mut<Health>, Mut<ActiveEffects>)>,
+    mut commands: Commands,
+) -> Result<(), BevyError> {
+    let ActionFinishedEvent { consequences, .. } = trigger.event();
+
+    for (e, c) in consequences {
+        let (mut health, mut active_effects) = health_q.get_mut(*e)?;
+        match c {
+            ActionConsequence::Effect {
+                effect,
+                keywords,
+                turns,
+                descr,
+            } => {
+                active_effects.add_temporary_eff(effect.clone(), *keywords, *turns, descr.clone());
+            }
+            ActionConsequence::Damage(damage_details) => {
+                commands.entity(*e).remove::<ActiveDefence>();
+
+                if damage_details.actual_damage > 0 {
+                    health.damage(damage_details.actual_damage);
+                }
+            }
+
+            ActionConsequence::Protection(resistance) => {
+                commands.entity(*e).insert(ActiveDefence(Resistance::new(
+                    ("Active Defence".into(), FeatType::Intrinsic),
+                    *resistance,
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug)]
+pub enum ActionConsequence {
+    Damage(DamageDetails),
+    Protection(u8),
+    Effect {
+        effect: Effect,
+        keywords: KeywordSet<ActionKeyword>,
+        turns: u8,
+        descr: String,
+    },
+}
+
+fn map_action_effect(
+    actor: Entity,
+    action_targets: &EffectTargets,
+    trigger: ActionEffectTrigger,
+    eff: &ActionEffect,
+    def_q: Query<(&PassiveDefence, Option<&ActiveDefence>)>,
+) -> Vec<(Entity, ActionConsequence)> {
+    let consequence_targets = if matches!(trigger, ActionEffectTrigger::Complication) {
+        // a complication always targets the one who did the action
+        &vec![actor]
+    } else {
+        &action_targets.0
+    };
+
+    match eff {
+        ActionEffect::Protection(p) => consequence_targets
+            .iter()
+            .map(|e| (*e, ActionConsequence::Protection(*p)))
+            .collect(),
+
+        ActionEffect::DamageTarget(dmg) => consequence_targets
+            .iter()
+            .map(|e| {
+                let (passive_def, active_def) = def_q.get(*e).unwrap();
+                let dmg_details = damage_calculation(*dmg, active_def, passive_def);
+                (*e, ActionConsequence::Damage(dmg_details))
+            })
+            .collect(),
+
+        // ActionEffect::Multi(effects) => effects
+        //     .iter()
+        //     .flat_map(|eff| map_action_effect(targets, eff, def_q))
+        //     .collect(),
+        ActionEffect::TempEffect {
+            effect,
+            descr,
+            keywords,
+            turns,
+        } => consequence_targets
+            .iter()
+            .map(|e| {
+                (
+                    *e,
+                    ActionConsequence::Effect {
+                        effect: effect.clone(),
+                        keywords: KeywordSet::new(keywords),
+                        turns: *turns,
+                        descr: descr.clone(),
+                    },
+                )
+            })
+            .collect(),
+        _ => vec![],
+    }
+}
+
+fn damage_calculation(
+    max_damage: u8,
+    active_def: Option<&ActiveDefence>,
+    passive_def: &PassiveDefence,
+) -> DamageDetails {
+    let defence = active_def.as_ref().map(|d| d.0.resistance).unwrap_or(0);
+    let armor = passive_def.total_resistance();
+    let actual_damage = max_damage
+        .checked_sub(defence)
+        .unwrap_or(0)
+        .checked_sub(armor)
+        .unwrap_or(0);
+
+    DamageDetails {
+        max_damage,
+        defence,
+        armor,
+        actual_damage,
+    }
+}
+
+#[derive(Debug)]
+pub struct DamageDetails {
+    pub max_damage: u8,
+    pub defence: u8,
+    pub armor: u8,
+    pub actual_damage: u8,
 }

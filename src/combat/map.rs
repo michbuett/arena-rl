@@ -11,16 +11,19 @@ const HEX_SIZE: f32 = 64.0;
 pub struct MapPos {
     q: i32,
     r: i32,
-    s: i32,
 }
 
 impl MapPos {
     pub fn new(q: i32, r: i32) -> Self {
-        Self { q, r, s: -q - r }
+        Self { q, r }
     }
 
-    pub fn coordinates(&self) -> (i32, i32) {
+    pub fn as_axial_coordinates(&self) -> (i32, i32) {
         (self.q, self.r)
+    }
+
+    pub fn from_axial_coordinates(v: (i32, i32)) -> Self {
+        Self::new(v.0, v.1)
     }
 
     pub fn from_oddr(col: i32, row: i32) -> Self {
@@ -49,7 +52,7 @@ impl MapPos {
     fn round_hex(frac_q: f32, frac_r: f32, frac_s: f32) -> Self {
         let mut q = frac_q.round();
         let mut r = frac_r.round();
-        let mut s = frac_s.round();
+        let s = frac_s.round();
 
         let q_diff = f32::abs(q - frac_q);
         let r_diff = f32::abs(r - frac_r);
@@ -59,21 +62,31 @@ impl MapPos {
             q = -r - s;
         } else if r_diff > s_diff {
             r = -q - s;
-        } else {
-            s = -q - r;
         }
 
-        Self {
-            q: q as i32,
-            r: r as i32,
-            s: s as i32,
-        }
+        Self::new(q as i32, r as i32)
     }
 
     pub fn distance(&self, other: &MapPos) -> i32 {
-        ((self.q - other.q).abs() + (self.r - other.r).abs() + (self.s - other.s).abs()) / 2
+        let self_s = -self.q - self.r;
+        let other_s = -other.q - other.r;
+
+        ((self.q - other.q).abs() + (self.r - other.r).abs() + (self_s - other_s).abs()) / 2
     }
 
+    fn scale(self, factor: i32) -> Self {
+        Self::new(self.q * factor, self.r * factor)
+    }
+
+    fn add(self, other: Self) -> Self {
+        Self::new(self.q + other.q, self.r + other.r)
+    }
+
+    fn neighbor(self, direction: usize) -> Self {
+        assert!(direction < 6);
+        let nd = NEIGHBOR_DELTAS[direction];
+        self.add(Self::new(nd.0, nd.1))
+    }
     // fn lerp(&self, other: &MapPos, delta: f32) -> Self {
     //     let fraq_q = self.q as f32 + (other.q - self.q) as f32 * delta;
     //     let fraq_r = self.r as f32 + (other.r - self.r) as f32 * delta;
@@ -126,12 +139,8 @@ impl HexMap {
             .map(|tt| (*hex, *tt, self.obstacles.get(hex).cloned()))
     }
 
-    pub fn neighbors<'a>(&'a self, pos: MapPos) -> NeighborTileIter<'a> {
-        NeighborTileIter {
-            map: self,
-            start_pos: pos,
-            step: 0,
-        }
+    pub fn neighbors(&self, center: MapPos, radius: i32) -> impl Iterator<Item = Tile> {
+        NeighborTileIter::new(self, center, radius)
     }
 
     pub fn find_path(&self, from: MapPos, to: MapPos) -> Option<Path> {
@@ -139,31 +148,8 @@ impl HexMap {
             return None;
         }
 
-        // let straight_path = self.find_straight_path(from, to);
-        // if straight_path.is_some() {
-        //     return straight_path;
-        // }
-
         find_path_astar(from, to, self)
     }
-
-    // pub fn find_straight_path(&self, start: MapPos, goal: MapPos) -> Option<Path> {
-    //     let mut p = Path::new();
-    //     let d = start.distance(&goal);
-
-    //     for i in 0..=(d.floor() as i32) {
-    //         let delta = 1.0 / d * (i as f32);
-    //         let next_pos = MapPos::lerp(&start, &goal, delta);
-
-    //         if let Some((mp, ..)) = self.find_tile(&next_pos) {
-    //             p.push(mp);
-    //         } else {
-    //             return None;
-    //         }
-    //     }
-
-    //     Some(p)
-    // }
 }
 
 pub fn dummy_hex() -> HexMap {
@@ -220,6 +206,26 @@ fn test_can_build_hex_map() {
     assert!(map.tiles().count() > 0);
 }
 
+#[rustfmt::skip]
+#[test]
+fn test_map_can_determine_neighbor_tiles() {
+    let map = dummy_hex();
+    let pos = MapPos::from_oddr(3, 3);
+    let neighbors = map
+        .neighbors(pos, 2)
+        .map(|(p, ..)| (p.q, p.r))
+        .collect::<Vec<_>>();
+
+    assert_eq!(18, neighbors.len());
+    assert_eq!(vec![
+    // first ring
+    (1, 4), (2, 4), (3, 3), (3, 2), (2, 2), (1, 3),
+    // second ring
+    (0, 5), (1, 5), (2, 5), (3, 4), (4, 3), (4, 2),
+    (4, 1), (3, 1), (2, 1), (1, 2), (0, 3), (0, 4),
+    ], neighbors);
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum TileType {
     Floor,
@@ -228,153 +234,6 @@ pub enum TileType {
 
 pub type Tile = (MapPos, TileType, Option<Obstacle>);
 pub type Path = Vec<MapPos>;
-
-// #[derive(Resource)]
-// pub struct Map(Vec<Vec<TileType>>);
-
-// impl Map {
-//     // pub fn new(Vec<Vec<TileType>>) -> Self {
-
-//     // }
-
-//     pub fn num_columns(self: &Self) -> u32 {
-//         self.0[0].len() as u32
-//     }
-
-//     pub fn num_rows(self: &Self) -> u32 {
-//         self.0.len() as u32
-//     }
-
-//     // pub fn find_tile(self: &Self, wpos: WorldPos) -> Option<Tile> {
-//     //     self.get_tile(MapPos::from_world_pos(wpos))
-//     // }
-
-//     pub fn get_tile(self: &Self, mpos: MapPos) -> Option<Tile> {
-//         let rows = &self.0;
-//         let (i, j) = (mpos.col() as usize, mpos.row() as usize);
-
-//         if j >= 0 && j < rows.len() {
-//             let cols = &rows[j];
-
-//             if i >= 0 && i < cols.len() {
-//                 let tt = cols[i].clone();
-//                 return Some(Tile(mpos, tt));
-//             }
-//         }
-
-//         None
-//     }
-
-//     pub fn tiles(&self) -> TileIter {
-//         TileIter {
-//             map: self,
-//             cur_col: 0,
-//             cur_row: 0,
-//         }
-//     }
-
-//     pub fn neighbors<'a>(
-//         &'a self,
-//         tile: Tile,
-//         distance: NonZeroU8,
-//         obstacles: &'a ObstacleSet,
-//     ) -> NeighborTileIter<'a> {
-//         NeighborTileIter {
-//             map: self,
-//             center_col: tile.column() as i32,
-//             center_row: tile.row() as i32,
-//             step: 0,
-//             obstacles,
-//             distance,
-//         }
-//     }
-
-//     pub fn find_path(&self, from: MapPos, to: MapPos, obstacles: &ObstacleSet) -> Option<Path> {
-//         let straight_path = self.find_straight_path(from, to, obstacles);
-//         if straight_path.is_some() {
-//             return straight_path;
-//         }
-
-//         if let (Some(s), Some(g)) = (self.get_tile(from), self.get_tile(to)) {
-//             return find_path_astar(self, s, g, obstacles);
-//         }
-
-//         None
-//     }
-
-//     pub fn find_straight_path(
-//         &self,
-//         start: MapPos,
-//         goal: MapPos,
-//         obstacles: &ObstacleSet,
-//     ) -> Option<Path> {
-//         let mut p = Path::new();
-//         let d = distance(start, goal).floor() as i32;
-
-//         for i in 1..=d {
-//             let delta = i as f32 / d as f32;
-//             let next_pos = MapPos::lerp(&start, &goal, delta);
-
-//             if let Some(next_tile) = self.get_tile(next_pos) {
-//                 if let Tile(_, TileType::Void) = next_tile {
-//                     return None;
-//                 }
-
-//                 if obstacles.0.get(&next_tile.into()).is_some() {
-//                     return None;
-//                 } else {
-//                     p.push(next_tile);
-//                 }
-//             } else {
-//                 return None;
-//             }
-//         }
-
-//         Some(p)
-//     }
-
-//     // pub fn tiles_along_line(&self, p1: MapPos, p2: MapPos) -> LineIter {
-//     //     LineIter::new(self, p1, p2)
-//     // }
-
-//     // pub fn find_path_neighborhood(
-//     //     &self,
-//     //     from: WorldPos,
-//     //     to: WorldPos,
-//     //     min_distance: u8,
-//     //     max_distance: u8,
-//     //     obstacles: &HashMap<Tile, Obstacle>,
-//     // ) -> Option<Path> {
-//     //     let neighbors = NeighborTileIter::new(self, to, obstacles);
-//     //     // let neighbors = NeighborTileIter::new(self, to, obstacles, min_distance, max_distance);
-//     //     let mut result = None;
-//     //     let mut length = usize::MAX;
-
-//     //     for n in neighbors {
-//     //         let n_pos = WorldPos(n.column() as f32, n.row() as f32);
-//     //         let p = self.find_path(from, n_pos, obstacles);
-//     //         if let Some(p) = p {
-//     //             if p.len() < length {
-//     //                 length = p.len();
-//     //                 result = Some(p);
-//     //             }
-//     //         }
-//     //     }
-
-//     //     result
-//     // }
-// }
-
-// #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-// pub enum Obstacle {
-//     /// An obstacle that is impossible to overcome
-//     Blocker,
-
-//     /// An obstacle which one may overcome with skill and luck
-//     /// obscurity (a modifiyer to the success chance of a roll) and blocking (a
-//     /// modifiyer of roll quality)
-//     Impediment(NonZeroU8, i8),
-// }
 
 #[derive(Component, Clone, Copy)]
 pub struct Obstacle(pub f32);
@@ -386,266 +245,83 @@ pub fn update_obstacles_in_map(mut map: ResMut<HexMap>, obstacles_q: Query<(&Obs
     }
 }
 
-// #[derive(Clone)]
-// pub struct ObstacleSet(pub HashMap<MapPos, Obstacle>);
-
-// impl ObstacleSet {
-//     pub fn ignore(self, pos: MapPos) -> Self {
-//         let mut hm = self.0;
-//         hm.remove(&pos);
-//         Self(hm)
-//     }
-// }
-
-// // pub struct LineIter<'a> {
-// //     map: &'a Map,
-// //     p1: MapPos,
-// //     p2: MapPos,
-// //     distance: usize,
-// //     step: usize,
-// // }
-
-// // impl<'a> LineIter<'a> {
-// //     pub fn new(map: &'a Map, p1: MapPos, p2: MapPos) -> Self {
-// //         Self {
-// //             map,
-// //             p1,
-// //             p2,
-// //             distance: p1.distance(p2),
-// //             step: 0,
-// //         }
-// //     }
-// // }
-
-// // impl<'a> Iterator for LineIter<'a> {
-// //     type Item = Tile;
-
-// //     fn next(&mut self) -> Option<Tile> {
-// //         let delta = self.step as f32 / self.distance as f32;
-// //         let next_pos = MapPos::lerp(&self.p1, &self.p2, delta);
-
-// //         self.step += 1;
-// //         self.map.get_tile(next_pos)
-// //     }
-// // }
-
-// /// An iterator that iterates over all map positions which are crossed by a line between two points p0 and p1
-// /// The algorithm is an adaptation of https://www.redblobgames.com/grids/line-drawing.html#supercover
-// /// The line itself is endless so it should be used in combination with e.g. take() or take_while()
-// /// panics if p0 == p1 in non-optimized builds (debug mode)
-// pub struct SuperLineIter {
-//     distance: (i32, i32),
-//     step: (i32, i32),
-//     next_pos: MapPos,
-//     sign: (i32, i32),
-// }
-
-// impl SuperLineIter {
-//     pub fn new(p0: MapPos, p1: MapPos) -> Self {
-//         debug_assert!(p0 != p1);
-
-//         let (x0, y0) = (p0.col() as i32, p0.row() as i32);
-//         let (x1, y1) = (p1.col() as i32, p1.row() as i32);
-//         let (dx, dy) = (x1 - x0, y1 - y0);
-
-//         Self {
-//             next_pos: p0,
-//             distance: (i32::abs(dx), i32::abs(dy)),
-//             step: (0, 0),
-//             sign: (i32::signum(dx), i32::signum(dy)),
-//         }
-//     }
-// }
-
-// impl Iterator for SuperLineIter {
-//     type Item = MapPos;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         let next_pos = self.next_pos;
-//         let (x, y) = (self.next_pos.col() as i32, self.next_pos.row() as i32);
-//         let (sign_x, sign_y) = self.sign;
-//         let (ix, iy) = self.step;
-//         let (nx, ny) = self.distance;
-//         let decision = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx;
-//         let (total_x, total_y, next_x, next_y) = if decision == 0 {
-//             // next step is diagonal
-//             (ix + 1, iy + 1, x + sign_x, y + sign_y)
-//         } else if decision < 0 {
-//             // next step is horizontal
-//             (ix + 1, iy, x + sign_x, y)
-//         } else {
-//             // next step is vertical
-//             (ix, iy + 1, x, y + sign_y)
-//         };
-
-//         self.next_pos = MapPos(next_x as u32, next_y as u32);
-//         self.step = (total_x, total_y);
-
-//         Some(next_pos)
-//     }
-// }
-
-// pub struct TileIter<'a> {
-//     map: &'a Map,
-//     cur_col: usize,
-//     cur_row: usize,
-// }
-
-// impl<'a> Iterator for TileIter<'a> {
-//     type Item = Tile;
-
-//     fn next(&mut self) -> Option<Tile> {
-//         let rows = &self.map.0;
-
-//         if self.cur_row < rows.len() {
-//             let cols = &rows[self.cur_row];
-
-//             if self.cur_col < cols.len() {
-//                 let tt = cols[self.cur_col].clone();
-//                 let tile = Tile(MapPos(self.cur_col as u32, self.cur_row as u32), tt);
-
-//                 self.cur_col = self.cur_col + 1;
-
-//                 return Some(tile);
-//             } else {
-//                 self.cur_row = self.cur_row + 1;
-//                 self.cur_col = 0;
-//                 return self.next();
-//             }
-//         }
-
-//         None
-//     }
-// }
-
-const NEIGHBOR_DELTAS: [(i32, i32, i32); 6] = [
-    (1, 0, -1),
-    (1, -1, 0),
-    (0, -1, 1),
-    (-1, 0, 1),
-    (-1, 1, 0),
-    (0, 1, -1),
-];
-
+const NEIGHBOR_DELTAS: [(i32, i32); 6] = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)];
 pub struct NeighborTileIter<'a> {
     map: &'a HexMap,
-    start_pos: MapPos,
-    step: usize,
+    curr_ring: i32,
+    center: MapPos,
+    curr_pos: MapPos,
+    max_steps: i32,
+    steps_taken: i32,
+    steps_in_dir: i32,
+    steps_in_ring: i32,
+    curr_dir: usize,
+}
+
+impl<'a> NeighborTileIter<'a> {
+    fn new(map: &'a HexMap, center: MapPos, radius: i32) -> Self {
+        let max_steps = 3 * radius * (radius + 1);
+
+        Self {
+            map,
+            center,
+            curr_pos: center.neighbor(4),
+            max_steps,
+            curr_ring: 1,
+            steps_taken: 0,
+            steps_in_dir: 0,
+            steps_in_ring: 1,
+            curr_dir: 0,
+        }
+    }
 }
 
 impl<'a> Iterator for NeighborTileIter<'a> {
     type Item = Tile;
-
     fn next(&mut self) -> Option<Tile> {
-        while self.step < NEIGHBOR_DELTAS.len() {
-            let (dq, dr, ds) = NEIGHBOR_DELTAS[self.step];
-            let candidate_pos = MapPos {
-                q: self.start_pos.q + dq,
-                r: self.start_pos.r + dr,
-                s: self.start_pos.s + ds,
-            };
+        while self.steps_taken < self.max_steps {
+            let candidate_tile = self.map.find_tile(&self.curr_pos);
+            let hexes_per_ring = 6 * self.curr_ring;
 
-            let candidate_tile = self.map.find_tile(&candidate_pos);
+            self.steps_taken += 1;
 
-            self.step += 1;
-            if candidate_tile.is_some() {
+            if self.steps_in_ring >= hexes_per_ring {
+                // We are at the end of the current ring
+                // => step up to the next ring
+                self.steps_in_ring = 1;
+                self.curr_dir = 0;
+                self.steps_in_dir = 0;
+                self.curr_ring += 1;
+                self.curr_pos = self
+                    .center
+                    .add(MapPos::from_axial_coordinates(NEIGHBOR_DELTAS[4]).scale(self.curr_ring));
+            } else {
+                // There are still hexes in the current ring to explore
+                // => take a step along the current ring and try the next hex
+                self.steps_in_ring += 1;
+
+                if self.steps_in_dir < self.curr_ring {
+                    // take another step anlog the current edge
+                    self.steps_in_dir += 1;
+                    self.curr_pos = self.curr_pos.neighbor(self.curr_dir);
+                } else {
+                    // We are at the end of the current edge
+                    // => turn around and walk along the next edge
+                    self.steps_in_dir = 1;
+                    self.curr_dir += 1;
+                    self.curr_pos = self.curr_pos.neighbor(self.curr_dir);
+                }
+            }
+
+            if candidate_tile.is_some_and(|(_, _, obs)| obs.is_none()) {
                 return candidate_tile;
             }
         }
-
         None
     }
 }
 
-// #[test]
-// fn it_can_find_a_path() {
-//     let m = build_map(vec![
-//         vec![1, 0, 1, 1, 1],
-//         vec![1, 0, 1, 1, 1],
-//         vec![1, 1, 1, 1, 1],
-//     ]);
-
-//     let obstacles = ObstacleSet(HashMap::new());
-//     let from = MapPos(0, 0);
-//     let to = MapPos(3, 1);
-//     let p = m.find_path(from, to, &obstacles).unwrap();
-//     let p2 = m.find_straight_path(from, to, &obstacles);
-
-//     // assert!(p.is_some());
-//     assert_eq!(p.len(), 4);
-//     assert_eq!(p2, None);
-//     let mut p = p.iter();
-//     assert_eq!(p.next(), Some(&Tile(MapPos(0, 1), TileType::Floor)));
-//     assert_eq!(p.next(), Some(&Tile(MapPos(1, 2), TileType::Floor)));
-//     assert_eq!(p.next(), Some(&Tile(MapPos(2, 2), TileType::Floor)));
-//     assert_eq!(p.next(), Some(&Tile(MapPos(3, 1), TileType::Floor)));
-// }
-
-// #[test]
-// fn it_can_find_a_staight_path() {
-//     let m = build_map(vec![
-//         vec![1, 1, 1, 1, 1, 1],
-//         vec![1, 1, 1, 1, 1, 1],
-//         vec![1, 1, 1, 1, 1, 1],
-//     ]);
-
-//     let from = MapPos(0, 0);
-//     let to = MapPos(5, 2);
-//     let p = m.find_path(from, to, &ObstacleSet(HashMap::new())).unwrap();
-
-//     // assert!(p.is_some());
-//     assert_eq!(p.len(), 5);
-//     let mut p = p.iter();
-//     assert_eq!(p.next(), Some(&Tile(MapPos(1, 0), TileType::Floor)));
-//     assert_eq!(p.next(), Some(&Tile(MapPos(2, 1), TileType::Floor)));
-//     assert_eq!(p.next(), Some(&Tile(MapPos(3, 1), TileType::Floor)));
-//     assert_eq!(p.next(), Some(&Tile(MapPos(4, 2), TileType::Floor)));
-//     assert_eq!(p.next(), Some(&Tile(MapPos(5, 2), TileType::Floor)));
-// }
-
-// pub fn dummy() -> Map {
-//     // build_map(vec![
-//     //     vec![0, 1, 0, 0],
-//     //     vec![1, 1, 1, 1],
-//     //     vec![1, 1, 1, 1],
-//     //     vec![1, 1, 0, 0],
-//     // ])
-//     build_map(vec![
-//         vec![0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0],
-//         vec![0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
-//         vec![0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-//         vec![0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-//         vec![0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-//         vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-//         vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-//         vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-//         vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-//         vec![0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-//         vec![0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-//         vec![0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-//         vec![0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
-//         vec![0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0],
-//     ])
-// }
-
-// fn build_map(tiles: Vec<Vec<u8>>) -> Map {
-//     let grid = tiles.iter().rev().map(|r| row(r)).collect();
-//     Map(grid)
-// }
-
-// fn row(row_tiles: &Vec<u8>) -> Vec<TileType> {
-//     Vec::from_iter(row_tiles.iter().map(|&i| {
-//         if i > 0 {
-//             TileType::Floor
-//         } else {
-//             TileType::Void
-//         }
-//     }))
-// }
-
-// #[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct Node(MapPos, f32);
-// struct Node(Tile, f32);
 
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
@@ -694,7 +370,7 @@ fn find_path_astar(start: MapPos, goal: MapPos, m: &HexMap) -> Option<Path> {
         } else {
             // the current candidate is not the goal
             // -> ... and look its at its neighbors
-            for neighbor_tile @ (neighor_pos, _, _) in m.neighbors(current_pos) {
+            for neighbor_tile @ (neighor_pos, _, _) in m.neighbors(current_pos, 1) {
                 let new_costs = current_costs + costs(&neighbor_tile);
                 // let new_costs = current_costs + 1.0; // TODO: consider tile type and obstacles
                 let costs = costs_so_far.get(&neighor_pos);

@@ -81,7 +81,7 @@ impl SpriteConfigMap {
                         .files
                         .iter()
                         .filter_map(|file_name| {
-                            asset_server.get_handle::<Image>(format!("images/combat/{}", file_name))
+                            asset_server.get_handle::<Image>(format!("images/combat/{file_name}"))
                         })
                         .map(|handle| handle.id())
                         .collect::<Vec<_>>();
@@ -158,18 +158,18 @@ impl From<&Vec<String>> for Visual {
 #[derive(Component)]
 pub struct SpriteContainer;
 
+#[allow(clippy::type_complexity)]
 pub fn update_sprites_from_visuals(
     mut commands: Commands,
     sprite_cfg_map: Res<SpriteConfigMap>,
-    // layouts: Res<Assets<TextureAtlasLayout>>,
-    visual_q: Query<(Entity, &Visual, Option<&FadeAnimation>), Changed<Visual>>,
+    visual_q: Query<(Entity, &Visual, Option<&FadeAnimation>, Option<&Pickable>), Changed<Visual>>,
     sprite_container_q: Query<(&ChildOf, Entity, &SpriteContainer)>,
 ) {
     if visual_q.is_empty() {
         return;
     }
 
-    for (entity, visual, fade_animation) in visual_q.iter() {
+    for (entity, visual, fade_animation, pickable) in visual_q.iter() {
         // clear "old" sprites
         for (child_of, child_entity, _) in sprite_container_q.iter() {
             if child_of.parent() == entity {
@@ -188,21 +188,29 @@ pub fn update_sprites_from_visuals(
         container_entity_cmd.insert(ChildOf(entity));
 
         match visual {
-            Visual::Single(v) => {
+            Visual::Single(visual) => {
                 insert_sprite(
                     container_entity_cmd,
                     &sprite_cfg_map,
-                    v,
+                    visual,
                     0.0,
                     fade_animation,
+                    pickable,
                 );
             }
 
             Visual::Multi(visuals) => {
-                for (idx, v) in visuals.iter().enumerate() {
+                for (idx, visual) in visuals.iter().enumerate() {
                     container_entity_cmd.with_children(|parent| {
                         let c = parent.spawn_empty();
-                        insert_sprite(c, &sprite_cfg_map, v, idx as f32, fade_animation);
+                        insert_sprite(
+                            c,
+                            &sprite_cfg_map,
+                            visual,
+                            idx as f32,
+                            fade_animation,
+                            pickable,
+                        );
                     });
                 }
             }
@@ -216,6 +224,7 @@ fn insert_sprite(
     visual: &str,
     zlayer: f32,
     fade_animation: Option<&FadeAnimation>,
+    pickable: Option<&Pickable>,
 ) {
     match sprite_cfg_map.map.get(visual) {
         Some(SpriteConfig::Single {
@@ -233,10 +242,6 @@ fn insert_sprite(
                 Transform::from_translation(Vec3::new(*dx, *dy, zlayer)),
                 Sprite::from_atlas_image(image, atlas),
             ));
-
-            if let Some(fa) = fade_animation {
-                commands.insert(fa.clone());
-            }
         }
 
         Some(SpriteConfig::Animated {
@@ -279,10 +284,17 @@ fn insert_sprite(
             warn!("Unknown visual '{}'", visual);
         }
     }
+
+    if let Some(fa) = fade_animation {
+        commands.insert(fa.clone());
+    }
+    if let Some(p) = pickable {
+        commands.insert(p.clone());
+    }
 }
 
 fn combat_sprite_path(n: impl Display) -> String {
-    format!("images/combat/{}", n)
+    format!("images/combat/{n}")
 }
 
 fn rand_between<R, T>(r: R) -> T

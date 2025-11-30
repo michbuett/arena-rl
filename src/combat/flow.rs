@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::{GameState, core::Hand};
+use crate::{
+    GameState,
+    core::{ActiveEffects, Hand},
+};
 
 use super::{
     GameDeck,
@@ -27,7 +30,7 @@ pub fn setup_combat_flow(mut commands: Commands) {
 pub fn handle_turn_phase_start_turn(
     mut deck: ResMut<GameDeck>,
     mut teams_q: Query<(Mut<Hand>, Mut<TeamReady>, &Controller)>,
-    mut activations_q: Query<(Entity, Mut<Activations>), With<Actor>>,
+    mut activations_q: Query<(Entity, Mut<Activations>, Mut<ActiveEffects>), With<Actor>>,
     mut next_turn_phase: ResMut<NextState<TurnPhase>>,
 ) {
     // println!("[enter_turn_phase_start_turn]");
@@ -42,7 +45,8 @@ pub fn handle_turn_phase_start_turn(
         }
     }
 
-    for (_, mut activations) in activations_q.iter_mut() {
+    for (_, mut activations, mut active_effects) in activations_q.iter_mut() {
+        active_effects.new_turn();
         activations.refresh(vec![deck.0.deal()]);
     }
 

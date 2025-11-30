@@ -1,13 +1,14 @@
 mod actor;
 mod ai;
 mod combat_fx;
-mod combat_resolution;
+mod commands;
 mod flow;
 mod fx;
 mod generator;
 mod map;
 mod ui;
 
+// use actor::setup_actor_changed;
 use ai::combat_ai_plugin;
 use bevy::prelude::*;
 use generator::{ActorGenerator, setup_generators};
@@ -21,6 +22,8 @@ use self::{
     ui::combat_ui_plugin,
 };
 
+pub use commands::ManeuverTemplates;
+
 #[derive(Component)]
 struct OnCombatState;
 
@@ -33,27 +36,20 @@ struct GameDeck(pub Deck);
 pub fn combat_plugin(app: &mut App) {
     app.add_sub_state::<TurnPhase>()
         .add_plugins((combat_ui_plugin, combat_ai_plugin))
-        // .add_event::<ActionTriggeredEvent>()
-        // .add_event::<ActionSelectedEvent>()
-        // .add_event::<ActorActivatedEvent>()
-        // .add_event::<CombatFinishedEvent>()
-        // .add_event::<BeginActivationCommand>()
-        // .add_event::<ActivationEndedEvent>()
-        // .add_event::<MoveToCommand>()
-        // .add_event::<AttackCommand>()
-        // .add_event::<AssignActivationCommand>()
-        // .add_event::<ProgressCombatTurnCommand>()
         .add_observer(actor::handle_actor_activated_event)
         .add_observer(actor::handle_action_selected_event)
         .add_observer(actor::handle_action_triggered_event)
         .add_observer(actor::handle_begin_activation_command)
         .add_observer(actor::handle_move_to_command)
-        .add_observer(actor::handle_attack_command)
+        .add_observer(actor::handle_action_command)
+        .add_observer(actor::handle_action_finished_event)
         .add_observer(actor::handle_assign_activation_command)
-        .add_observer(actor::handle_combat_finished_event)
         .add_observer(actor::handle_map_pos_selected_event)
-        // .add_observer(actor::handle_refresh_possible_actions_command)
-        .add_observer(combat_fx::handle_combat_finished_event)
+        .add_observer(actor::on_actor_activated_event)
+        .add_observer(commands::on_start_input_workflow_command)
+        .add_observer(commands::on_fx_finished)
+        .add_observer(commands::on_input_step_completed_event)
+        .add_observer(combat_fx::handle_action_finished_event)
         .add_systems(
             OnEnter(GameState::Combat),
             (
@@ -74,12 +70,12 @@ pub fn combat_plugin(app: &mut App) {
                 actor::clear_user_actions_on_turn_phase_change.run_if(state_changed::<TurnPhase>),
                 actor::collect_actions_for_assigning_activations
                     .run_if(in_state(TurnPhase::BoostActivations)),
-                actor::collect_actions_for_performin_actions
-                    .run_if(in_state(TurnPhase::PerformActions)),
             )
                 .run_if(in_state(GameState::Combat)),
         )
         .add_systems(OnExit(GameState::Combat), despawn_screen::<OnCombatState>);
+
+    // setup_actor_changed(app);
 }
 
 fn setup_map(mut commands: Commands) {

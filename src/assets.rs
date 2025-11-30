@@ -2,7 +2,8 @@ mod sprites;
 
 use crate::{
     GameState,
-    core::{ActorTemplates, AttackTemplates, Feats},
+    combat::ManeuverTemplates,
+    core::{ActorTemplates, Feats},
 };
 use bevy::{
     asset::{AssetLoader, LoadContext, LoadState, io::Reader, ron},
@@ -95,14 +96,11 @@ struct SpriteConfigLoadedEvent {
 struct AllAssetsLoadedEvent;
 
 pub fn assets_plugin(app: &mut App) {
-    app
-        // .add_message::<AssetLoadedEvent>()
-        // .add_message::<AllAssetsLoadedEvent>()
-        .init_asset::<AttackTemplates>()
-        .init_asset::<ActorTemplates>()
+    app.init_asset::<ActorTemplates>()
         .init_asset::<RawSpriteConfig>()
+        .init_asset::<ManeuverTemplates>()
         .init_asset::<Feats>()
-        .register_asset_loader(DataAssetLoader::<AttackTemplates>::new("actions.ron"))
+        .register_asset_loader(DataAssetLoader::<ManeuverTemplates>::new("maneuvers.ron"))
         .register_asset_loader(DataAssetLoader::<ActorTemplates>::new("actors.ron"))
         .register_asset_loader(DataAssetLoader::<RawSpriteConfig>::new("sprites.ron"))
         .register_asset_loader(DataAssetLoader::<Feats>::new("feats.ron"))
@@ -132,7 +130,7 @@ fn load_data_files(mut commands: Commands, asset_server: Res<AssetServer>) {
         Loading,
         AssetHandle(
             asset_server
-                .load::<AttackTemplates>("data/main.actions.ron")
+                .load::<ManeuverTemplates>("data/main.maneuvers.ron")
                 .untyped(),
         ),
     ));
@@ -241,5 +239,5 @@ fn handle_all_assets_loaded_event(
 }
 
 fn combat_sprite_path(n: impl Display) -> String {
-    format!("images/combat/{}", n)
+    format!("images/combat/{n}")
 }

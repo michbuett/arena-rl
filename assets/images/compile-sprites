@@ -32,7 +32,7 @@ resize "128x128" "monster"
 
 resize "128x128" "map"
 
-resize "100%" "ui/floor"
+resize "128x128" "ui/floor"
 
 resize "128x128" "fx/gore"
 resize "64x64" "fx/projectiles"
