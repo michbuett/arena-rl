@@ -26,7 +26,7 @@ impl TextStyle {
         };
 
         TextFont {
-            font_size,
+            font_size: FontSize::Px(font_size),
             ..default()
         }
     }
