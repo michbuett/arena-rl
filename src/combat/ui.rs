@@ -692,7 +692,6 @@ pub fn update_action_buttons(
                 .spawn((
                     Name::from("Action Stance Selector"),
                     BackgroundColor(WINDOW_BACKGROUND.into()),
-                    BorderRadius::top(Val::Px(20.)),
                     Node {
                         display: Display::Block,
                         width: Val::Percent(100.0),
@@ -1020,13 +1019,12 @@ fn update_player_hand_window(
         } else {
             commands.spawn((
                 Name::new("PlayerHandWindow"),
-                // BackgroundColor(WINDOW_BACKGROUND_TANSPARENT.into()),
-                BorderRadius::all(Val::Px(5.)),
                 Node {
                     position_type: PositionType::Absolute,
                     bottom: Val::Px(20.0),
                     left: Val::Px(20.0),
                     margin: UiRect::all(Val::Px(3.)),
+                    border_radius: BorderRadius::all(Val::Px(5.)),
                     ..Default::default()
                 },
                 OnCombatState,
@@ -1060,12 +1058,12 @@ fn update_player_hand_window(
                         .spawn((
                             Name::new("PlayerHandCard"),
                             BackgroundColor(background_color),
-                            BorderRadius::all(Val::Px(5.)),
                             Node {
                                 width: Val::Px(50.),
                                 height: Val::Px(80.),
                                 padding: UiRect::all(Val::Px(5.)),
                                 margin: UiRect::all(Val::Px(5.)),
+                                border_radius: BorderRadius::all(Val::Px(5.)),
                                 ..Default::default()
                             },
                             PlayerHandCard(index),

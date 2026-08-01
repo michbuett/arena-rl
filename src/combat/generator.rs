@@ -138,7 +138,6 @@ impl ActorGenerator {
 
 #[test]
 fn test_feats_syntax() {
-    use bevy::asset::ron;
     let raw_string = std::fs::read_to_string("assets/data/main.feats.ron").unwrap();
     let data: Feats = ron::from_str(&raw_string).unwrap();
     assert!(data.0.len() > 0);
@@ -146,7 +145,6 @@ fn test_feats_syntax() {
 
 #[test]
 fn test_actor_templates_syntax() {
-    use bevy::asset::ron;
     let raw_string = std::fs::read_to_string("assets/data/main.actors.ron").unwrap();
     let data: ActorTemplates = ron::from_str(&raw_string).unwrap();
     assert!(data.0.len() > 0);
@@ -154,7 +152,6 @@ fn test_actor_templates_syntax() {
 
 #[test]
 fn test_maneuver_templates_syntax() {
-    use bevy::asset::ron;
     let raw_string = std::fs::read_to_string("assets/data/main.maneuvers.ron").unwrap();
     let data: ManeuverTemplates = ron::from_str(&raw_string).unwrap();
     assert!(data.0.len() > 0);

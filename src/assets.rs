@@ -6,7 +6,7 @@ use crate::{
     core::{ActorTemplates, Feats},
 };
 use bevy::{
-    asset::{AssetLoader, LoadContext, LoadState, io::Reader, ron},
+    asset::{AssetLoader, LoadContext, LoadState, io::Reader},
     prelude::*,
 };
 use core::panic;
@@ -19,6 +19,7 @@ use std::{fmt::Display, marker::PhantomData};
 use thiserror::Error;
 
 /// An generic asset loader for data stored in RON files
+#[derive(TypePath)]
 pub struct DataAssetLoader<T> {
     extensions: Vec<&'static str>,
     _t: PhantomData<T>,
