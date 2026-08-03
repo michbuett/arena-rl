@@ -6,8 +6,8 @@ use crate::{
     assets::Visual,
     combat::commands::{ManeuverTemplate, ManeuverTemplates},
     core::{
-        ActiveEffects, ActorTemplate, ActorTemplates, Effect, Feat, FeatStore, Feats, Health, Item,
-        ItemState, Items, PassiveDefence, Resistance,
+        ActiveEffects, ActorTemplate, ActorTemplates, Effect, FeatStore, Feats, Health, Item,
+        ItemState, Items, PassiveDefence, Resistance, ResistanceSource,
     },
 };
 
@@ -30,7 +30,6 @@ pub fn setup_generators(
 pub struct ActorGenerator {
     maneuver_templates: HashMap<String, ManeuverTemplate>,
     actor_templates: HashMap<String, ActorTemplate>,
-    feat_templates: HashMap<String, Feat>,
     feat_store: FeatStore,
 }
 
@@ -54,15 +53,11 @@ impl ActorGenerator {
                 .cloned(),
         );
 
-        let feat_templates: HashMap<String, Feat> =
-            HashMap::from_iter(feats_assets.iter().flat_map(|(_, fl)| fl.0.iter()).cloned());
-
         let feat_store = FeatStore::new(feats_assets);
 
         Self {
             maneuver_templates,
             actor_templates,
-            feat_templates,
             feat_store,
         }
     }
@@ -84,7 +79,7 @@ impl ActorGenerator {
 
         let mut resistances: Vec<Resistance> = vec![];
         let mut items: Vec<Item> = vec![];
-        let mut modifier_effects = vec![];
+        let mut active_effects = vec![];
 
         if let Some(feat_list) = actor_template.feats.as_ref() {
             for feat_ref in feat_list.iter() {
@@ -97,33 +92,28 @@ impl ActorGenerator {
                 if matches!(descr.feat_type, crate::core::FeatType::Item) {
                     items.push(Item {
                         key,
-                        feat_ref: feat_ref.to_string(),
+                        // feat_ref: feat_ref.to_string(),
                         name: descr.name.to_string(),
                         state: ItemState::New,
                     });
                 }
 
-                modifier_effects.push(self.feat_store.effect(key).clone());
-                // println!("Effects: {:?}", self.feat_store.effect(key));
-                // let eff = self.feat_store.effect(key);
-
-                if let Some(feat) = self.feat_templates.get(feat_ref) {
-                    for eff in feat.effects.iter() {
-                        if let Effect::Resistance(resistance) = eff {
-                            let source = (feat_ref.to_string(), feat.feat_type);
-                            resistances.push(Resistance::new(source, *resistance));
-                        }
+                let feat_eff = self.feat_store().effect(key);
+                for eff in feat_eff.effects.iter() {
+                    if let Effect::Resistance(resistance) = eff {
+                        let source = ResistanceSource::Feat(key, descr.feat_type);
+                        resistances.push(Resistance::new(source, *resistance));
                     }
-                } else {
-                    warn!("Unknown feat '{}'", feat_ref);
                 }
+
+                active_effects.push(feat_eff.clone());
             }
         }
 
         (
             Visual::from(&actor_template.visual),
             ActorManeuvers(maneuver_templates),
-            ActiveEffects::new(&modifier_effects),
+            ActiveEffects::new(&active_effects),
             PassiveDefence(resistances),
             Items(items),
             actor_template.attributes,

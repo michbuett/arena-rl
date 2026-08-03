@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::{ActionKeyword, CheckResult, Effect, FeatKey, FeatType, KeywordSet, Magnitude};
+use crate::core::FeatKey;
+
+use super::{ActionKeyword, CheckResult, Effect, FeatType, KeywordSet, Magnitude};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize)]
 pub enum AttributeType {
@@ -84,7 +86,6 @@ impl ActionEffects {
                 None
             })
             .fold(vec![], fold_effects);
-        // .collect();
 
         result
     }
@@ -105,61 +106,10 @@ fn fold_effects(
     }
     list_so_far
 }
-// fn filter_action_effect(
-//     eff: &ActionEffect,
-//     trigger: &ActionEffectTrigger,
-//     check_result: &CheckResult,
-// ) -> Option<ActionEffect> {
-//     // if check_result.complication
-//     match (trigger, &check_result.success, &check_result.complication) {
-//         (ActionEffectTrigger::Always, _, _) => Some(eff.clone()),
-
-//         (ActionEffectTrigger::Success, Magnitude::Minor, _)
-//         | (ActionEffectTrigger::SuccessNormal, Magnitude::Normal, _)
-//         | (ActionEffectTrigger::SuccessMajor, Magnitude::Major, _) => Some(eff.clone()),
-
-//         (ActionEffectTrigger::ComplicationMajor, _, Magnitude::Minor)
-//         | (ActionEffectTrigger::ComplicationNormal, _, Magnitude::Normal)
-//         | (ActionEffectTrigger::Complication, _, Magnitude::Major) => Some(eff.clone()),
-
-//         _ => None,
-//     }
-// }
-
-impl From<RawActionEffects> for ActionEffects {
-    fn from(value: RawActionEffects) -> Self {
-        use ActionEffectTrigger::*;
-        use Magnitude::*;
-        match value {
-            RawActionEffects::Always(eff) => Self(vec![(Success, Normal, eff)]),
-            RawActionEffects::LowNormalHigh(e1, e2, e3) => Self(vec![
-                (Success, Minor, e1),
-                (Success, Normal, e2),
-                (Success, Major, e3),
-            ]),
-        }
-    }
-}
-// impl From<Vec<(ActionEffectTrigger, Magnitude, ActionEffect)>> for ActionEffects {
-//     fn from(value: Vec<(ActionEffectTrigger, Magnitude, ActionEffect)>) -> Self {
-//         Self(value)
-//     }
-// }
-
-// impl From<ActionCheck> for ActionEffects {
-//     fn from(value: ActionCheck) -> Self {
-//         use ActionEffectTrigger::*;
-//         use Magnitude::*;
-//         match value {
-//             ActionCheck::NoCheck(eff) => Self(vec![(Always, None, eff)]),
-//             ActionCheck::Check { effects, .. } => Self(effects.clone()),
-//         }
-//     }
-// }
 
 #[derive(Debug, Clone, Deserialize)]
 pub enum ActionEffect {
-    NoEffect,
+    ArmorBreak,
     DamageTarget(u8),
     Protection(u8),
     TempEffect {
@@ -168,7 +118,6 @@ pub enum ActionEffect {
         keywords: Vec<ActionKeyword>,
         turns: u8,
     },
-    // Multi(Vec<ActionEffect>),
 }
 
 impl ActionEffect {
@@ -193,10 +142,7 @@ pub enum ActionFx {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RawActionTemplate {
-    // pub attribute: AttributeType,
-    // pub effect: RawActionEffects,
     pub fx: ActionFx,
-    // pub keywords: Vec<ActionKeyword>,
     pub name: String,
     pub check: ActionCheck,
 }
@@ -206,20 +152,10 @@ pub enum ActionCheck {
     NoCheck(ActionEffects),
     Check {
         effects: ActionEffects,
-        // effects: Vec<(ActionEffectTrigger, Magnitude, ActionEffect)>,
-        // effect: (ActionEffect, ActionEffect, ActionEffect),
-        // complication: (ActionEffect, ActionEffect, ActionEffect),
         risky: bool,
         attribute: AttributeType,
         keywords: KeywordSet<ActionKeyword>,
     },
-}
-
-/// An abstraction to make defining the effects for an action more convinient
-#[derive(Debug, Clone, Deserialize)]
-pub enum RawActionEffects {
-    Always(ActionEffect),
-    LowNormalHigh(ActionEffect, ActionEffect, ActionEffect),
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -244,12 +180,20 @@ impl PassiveDefence {
 
 #[derive(Debug, Clone)]
 pub struct Resistance {
-    pub source: (String, FeatType),
+    // pub source: (FeatKey, FeatType),
+    pub source: ResistanceSource,
     pub resistance: u8,
 }
 
+#[derive(Debug, Clone)]
+pub enum ResistanceSource {
+    Feat(FeatKey, FeatType),
+    ActiveDefence,
+}
+
 impl Resistance {
-    pub fn new(source: (String, FeatType), resistance: u8) -> Self {
+    pub fn new(source: ResistanceSource, resistance: u8) -> Self {
+        // pub fn new(source: (FeatKey, FeatType), resistance: u8) -> Self {
         Self { source, resistance }
     }
 }
@@ -258,7 +202,7 @@ pub struct Items(pub Vec<Item>);
 
 #[derive(Debug)]
 pub struct Item {
-    pub feat_ref: String,
+    // pub feat_ref: String,
     pub key: FeatKey,
     pub name: String,
     pub state: ItemState,

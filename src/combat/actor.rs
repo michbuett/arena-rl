@@ -1,11 +1,12 @@
 extern crate rand;
 
 use bevy::prelude::*;
+use rand::prelude::*;
 
 use crate::core::{
     ActionCheck, ActionEffect, ActionEffectTrigger, ActionFx, ActionKeyword, ActiveDefence,
-    ActiveEffects, Attributes, Card, CheckResult, Effect, FeatType, Hand, Health, KeywordSet,
-    PassiveDefence, RawActionTemplate, Resistance, SimpleAction,
+    ActiveEffects, Attributes, Card, CheckResult, Effect, FeatType, Hand, Health, ItemState, Items,
+    KeywordSet, PassiveDefence, RawActionTemplate, Resistance, ResistanceSource, SimpleAction,
 };
 
 use super::GameDeck;
@@ -491,92 +492,6 @@ pub fn handle_assign_activation_command(
     Ok(())
 }
 
-// pub fn handle_combat_finished_event(
-//     trigger: On<CombatFinishedEvent>,
-//     mut health_q: Query<(
-//         Mut<Health>,
-//         Mut<PassiveDefence>,
-//         Mut<Items>,
-//         Mut<ActiveEffects>,
-//     )>,
-// ) -> Result<(), BevyError> {
-//     let CombatFinishedEvent {
-//         result: combat_result,
-//         ..
-//     } = trigger.event();
-
-//     for (e, c) in combat_result.consequences.iter() {
-//         let (mut health, mut protection, mut items, mut active_effects) = health_q.get_mut(*e)?;
-
-//         match c {
-//             CombatConsequence::Wound { damage } => {
-//                 health.damage(*damage);
-//                 // for card in damage.iter() {
-//                 //     health.wounds.push(*card);
-//                 // }
-//             }
-
-//             CombatConsequence::OffBalance => {
-//                 active_effects.add_temporary_eff(
-//                     Effect::BoonOrBane(-1), // the following attacks will be more difficult
-//                     keyword_set!(ActionKeyword::Action, ActionKeyword::Physical),
-//                     1,
-//                     "Off balance (-1 to attacks)".to_string(),
-//                 );
-//             }
-
-//             CombatConsequence::Vulnerable => {
-//                 active_effects.add_temporary_eff(
-//                     Effect::BoonOrBane(-1), // it becomes harder to defend further attacks
-//                     keyword_set!(ActionKeyword::Reaction, ActionKeyword::Physical),
-//                     1,
-//                     "Vulnerable (-1 to defence)".to_string(),
-//                 );
-//             }
-
-//             CombatConsequence::ArmorBreak => {
-//                 let mut rng = thread_rng();
-//                 let protecting_item = protection
-//                     .0
-//                     .iter()
-//                     .filter_map(|r| {
-//                         if matches!(r.source.1, FeatType::Item) {
-//                             Some(r.source.0.to_string())
-//                         } else {
-//                             None
-//                         }
-//                     })
-//                     .choose(&mut rng);
-
-//                 if let Some(item_name) = protecting_item {
-//                     let resistance = protection
-//                         .0
-//                         .iter_mut()
-//                         .find(|r| r.source.0 == item_name)
-//                         .unwrap();
-
-//                     resistance.resistance = resistance.resistance.checked_sub(1).unwrap_or(0);
-
-//                     let item = items
-//                         .0
-//                         .iter_mut()
-//                         .find(|r| r.feat_ref == item_name)
-//                         .unwrap();
-//                     item.state = if resistance.resistance == 0 {
-//                         ItemState::Broken
-//                     } else {
-//                         ItemState::Damaged
-//                     };
-//                 }
-//             } // _ => {
-//               //     warn!("Not implemented yet: {:?}", c);
-//               // }
-//         }
-//     }
-
-//     Ok(())
-// }
-
 pub fn handle_action_command(
     trigger: On<ActionCommand>,
     actor_q: Query<(
@@ -592,9 +507,6 @@ pub fn handle_action_command(
     let ActionCommand(ActionCommandData {
         actor,
         targets,
-        // effect,
-        // keywords,
-        // attribute,
         name,
         fx,
         check,
@@ -645,14 +557,48 @@ pub fn handle_action_command(
 
 pub fn handle_action_finished_event(
     trigger: On<ActionFinishedEvent>,
-    mut health_q: Query<(Mut<Health>, Mut<ActiveEffects>)>,
+    mut health_q: Query<(
+        Mut<Health>,
+        Mut<ActiveEffects>,
+        Mut<PassiveDefence>,
+        Mut<Items>,
+    )>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
     let ActionFinishedEvent { consequences, .. } = trigger.event();
 
     for (e, c) in consequences {
-        let (mut health, mut active_effects) = health_q.get_mut(*e)?;
+        let (mut health, mut active_effects, mut protection, mut items) = health_q.get_mut(*e)?;
         match c {
+            ActionConsequence::ArmorBreak => {
+                let mut rng = rand::thread_rng();
+                let protecting_item = protection
+                    .0
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, r)| {
+                        if let ResistanceSource::Feat(key, FeatType::Item) = r.source {
+                            Some((idx, key))
+                        } else {
+                            None
+                        }
+                    })
+                    .choose(&mut rng);
+
+                if let Some((idx, item_feat_key)) = protecting_item {
+                    let resistance = protection.0.get_mut(idx).unwrap();
+
+                    resistance.resistance = resistance.resistance.checked_sub(1).unwrap_or(0);
+
+                    let item = items.0.iter_mut().find(|r| r.key == item_feat_key).unwrap();
+                    item.state = if resistance.resistance == 0 {
+                        ItemState::Broken
+                    } else {
+                        ItemState::Damaged
+                    };
+                }
+            }
+
             ActionConsequence::Effect {
                 effect,
                 keywords,
@@ -671,7 +617,7 @@ pub fn handle_action_finished_event(
 
             ActionConsequence::Protection(resistance) => {
                 commands.entity(*e).insert(ActiveDefence(Resistance::new(
-                    ("Active Defence".into(), FeatType::Intrinsic),
+                    ResistanceSource::ActiveDefence,
                     *resistance,
                 )));
             }
@@ -682,6 +628,7 @@ pub fn handle_action_finished_event(
 
 #[derive(Debug)]
 pub enum ActionConsequence {
+    ArmorBreak,
     Damage(DamageDetails),
     Protection(u8),
     Effect {
@@ -707,6 +654,11 @@ fn map_action_effect(
     };
 
     match eff {
+        ActionEffect::ArmorBreak => consequence_targets
+            .iter()
+            .map(|e| (*e, ActionConsequence::ArmorBreak))
+            .collect(),
+
         ActionEffect::Protection(p) => consequence_targets
             .iter()
             .map(|e| (*e, ActionConsequence::Protection(*p)))
@@ -721,10 +673,6 @@ fn map_action_effect(
             })
             .collect(),
 
-        // ActionEffect::Multi(effects) => effects
-        //     .iter()
-        //     .flat_map(|eff| map_action_effect(targets, eff, def_q))
-        //     .collect(),
         ActionEffect::TempEffect {
             effect,
             descr,
@@ -744,7 +692,6 @@ fn map_action_effect(
                 )
             })
             .collect(),
-        _ => vec![],
     }
 }
 

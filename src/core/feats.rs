@@ -16,7 +16,7 @@ pub struct Feat {
     pub action_keywords: Option<Vec<ActionKeyword>>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FeatKey(pub usize);
 
 #[derive(Debug, Clone)]
@@ -28,7 +28,7 @@ pub struct FeatEffect {
 
 #[derive(Debug, Clone)]
 pub struct FeatDescription {
-    pub key: FeatKey,
+    // pub key: FeatKey,
     pub name: String,
     pub feat_type: FeatType,
 }
@@ -61,7 +61,7 @@ impl FeatStore {
             };
 
             let desc = FeatDescription {
-                key,
+                // key,
                 name: feat.name.to_string(),
                 feat_type: feat.feat_type,
             };

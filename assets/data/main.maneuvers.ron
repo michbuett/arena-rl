@@ -38,6 +38,7 @@
                         (Success, Minor, DamageTarget(3)),
                         (Success, Normal, DamageTarget(4)),
                         (Success, Major, DamageTarget(5)),
+                        (Success, Major, ArmorBreak),
                         (Complication, Normal, DamageTarget(1)),
                         (Complication, Major, DamageTarget(2)),
                     ]),
@@ -146,8 +147,15 @@
                             (Success, Minor, Protection(2)),
                             (Success, Normal, Protection(6)),
                             (Success, Major, Protection(10)),
+                            (Complication, Minor, TempEffect(
+                                effect: BoonOrBane(-1),
+                                turns: 1,
+                                keywords: [Action, Physical, Melee],
+                                descr: "Off balance (-1 to attack)"
+                            )),
+                            (Complication, Major, ArmorBreak),
                         ]),
-                        risky: false,
+                        risky: true,
                         keywords: [Reaction, Physical, Melee],
                         attribute: PhysicalAg,
                     )

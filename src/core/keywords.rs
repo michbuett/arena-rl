@@ -67,6 +67,7 @@ impl<K: Into<u64> + Copy> KeywordSet<K> {
         other.is_empty() || (self.0 & other.0) == other.0
     }
 
+    #[cfg(test)]
     pub fn has(&self, keyword: K) -> bool {
         let bit: u64 = keyword.into();
         let v = self.0 & (1 << bit);
@@ -80,22 +81,6 @@ macro_rules! keyword_set {
         crate::core::KeywordSet::new(&vec![$x $(, $more )* ])
     };
 }
-
-// macro_rules! keyword_insert {
-//     ($set:expr) => {
-//         $set
-//     };
-
-//     // ($set:expr, $kw:expr) => {
-//     //     $set.insert($kw)
-//     // };
-
-//     ($set:expr, $kw:expr $(, $more:expr )*) => {{
-//         // keyword_insert!($set, $kw);
-//         $set.insert($kw);
-//         keyword_insert!($set $(, $more )* )
-//     }};
-// }
 
 #[test]
 fn can_keyword_set_from_vec_of_keywords() {

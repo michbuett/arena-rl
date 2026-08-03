@@ -139,20 +139,20 @@ impl Deck {
     }
 }
 
-#[allow(dead_code)]
-pub fn fixed_deck() -> Vec<Card> {
-    use Suite::*;
-    vec![
-        Card::new(10, Clubs),
-        Card::new(9, Spades),
-        Card::new(8, Hearts),
-        Card::new(7, Diamonds),
-        Card::new(10, Spades),
-        Card::new(9, Hearts),
-        Card::new(8, Diamonds),
-        Card::new(7, Clubs),
-    ]
-}
+// #[cfg(test)]
+// pub fn fixed_deck() -> Vec<Card> {
+//     use Suite::*;
+//     vec![
+//         Card::new(10, Clubs),
+//         Card::new(9, Spades),
+//         Card::new(8, Hearts),
+//         Card::new(7, Diamonds),
+//         Card::new(10, Spades),
+//         Card::new(9, Hearts),
+//         Card::new(8, Diamonds),
+//         Card::new(7, Clubs),
+//     ]
+// }
 
 const MAX_HAND_SIZE: usize = 5;
 

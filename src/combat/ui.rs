@@ -865,6 +865,9 @@ fn describe_action_consequence(
     };
 
     match c {
+        ActionConsequence::ArmorBreak => {
+            format!("Armor of {name} got damaged")
+        }
         ActionConsequence::Effect { turns, descr, .. } => {
             format!("{name} applies {descr} for {turns} turns")
         }
