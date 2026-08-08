@@ -105,7 +105,7 @@ pub fn assets_plugin(app: &mut App) {
         .register_asset_loader(DataAssetLoader::<ActorTemplates>::new("actors.ron"))
         .register_asset_loader(DataAssetLoader::<RawSpriteConfig>::new("sprites.ron"))
         .register_asset_loader(DataAssetLoader::<Feats>::new("feats.ron"))
-        .add_observer(handle_on_loaded)
+        .add_observer(on_sprite_config_loaded_event)
         .add_observer(handle_all_assets_loaded_event)
         .add_systems(OnEnter(GameState::Start), load_data_files)
         .add_systems(
@@ -194,7 +194,7 @@ fn check_asset_loading_state(
     }
 }
 
-fn handle_on_loaded(
+fn on_sprite_config_loaded_event(
     trigger: On<SpriteConfigLoadedEvent>,
     asset_server: Res<AssetServer>,
     raw_sprite_config: Res<Assets<RawSpriteConfig>>,
@@ -210,8 +210,9 @@ fn handle_on_loaded(
 
     for (_, psc) in rsc.0.iter() {
         for f in psc.files.iter() {
-            commands.spawn(AssetHandle(
-                asset_server.load::<Image>(combat_sprite_path(f)).untyped(),
+            commands.spawn((
+                Loading,
+                AssetHandle(asset_server.load::<Image>(combat_sprite_path(f)).untyped()),
             ));
         }
     }
