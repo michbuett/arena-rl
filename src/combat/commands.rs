@@ -21,6 +21,13 @@ pub struct SelectManeuverCommand {
 }
 
 #[derive(Event, Debug)]
+pub struct SelectHandCardCommand {
+    pub actor: Entity,
+    pub input_id: InputId,
+    pub prompt: String,
+}
+
+#[derive(Event, Debug)]
 pub struct SelectPathCommand {
     pub actor: Entity,
     pub input_id: InputId,
@@ -47,34 +54,36 @@ impl SelectActorFilterSet {
         candidate: SelectActorFilterParams,
         other: SelectActorFilterParams,
     ) -> bool {
-        for filter in self.0.iter() {
-            match filter {
-                SelectActorFilter::OtherOnly => {
-                    if candidate.0 == other.0 {
-                        return false;
-                    }
-                }
-                SelectActorFilter::EnemiesOnly => {
-                    if candidate.1 == other.1 {
-                        return false;
-                    }
-                }
-                SelectActorFilter::WithinReach(reach) => {
-                    let distance = candidate.2.distance(other.2);
-                    if distance > *reach as i32 {
-                        return false;
-                    }
-                }
-            }
+        self.0
+            .iter()
+            .all(|filter| filter_passed(filter, candidate, other))
+    }
+}
+
+fn filter_passed(
+    filter: &SelectActorFilter,
+    candidate: SelectActorFilterParams,
+    other: SelectActorFilterParams,
+) -> bool {
+    let (entity_candidate, team_candidate, pos_candidate) = candidate;
+    let (entity_other, team_other, pos_other) = other;
+
+    match filter {
+        SelectActorFilter::SameEntity(expect_same) => {
+            (entity_candidate == entity_other) == *expect_same
         }
-        true
+        SelectActorFilter::SameTeam(expect_same) => (team_candidate == team_other) == *expect_same,
+        SelectActorFilter::WithinReach(reach) => {
+            let distance = pos_candidate.distance(pos_other);
+            distance <= *reach as i32
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 pub enum SelectActorFilter {
-    OtherOnly,
-    EnemiesOnly,
+    SameEntity(bool),
+    SameTeam(bool),
     WithinReach(u8),
 }
 
@@ -125,18 +134,21 @@ pub fn on_input_step_completed_event(
     input_workflow.advance(&mut commands);
 }
 
-#[derive(Default, Debug, Resource)]
+#[derive(Debug, Resource)]
 pub struct UserInputWorkflow {
+    active_actor: Entity,
     selected_values: HashMap<InputId, InputValue>,
     queued_actions: Vec<ActionOrder>,
     unresolved_inputs: Vec<(Entity, InputStep)>,
     next_action: Option<(ActionOrder, Vec<(Entity, ActionKind)>)>,
     awaiting_input: bool,
+    speed: ManeuverSpeed,
 }
 
 impl UserInputWorkflow {
     pub fn new(actor: Entity) -> Self {
         Self {
+            active_actor: actor,
             selected_values: HashMap::from_iter(vec![("actor".into(), InputValue::Actor(actor))]),
             unresolved_inputs: vec![(
                 actor,
@@ -150,24 +162,34 @@ impl UserInputWorkflow {
                     },
                 },
             )],
-            ..default()
+            queued_actions: Vec::new(),
+            next_action: None,
+            speed: ManeuverSpeed::Free,
+            awaiting_input: false,
         }
     }
 
     fn complete_step(&mut self, input_id: InputId, input_value: InputValue) {
-        if let InputValue::None = &input_value {
-            println!(" (> skipping input '{input_id:?}')");
-        } else {
-            println!(" (> set input '{input_id:?}' to {input_value:?})");
-        }
+        // if let InputValue::None = &input_value {
+        //     println!(" (> skipping input '{input_id:?}')");
+        // } else {
+        //     println!(" (> set input '{input_id:?}' to {input_value:?})");
+        // }
 
         if let InputValue::Maneuver {
             actor,
             is_reaction,
-            template: ManeuverTemplate { actions, .. },
+            template: tpl @ ManeuverTemplate { actions, .. },
         } = &input_value
         {
-            if *is_reaction && self.next_action.is_some() {
+            if *is_reaction {
+                if self.next_action.is_none() {
+                    self.next_action = Some((
+                        ActionOrder::from_template(ActionOrderTemplate::no_op(), self.active_actor),
+                        vec![],
+                    ));
+                }
+
                 // reaction are excuted right before with the action that tiggered them
                 // (which is always the next action of the workflow)
                 for a in actions.iter() {
@@ -185,6 +207,7 @@ impl UserInputWorkflow {
                     .collect();
 
                 self.queued_actions.append(&mut new_actions);
+                self.speed = std::cmp::max(self.speed, tpl.speed());
             }
         }
 
@@ -193,14 +216,14 @@ impl UserInputWorkflow {
     }
 
     fn advance(&mut self, commands: &mut Commands) {
-        println!(
-            "Advancing input workflow - unresolved inputs: {}",
-            self.unresolved_inputs
-                .iter()
-                .map(|(_, i)| i.input_id.0.clone())
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
+        // println!(
+        //     "Advancing input workflow - unresolved inputs: {}",
+        //     self.unresolved_inputs
+        //         .iter()
+        //         .map(|(_, i)| i.input_id.0.clone())
+        //         .collect::<Vec<_>>()
+        //         .join(", ")
+        // );
         if self.awaiting_input {
             // There is already an active step
             // => skip
@@ -210,16 +233,19 @@ impl UserInputWorkflow {
 
         if self.unresolved_inputs.is_empty() {
             for action in self.flush_next_actions() {
-                println!(" > trigger next action: {action:?}");
+                // println!(" > trigger next action: {action:?}");
                 commands.trigger(ActionTriggeredEvent(action));
             }
 
             if self.queued_actions.is_empty() {
                 // there are no more actions and no more unresolved inputs in the queue
                 // -> The workflow is complete
-                println!(" > Workflow is complete");
-                commands.trigger(ActionTriggeredEvent(Order::EndActivation));
+                // println!(" > Workflow is complete");
                 commands.remove_resource::<UserInputWorkflow>();
+                commands.trigger(ActionTriggeredEvent(Order::EndActivation {
+                    actor: self.active_actor,
+                    maneuver_speed: self.speed,
+                }));
                 return;
             } else {
                 let mut action_order = self.queued_actions.remove(0);
@@ -230,7 +256,7 @@ impl UserInputWorkflow {
                     }
                 }
 
-                println!(" > Prepare next action: {:?}", action_order.kind);
+                // println!(" > Prepare next action: {:?}", action_order.kind);
                 action_order.inputs = vec![];
                 self.next_action = Some((action_order, vec![]));
             }
@@ -240,7 +266,7 @@ impl UserInputWorkflow {
             self.advance(commands);
         } else {
             let (actor, input_step) = self.unresolved_inputs.remove(0);
-            println!(" > Next input: {:?}", input_step.input_id);
+            // println!(" > Next input: {:?}", input_step.input_id);
             self.trigger_step(actor, input_step, commands);
         }
     }
@@ -295,6 +321,17 @@ impl UserInputWorkflow {
                     input_id: input_id.clone(),
                     prompt: prompt.clone(),
                     filter: SelectActorFilterSet(filter.clone()),
+                });
+            }
+
+            InputKind::HandCard { actor } => {
+                self.with_values([&actor], |[actor]| {
+                    input_request_incomplete = false;
+                    commands.trigger(SelectHandCardCommand {
+                        actor: actor.unwrap(),
+                        input_id: input_id.clone(),
+                        prompt: prompt.clone(),
+                    });
                 });
             }
         }
@@ -355,6 +392,8 @@ impl UserInputWorkflow {
 
     fn map_single_action_kind(&self, actor: Entity, kind: &ActionKind) -> Option<Order> {
         match kind {
+            ActionKind::NoOp => None,
+
             ActionKind::MoveTo { path } => self.with_values([path], |[path]| Order::MoveAlong {
                 actor,
                 path: path.unwrap(),
@@ -377,6 +416,16 @@ impl UserInputWorkflow {
                     template,
                 ))),
             },
+
+            ActionKind::ChangeActivation {
+                target_actor,
+                activation,
+            } => self.with_values([target_actor, activation], |[target, activation]| {
+                Order::AssignActivation {
+                    actor: target.unwrap(),
+                    card_index: activation.unwrap(),
+                }
+            }),
         }
     }
 }
@@ -398,6 +447,9 @@ pub enum InputKind {
     TargetActor {
         filter: Vec<SelectActorFilter>,
     },
+    HandCard {
+        actor: InputId,
+    },
     Maneuver {
         actor: InputId,
         filter: Vec<ActionKeyword>,
@@ -410,6 +462,7 @@ pub enum InputValue {
     #[default]
     None,
     Path(Vec<MapPos>),
+    Usize(usize),
     // MapPos(MapPos),
     Actor(Entity),
     Maneuver {
@@ -429,6 +482,16 @@ pub struct ManeuverTemplate {
     pub keywords: KeywordSet<ActionKeyword>,
 }
 
+impl ManeuverTemplate {
+    fn speed(&self) -> ManeuverSpeed {
+        self.actions
+            .iter()
+            .map(|a| a.speed())
+            .max()
+            .unwrap_or(ManeuverSpeed::Free)
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Asset, TypePath)]
 pub struct ManeuverTemplates(pub Vec<(String, RawManeuverTemplate)>);
 
@@ -437,6 +500,12 @@ pub struct RawManeuverTemplate {
     pub name: String,
     pub actions: Vec<ActionOrderTemplate>,
     pub keywords: Vec<ActionKeyword>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
+pub enum ManeuverSpeed {
+    Free,
+    Normal,
 }
 
 impl Into<ManeuverTemplate> for RawManeuverTemplate {
@@ -472,8 +541,25 @@ pub struct ActionOrderTemplate {
     pub inputs: Vec<InputStep>,
 }
 
+impl ActionOrderTemplate {
+    fn no_op() -> Self {
+        Self {
+            kind: ActionKind::NoOp,
+            inputs: vec![],
+        }
+    }
+    pub fn speed(&self) -> ManeuverSpeed {
+        match self.kind {
+            ActionKind::ChangeActivation { .. } => ManeuverSpeed::Free,
+            _ => ManeuverSpeed::Normal,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub enum ActionKind {
+    NoOp,
+
     MoveTo {
         path: InputId,
     },
@@ -481,6 +567,11 @@ pub enum ActionKind {
     Action {
         target: ActionTarget,
         template: RawActionTemplate,
+    },
+
+    ChangeActivation {
+        target_actor: InputId,
+        activation: InputId,
     },
 }
 
@@ -515,6 +606,15 @@ impl GetValue<Vec<MapPos>> for InputValue {
         match &self {
             InputValue::Path(p) => p.clone(),
             _ => panic!("Expected MapPos, found {self:?}"),
+        }
+    }
+}
+
+impl GetValue<usize> for InputValue {
+    fn unwrap(&self) -> usize {
+        match &self {
+            InputValue::Usize(v) => *v,
+            _ => panic!("Expected usize, found {self:?}"),
         }
     }
 }

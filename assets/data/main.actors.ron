@@ -11,8 +11,25 @@
         )
     )),
 
-    ("player", (
-        name: "Player",
+    ("player_leader", (
+        name: "Leader",
+        attacks: ["attack-sword-01", "move", "spur", "dodge"],
+        visual: [
+            "body-light_1",
+            "head-heavy_6",
+            "staff-1",
+        ],
+        attributes: (
+            physical_strength: 3,
+            physical_agility: 3,
+            mental_strength: 5,
+            mental_agility: 5,
+        ),
+        feats: Some(["armor-body-medium"]),
+    )),
+
+    ("player_tank", (
+        name: "Tank",
         attacks: ["charge", "attack-sword-01", "move", "dodge"],
         visual: [
             "body-heavy_1",

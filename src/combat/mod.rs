@@ -36,15 +36,13 @@ struct GameDeck(pub Deck);
 pub fn combat_plugin(app: &mut App) {
     app.add_sub_state::<TurnPhase>()
         .add_plugins((combat_ui_plugin, combat_ai_plugin))
-        .add_observer(actor::handle_actor_activated_event)
-        .add_observer(actor::handle_action_selected_event)
         .add_observer(actor::handle_action_triggered_event)
         .add_observer(actor::handle_begin_activation_command)
+        .add_observer(actor::handle_end_activation_command)
         .add_observer(actor::handle_move_to_command)
         .add_observer(actor::handle_action_command)
         .add_observer(actor::handle_action_finished_event)
         .add_observer(actor::handle_assign_activation_command)
-        .add_observer(actor::handle_map_pos_selected_event)
         .add_observer(actor::on_actor_activated_event)
         .add_observer(commands::on_start_input_workflow_command)
         .add_observer(commands::on_fx_finished)
@@ -65,11 +63,6 @@ pub fn combat_plugin(app: &mut App) {
                 update_obstacles_in_map,
                 fx::update_check_fx_ready,
                 flow::handle_turn_phase_perform_actions.run_if(in_state(TurnPhase::PerformActions)),
-                flow::handle_turn_phase_boost_activations
-                    .run_if(in_state(TurnPhase::BoostActivations)),
-                actor::clear_user_actions_on_turn_phase_change.run_if(state_changed::<TurnPhase>),
-                actor::collect_actions_for_assigning_activations
-                    .run_if(in_state(TurnPhase::BoostActivations)),
             )
                 .run_if(in_state(GameState::Combat)),
         )
@@ -114,16 +107,26 @@ fn setup_camera(
 fn setup_actors(mut commands: Commands, actor_generator: Res<ActorGenerator>) {
     let player_team = Team(commands.spawn(TeamBundle::new("Player", true)).id());
     let cpu_team = Team(commands.spawn(TeamBundle::new("CPU", false)).id());
-    let deck = Deck::new_rnd();
+    let mut deck = Deck::new_rnd();
 
     commands.spawn((
         ActorBundle::new(
-            Name::new("Player"),
+            Name::new("Player (Leader)"),
             player_team,
             true,
             MapPos::from_oddr(5, 5),
         ),
-        actor_generator.generate_actor("player"),
+        actor_generator.generate_actor("player_leader", &mut deck),
+    ));
+
+    commands.spawn((
+        ActorBundle::new(
+            Name::new("Player (Tank)"),
+            player_team,
+            true,
+            MapPos::from_oddr(5, 6),
+        ),
+        actor_generator.generate_actor("player_tank", &mut deck),
     ));
 
     commands.spawn((
@@ -133,7 +136,7 @@ fn setup_actors(mut commands: Commands, actor_generator: Res<ActorGenerator>) {
             false,
             MapPos::from_oddr(2, 2),
         ),
-        actor_generator.generate_actor("sucker"),
+        actor_generator.generate_actor("sucker", &mut deck),
     ));
 
     commands.spawn((
@@ -143,7 +146,7 @@ fn setup_actors(mut commands: Commands, actor_generator: Res<ActorGenerator>) {
             false,
             MapPos::from_oddr(8, 2),
         ),
-        actor_generator.generate_actor("sucker"),
+        actor_generator.generate_actor("sucker", &mut deck),
     ));
 
     commands.insert_resource(GameDeck(deck));

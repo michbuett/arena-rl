@@ -4,9 +4,12 @@ use bevy::prelude::*;
 
 use crate::{
     assets::Visual,
-    combat::commands::{ManeuverTemplate, ManeuverTemplates},
+    combat::{
+        actor::Activations,
+        commands::{ManeuverTemplate, ManeuverTemplates},
+    },
     core::{
-        ActiveEffects, ActorTemplate, ActorTemplates, Effect, FeatStore, Feats, Health, Item,
+        ActiveEffects, ActorTemplate, ActorTemplates, Deck, Effect, FeatStore, Feats, Health, Item,
         ItemState, Items, PassiveDefence, Resistance, ResistanceSource,
     },
 };
@@ -62,7 +65,7 @@ impl ActorGenerator {
         }
     }
 
-    pub fn generate_actor(&self, template_name: &str) -> impl Bundle {
+    pub fn generate_actor(&self, template_name: &str, deck: &mut Deck) -> impl Bundle {
         let Some(actor_template) = self.actor_templates.get(template_name) else {
             panic!("Unknown actor template '{template_name}'");
         };
@@ -111,6 +114,7 @@ impl ActorGenerator {
         }
 
         (
+            Activations::new(deck.deal()),
             Visual::from(&actor_template.visual),
             ActorManeuvers(maneuver_templates),
             ActiveEffects::new(&active_effects),

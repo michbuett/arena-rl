@@ -52,7 +52,7 @@
             input_id: ("target"),
             prompt: "Select an enemy to attack",
             input_kind: TargetActor(
-                filter: [OtherOnly, EnemiesOnly, WithinReach(1)],
+                filter: [SameEntity(false), SameTeam(false), WithinReach(1)],
             ),
         ), (
             input_id: ("defence"),
@@ -93,7 +93,7 @@
                 input_id: ("target"),
                 prompt: "Select an enemy to attack",
                 input_kind: TargetActor (
-                    filter: [OtherOnly, EnemiesOnly, WithinReach(1)],
+                    filter: [SameEntity(false), SameTeam(false), WithinReach(1)],
                 ),
             ), (
                 input_id: ("defence"),
@@ -119,6 +119,30 @@
                 prompt: "Select a path",
                 input_kind: Path (
                     length: 3,
+                ),
+            )],
+        )],
+    )),
+
+    ("spur", (
+        name: "Spur on",
+        keywords: [Action],
+        actions: [(
+            kind: ChangeActivation(
+                target_actor: ("target"),
+                activation: ("activation"),
+            ),
+            inputs: [(
+                input_id: ("target"),
+                prompt: "Select an ally to spur on",
+                input_kind: TargetActor (
+                    filter: [SameTeam(true)],
+                ),
+            ), (
+                input_id: ("activation"),
+                prompt: "Select a card from your hand",
+                input_kind: HandCard(
+                    actor: ("target"),
                 ),
             )],
         )],

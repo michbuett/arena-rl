@@ -197,7 +197,10 @@ impl Hand {
     }
 
     pub fn toggle_selection(&mut self, index: usize) {
-        assert!(index < self.cards.len());
+        assert!(
+            index < self.cards.len(),
+            "The hand has not enough cards (index: {index})"
+        );
 
         if self.is_selected(index) {
             self.reset_selection();
@@ -212,9 +215,5 @@ impl Hand {
 
     pub fn is_selected(&self, index: usize) -> bool {
         self.selected_idx.is_some_and(|selected| selected == index)
-    }
-
-    pub fn selected_card(&self) -> Option<usize> {
-        self.selected_idx
     }
 }

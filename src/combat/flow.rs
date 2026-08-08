@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     GameState,
+    combat::actor::Initiative,
     core::{ActiveEffects, Hand},
 };
 
@@ -12,25 +13,26 @@ use super::{
 };
 
 #[derive(Debug, Resource)]
-pub struct TurnNumber(pub u64);
+pub struct Turn(pub u64, pub Initiative);
+
+impl Turn {}
 
 #[derive(SubStates, Hash, Clone, Copy, Eq, PartialEq, Debug, Default)]
 #[source(GameState = GameState::Combat)]
 pub enum TurnPhase {
     #[default]
     StartTurn,
-    BoostActivations,
     PerformActions,
 }
 
 pub fn setup_combat_flow(mut commands: Commands) {
-    commands.insert_resource(TurnNumber(1));
+    commands.insert_resource(Turn(1, Initiative::start()));
 }
 
 pub fn handle_turn_phase_start_turn(
     mut deck: ResMut<GameDeck>,
     mut teams_q: Query<(Mut<Hand>, Mut<TeamReady>, &Controller)>,
-    mut activations_q: Query<(Entity, Mut<Activations>, Mut<ActiveEffects>), With<Actor>>,
+    mut activations_q: Query<Mut<ActiveEffects>, With<Actor>>,
     mut next_turn_phase: ResMut<NextState<TurnPhase>>,
 ) {
     // println!("[enter_turn_phase_start_turn]");
@@ -45,29 +47,11 @@ pub fn handle_turn_phase_start_turn(
         }
     }
 
-    for (_, mut activations, mut active_effects) in activations_q.iter_mut() {
+    for mut active_effects in activations_q.iter_mut() {
         active_effects.new_turn();
-        activations.refresh(vec![deck.0.deal()]);
     }
 
-    next_turn_phase.set(TurnPhase::BoostActivations);
-}
-
-pub fn handle_turn_phase_boost_activations(
-    teams_q: Query<(&Hand, &TeamReady, &Controller)>,
-    mut next_turn_phase: ResMut<NextState<TurnPhase>>,
-) -> Result<(), BevyError> {
-    let all_ready = teams_q
-        .iter()
-        .fold(true, |ready_so_far, (_, team_ready, _)| {
-            ready_so_far && team_ready.0
-        });
-
-    if all_ready {
-        next_turn_phase.set(TurnPhase::PerformActions);
-    }
-
-    Ok(())
+    next_turn_phase.set(TurnPhase::PerformActions);
 }
 
 pub fn handle_turn_phase_perform_actions(
@@ -75,7 +59,7 @@ pub fn handle_turn_phase_perform_actions(
     running_fx_q: Query<(), With<FxRunning>>,
     active_q: Query<(), With<Active>>,
     mut commands: Commands,
-    mut turn_number: ResMut<TurnNumber>,
+    mut turn: ResMut<Turn>,
     mut next_turn_phase: ResMut<NextState<TurnPhase>>,
 ) {
     // println!("[handle_turn_phase_perform_actions]");
@@ -92,31 +76,69 @@ pub fn handle_turn_phase_perform_actions(
         return;
     }
 
-    // Activate actors in order if the initiative card
-    let mut actor_to_activate: Option<(Entity, u8)> = None;
+    let curr_turn_number = turn.0;
+    let mut actors_to_activate = activations_q
+        .iter()
+        .filter_map(|(e, a)| {
+            a.next_activation_initiative(curr_turn_number)
+                .map(|i| (e, i))
+        })
+        .collect::<Vec<_>>();
 
-    // for (entity, activations, _, prep_action) in activations_q.iter() {
-    for (entity, activations, ..) in activations_q.iter() {
-        if let Some(initiative_value) = activations.next_activation_initiative() {
-            actor_to_activate = actor_to_activate.map_or(
-                Some((entity, initiative_value)),
-                |(id_so_far, ini_so_far)| {
-                    if initiative_value < ini_so_far {
-                        Some((entity, initiative_value))
-                    } else {
-                        Some((id_so_far, ini_so_far))
-                    }
-                },
-            );
-        }
-    }
+    actors_to_activate.sort_by_key(|(_, i)| *i);
 
-    // println!("ACTIVATE:{:?}", actor_to_activate);
-    if let Some((entity, _)) = actor_to_activate {
-        commands.trigger(BeginActivationCommand(entity));
+    if let Some((actor_to_activate, initiative_value)) = actors_to_activate.first() {
+        turn.1 = *initiative_value;
+        commands.trigger(BeginActivationCommand(*actor_to_activate));
     } else {
         // There are no more actors to activate
-        turn_number.0 += 1;
+        turn.0 = curr_turn_number + 1;
+        turn.1 = Initiative::start();
         next_turn_phase.set(TurnPhase::StartTurn);
     }
+
+    // }
+
+    // let mut current_initiative = Some(turn_number.1);
+    // while let Some(initiative) = current_initiative {
+    //     for (entity, activations, ..) in activations_q.iter() {
+    //         if let Some(initiative_value) = activations.next_activation_initiative(turn_number.0) {
+    //             if initiative_value <= initiative {
+    //                 commands.trigger(BeginActivationCommand(entity));
+    //                 return;
+    //             }
+    //         }
+    //     }
+    //     current_initiative = initiative.step()
+    // }
+
+    // turn_number.0 += 1;
+    // next_turn_phase.set(TurnPhase::StartTurn);
+
+    // // Activate actors in order if the initiative card
+    // // let mut actor_to_activate: Option<(Entity, u8)> = None;
+
+    // // for (entity, activations, ..) in activations_q.iter() {
+    // // if let Some(initiative_value) = activations.next_activation_initiative(turn_number.0) {}
+    // //         actor_to_activate = actor_to_activate.map_or(
+    // //             Some((entity, initiative_value)),
+    // //             |(id_so_far, ini_so_far)| {
+    // //                 if initiative_value < ini_so_far {
+    // //                     Some((entity, initiative_value))
+    // //                 } else {
+    // //                     Some((id_so_far, ini_so_far))
+    // //                 }
+    // //             },
+    // //         );
+    // //     }
+    // // }
+
+    // // println!("ACTIVATE:{:?}", actor_to_activate);
+    // if let Some((entity, _)) = actor_to_activate {
+    //     commands.trigger(BeginActivationCommand(entity));
+    // } else {
+    //     // There are no more actors to activate
+    //     turn_number.0 += 1;
+    //     next_turn_phase.set(TurnPhase::StartTurn);
+    // }
 }
