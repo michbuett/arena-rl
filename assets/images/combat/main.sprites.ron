@@ -1,6 +1,6 @@
 ([
     // === SECTION ===========================================
-    // backgrounds 
+    // backgrounds
     // blood and gore
     // body
     // fx
@@ -8,97 +8,97 @@
     // monster
 
     // EXAMPLE
-    // ("melee-1h_1", ProtoSpriteConfig( 
+    // ("melee-1h_1", ProtoSpriteConfig(
     //         files: ["weapons_saw-1-1.png", "weapons_saw-1-2.png"],
     //         offset: Some((16, 16)),
     //         alpha: Some(200),  // optional, defaults to 255
     //         frame_durration: Some(200), // optional, defaults to 50, only relevant for animations
     //     )),
-    
+
     // === BEGIN SECTION head ================================
     ("head_1", ProtoSpriteConfig(
             files: ["chars/heads/no-helm-1.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head_2", ProtoSpriteConfig(
             files: ["chars/heads/no-helm-2.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head_3", ProtoSpriteConfig(
             files: ["chars/heads/no-helm-3.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head_4", ProtoSpriteConfig(
             files: ["chars/heads/no-helm-4.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head_5", ProtoSpriteConfig(
             files: ["chars/heads/no-helm-5.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head_6", ProtoSpriteConfig(
             files: ["chars/heads/no-helm-6.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-heavy_1", ProtoSpriteConfig(
             files: ["chars/heads/helm-01.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-heavy_2", ProtoSpriteConfig(
             files: ["chars/heads/helm-02.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-heavy_3", ProtoSpriteConfig(
             files: ["chars/heads/helm-03.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-heavy_4", ProtoSpriteConfig(
             files: ["chars/heads/helm-04.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-heavy_5", ProtoSpriteConfig(
             files: ["chars/heads/helm-05.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-heavy_6", ProtoSpriteConfig(
             files: ["chars/heads/helm-06.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-heavy_7", ProtoSpriteConfig(
             files: ["chars/heads/helm-07.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-heavy_8", ProtoSpriteConfig(
             files: ["chars/heads/helm-08.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-zombi_1", ProtoSpriteConfig(
             files: ["chars/heads/zombi-1.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-zombi_2", ProtoSpriteConfig(
             files: ["chars/heads/zombi-2.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-zombi_3", ProtoSpriteConfig(
             files: ["chars/heads/zombi-3.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-zombi_4", ProtoSpriteConfig(
             files: ["chars/heads/zombi-4.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-zombi_5", ProtoSpriteConfig(
             files: ["chars/heads/zombi-5.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-zombi_6", ProtoSpriteConfig(
             files: ["chars/heads/zombi-6.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
     ("head-zombi_7", ProtoSpriteConfig(
             files: ["chars/heads/zombi-7.png"],
-            offset: Some((0, 32)),
+            offset: Some((0, 40)),
         )),
 
     // === BEGIN SECTION body ================================
@@ -291,7 +291,7 @@
     ("icon-ai-ms-K", ProtoSpriteConfig( files: ["ui/cards/cards-small-50.png"])),
     ("icon-ai-pa-K", ProtoSpriteConfig( files: ["ui/cards/cards-small-51.png"])),
     ("icon-ai-ps-K", ProtoSpriteConfig( files: ["ui/cards/cards-small-52.png"])),
-    
+
     // ("icon-action-Done", ProtoSpriteConfig(
     //         files: ["ui/action/done.png"],
     //         offset: Some((32, 16)),
@@ -329,7 +329,7 @@
             files: ["ui/floor/selected.png"],
         )),
     // ("action-indicator-Ambush", ProtoSpriteConfig(
-    //         files: ["ui/floor/indicator-ambush.png"], 
+    //         files: ["ui/floor/indicator-ambush.png"],
     //     )),
     // ("action-indicator-MeleeAttack", ProtoSpriteConfig(
     //         files: ["ui/directed/melee.png"],
@@ -342,15 +342,15 @@
     //     )),
     ("icon-floor-MoveTo", ProtoSpriteConfig(
             files: ["ui/floor/feet.png"],
-            alpha: Some(100),  
+            alpha: Some(100),
         )),
     ("icon-floor-RangedAttack-1", ProtoSpriteConfig(
             files: ["ui/floor/aim.png"],
-            alpha: Some(100),  
+            alpha: Some(100),
         )),
     ("icon-floor-RangedAttack-2", ProtoSpriteConfig(
-            files: ["ui/floor/aim_obstacle.png"], 
-            alpha: Some(200),  
+            files: ["ui/floor/aim_obstacle.png"],
+            alpha: Some(200),
         )),
 
     // === BEGIN SECTION blood and gore ================================
