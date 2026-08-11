@@ -1,51 +1,73 @@
-use bevy::prelude::*;
+use bevy::{
+    ecs::{lifecycle::HookContext, world::DeferredWorld},
+    prelude::*,
+};
 
+pub const BLACK: Color = Color::srgb(0.15, 0.14, 0.13);
 pub const WINDOW_BACKGROUND: Color = Color::srgb(0.90, 0.89, 0.88);
 pub const WINDOW_BACKGROUND_HL: Color = Color::srgb(1.0, 0.99, 0.98);
 pub const WINDOW_BACKGROUND_TANSPARENT: Color = Color::srgba(0.99, 0.98, 0.97, 0.5);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Component)]
 pub enum TextStyle {
+    HUDElement,
     UiNormal,
     InGameScream,
 }
 
 impl TextStyle {
-    fn as_text_color(&self) -> TextColor {
-        let color = match self {
-            Self::InGameScream => Color::LinearRgba(LinearRgba::rgb(0.8, 0.2, 0.1)),
-            _ => Color::srgb(0.03, 0.02, 0.01),
-        };
-        TextColor(color)
-    }
+    pub fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        let text_style = world.get::<TextStyle>(context.entity).unwrap();
+        let (text_font, text_color) = match text_style {
+            Self::HUDElement => {
+                let handle = world.load_asset("fonts/Bangers-Regular.ttf");
+                // let handle = world.load_asset("fonts/RubikDistressed-Regular.ttf");
+                let text_font = TextFont {
+                    font: FontSource::Handle(handle),
+                    font_size: FontSize::Px(14.),
+                    ..default()
+                };
+                let text_color = TextColor(Color::LinearRgba(LinearRgba::rgb(0.99, 0.98, 0.97)));
+                (text_font, text_color)
+            }
 
-    fn as_text_font(&self) -> TextFont {
-        let font_size = match self {
-            Self::InGameScream => 48.,
-            _ => 12.,
+            Self::InGameScream => {
+                let handle = world.load_asset("fonts/Bangers-Regular.ttf");
+                let text_font = TextFont {
+                    font: FontSource::Handle(handle),
+                    font_size: FontSize::Px(48.),
+                    ..default()
+                };
+                let text_color = TextColor(Color::LinearRgba(LinearRgba::rgb(0.8, 0.2, 0.1)));
+                (text_font, text_color)
+            }
+
+            Self::UiNormal => {
+                // let handle = world.load_asset("fonts/ComicRelief-Regular.ttf");
+                let handle = world.load_asset("fonts/Oldenburg-Regular.ttf");
+                let text_font = TextFont {
+                    font: FontSource::Handle(handle),
+                    font_size: FontSize::Px(12.),
+                    ..default()
+                };
+                let text_color = TextColor(Color::srgb(0.03, 0.02, 0.01));
+                (text_font, text_color)
+            }
         };
 
-        TextFont {
-            font_size: FontSize::Px(font_size),
-            ..default()
-        }
+        world
+            .commands()
+            .entity(context.entity)
+            .insert((text_font, text_color));
     }
 }
 
-pub fn text(txt: impl Into<String>, style: TextStyle) -> (Text, TextColor, TextFont) {
-    (
-        Text::new(txt.into()),
-        style.as_text_color(),
-        style.as_text_font(),
-    )
+pub fn text(txt: impl Into<String>, style: TextStyle) -> impl Bundle {
+    (Text::new(txt.into()), style)
 }
 
-pub fn text2d(txt: impl Into<String>, style: TextStyle) -> (Text2d, TextColor, TextFont) {
-    (
-        Text2d::new(txt.into()),
-        style.as_text_color(),
-        style.as_text_font(),
-    )
+pub fn text2d(txt: impl Into<String>, style: TextStyle) -> impl Bundle {
+    (Text2d::new(txt.into()), style)
 }
 
 pub fn button(txt: impl Into<String>) -> impl Bundle {

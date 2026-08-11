@@ -1,5 +1,3 @@
-extern crate rand;
-
 use bevy::prelude::*;
 use rand::prelude::*;
 

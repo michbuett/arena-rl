@@ -16,7 +16,7 @@
         attacks: ["attack-sword-01", "move", "spur", "dodge"],
         visual: [
             "body-light_1",
-            "head-heavy_6",
+            "head_6",
             "staff-1",
         ],
         attributes: (

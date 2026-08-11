@@ -6,7 +6,9 @@ use crate::core::{
     ActiveEffect, ActiveEffectSource, ActiveEffects, AttributeType, Card, CheckResult, FeatStore,
     FlipModifierSource, Hand, Health, ItemState, Items, KeywordSet, PassiveDefence, Suite,
 };
-use crate::style::{TextStyle, WINDOW_BACKGROUND_HL, WINDOW_BACKGROUND_TANSPARENT, button, text};
+use crate::style::{
+    BLACK, TextStyle, WINDOW_BACKGROUND_HL, WINDOW_BACKGROUND_TANSPARENT, button, text,
+};
 use crate::{GameState, style::WINDOW_BACKGROUND};
 
 use super::actor::{
@@ -43,9 +45,6 @@ pub struct DetailsWindowText;
 pub struct SelectedTile;
 
 #[derive(Component)]
-pub struct ActionButtonContainer;
-
-#[derive(Component)]
 pub struct CombatLogContainer;
 
 #[derive(Component)]
@@ -70,6 +69,11 @@ pub struct PlayerHandWindow;
 pub struct PlayerHandCard(usize);
 
 pub fn combat_ui_plugin(app: &mut App) {
+    // use a hook to inject the font handle
+    app.world_mut()
+        .register_component_hooks::<TextStyle>()
+        .on_insert(TextStyle::on_insert);
+
     app.add_observer(handle_action_finished_event)
         .add_observer(handle_map_pos_selected_event)
         .add_observer(on_select_path_command)
@@ -97,6 +101,8 @@ pub fn combat_ui_plugin(app: &mut App) {
 }
 
 fn setup_ui(mut commands: Commands) {
+    commands.insert_resource(ClearColor(BLACK));
+
     commands
         .spawn((
             Name::from("Mouse Input Catcher"),
@@ -121,7 +127,7 @@ fn setup_ui(mut commands: Commands) {
     commands
         .spawn((
             Name::from("Turn Info Container"),
-            BackgroundColor(WINDOW_BACKGROUND),
+            BackgroundColor(BLACK.with_alpha(0.5)),
             Node {
                 position_type: PositionType::Absolute,
                 top: Val::Px(20.0),
@@ -132,7 +138,7 @@ fn setup_ui(mut commands: Commands) {
             OnCombatState,
         ))
         .with_children(|parent| {
-            parent.spawn((text("Turn: -", TextStyle::UiNormal), TurnInfo));
+            parent.spawn((text("Turn: -", TextStyle::HUDElement), TurnInfo));
         });
 
     commands
@@ -149,27 +155,11 @@ fn setup_ui(mut commands: Commands) {
             },
             OnCombatState,
             DetailsWindow,
+            Visibility::Hidden,
         ))
         .with_children(|parent| {
             parent.spawn((text("", TextStyle::UiNormal), DetailsWindowText));
         });
-
-    commands.spawn((
-        Name::from("Action Button Container"),
-        Node {
-            position_type: PositionType::Absolute,
-            flex_direction: FlexDirection::Column,
-            justify_items: JustifyItems::Start,
-            align_items: AlignItems::Stretch,
-            display: Display::Flex,
-            bottom: Val::Px(20.0),
-            right: Val::Px(20.0),
-            width: Val::Px(200.0),
-            ..Default::default()
-        },
-        OnCombatState,
-        ActionButtonContainer,
-    ));
 
     commands.spawn((
         Name::from("SelectedTile"),
@@ -465,19 +455,6 @@ fn describe_actor(
             " / ".to_string()
         }
     };
-
-    // let remaining_activations_txt = if activations.1.remaining().is_empty() {
-    //     " - ".to_string()
-    // } else {
-    //     activations
-    //         .1
-    //         .remaining()
-    //         .iter()
-    //         .rev()
-    //         .map(card_descr)
-    //         .collect::<Vec<_>>()
-    //         .join(", ")
-    // };
 
     let health_text = describe_actor_condition(health, protection);
     let items_txt = describe_actor_items(items);
