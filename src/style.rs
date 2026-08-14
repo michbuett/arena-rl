@@ -62,6 +62,11 @@ impl TextStyle {
     }
 }
 
+// fn parse_txt(txt: impl Into<String>) -> impl SceneList {
+//     let list = vec![TextSpan::new("text")];
+//     bsn_list![]
+// }
+
 pub fn text(txt: impl Into<String>, style: TextStyle) -> impl Bundle {
     (Text::new(txt.into()), style)
 }

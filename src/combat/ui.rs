@@ -1,6 +1,7 @@
 use bevy::{prelude::*, window::PrimaryWindow};
 
 use crate::MarkedForDeath;
+use crate::animations::MovementAnimation;
 use crate::combat::commands::SelectHandCardCommand;
 use crate::core::{
     ActiveEffect, ActiveEffectSource, ActiveEffects, AttributeType, Card, CheckResult, FeatStore,
@@ -40,6 +41,9 @@ pub struct DetailsWindow;
 
 #[derive(Component)]
 pub struct DetailsWindowText;
+
+#[derive(Component)]
+pub struct ActiveTile;
 
 #[derive(Component)]
 pub struct SelectedTile;
@@ -95,6 +99,7 @@ pub fn combat_ui_plugin(app: &mut App) {
                 update_player_hand_window,
                 update_details_window_text_on_change,
                 update_indicators_when_activations_changed,
+                update_hover_animation,
             )
                 .run_if(in_state(GameState::Combat)),
         );
@@ -160,6 +165,15 @@ fn setup_ui(mut commands: Commands) {
         .with_children(|parent| {
             parent.spawn((text("", TextStyle::UiNormal), DetailsWindowText));
         });
+
+    commands.spawn((
+        Name::from("ActiveTile"),
+        Visibility::Hidden,
+        Transform::default(),
+        Visual::Single("floor-active".to_string()),
+        ActiveTile,
+        OnCombatState,
+    ));
 
     commands.spawn((
         Name::from("SelectedTile"),
@@ -993,12 +1007,12 @@ fn on_select_path_command(
     controller_q: Query<(&Controller, &MapPos)>,
     map: Res<HexMap>,
     mut commands: Commands,
+    mut active_tile_q: Query<(&mut Transform, &mut Visibility), With<ActiveTile>>,
 ) -> Result<(), BevyError> {
     let SelectPathCommand {
         actor,
         input_id,
         prompt,
-        // start,
         length,
     } = trigger.event();
 
@@ -1007,6 +1021,10 @@ fn on_select_path_command(
         // ignore AI controlled actors
         return Ok(());
     }
+
+    let (mut active_tile_transform, mut active_tile_visibility) = active_tile_q.single_mut()?;
+    active_tile_transform.translation = start.into_vec3().with_z(Z_LAYER_UI_MAP_MARKER);
+    *active_tile_visibility = Visibility::Visible;
 
     commands.spawn((
         Name::from("Select Path Window"),
@@ -1088,52 +1106,6 @@ struct InputStepData {
     input_value: InputValue,
 }
 
-// fn on_select_maneuver_command_old(
-//     trigger: On<SelectManeuverCommandOld>,
-//     controller_q: Query<&Controller>,
-//     mut commands: Commands,
-// ) -> Result<(), BevyError> {
-//     let SelectManeuverCommandOld {
-//         actor,
-//         input_id,
-//         prompt,
-//         options,
-//     } = trigger.event();
-
-//     let controller = controller_q.get(*actor)?;
-//     if !controller.is_pc() {
-//         // An A.I. contolled actor has been activated
-//         // => ignore, because we handle only user controlled actors here
-//         return Ok(());
-//     }
-
-//     commands
-//         .spawn((Name::from("Select Maneuver Window"), create_input_window()))
-//         .with_children(|parent| {
-//             parent.spawn(text(prompt, TextStyle::UiNormal));
-
-//             for m in options.iter() {
-//                 let txt = &m.name;
-
-//                 parent
-//                     .spawn((
-//                         button(txt),
-//                         OnCombatState,
-//                         InputStepData {
-//                             input_id: input_id.clone(),
-//                             input_value: InputValue::Maneuver {
-//                                 is_reaction: false,
-//                                 template: m.clone(),
-//                             },
-//                         },
-//                     ))
-//                     .observe(on_input_selected);
-//             }
-//         });
-
-//     Ok(())
-// }
-
 #[derive(Debug, Resource)]
 struct SelectHandCardInput {
     input_id: InputId,
@@ -1142,7 +1114,8 @@ struct SelectHandCardInput {
 
 fn on_select_hand_card_command(
     trigger: On<SelectHandCardCommand>,
-    controller_q: Query<(&Controller, &Team)>,
+    actor_q: Query<(&Controller, &Team, &MapPos)>,
+    mut active_tile_q: Query<(&mut Transform, &mut Visibility), With<ActiveTile>>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
     let SelectHandCardCommand {
@@ -1151,11 +1124,15 @@ fn on_select_hand_card_command(
         prompt,
     } = trigger.event();
 
-    let (controller, team) = controller_q.get(*actor)?;
+    let (controller, team, actor_pos) = actor_q.get(*actor)?;
     if !controller.is_pc() {
         // ignore AI controlled actors
         return Ok(());
     }
+
+    let (mut active_tile_transform, mut active_tile_visibility) = active_tile_q.single_mut()?;
+    active_tile_transform.translation = actor_pos.into_vec3().with_z(Z_LAYER_UI_MAP_MARKER);
+    *active_tile_visibility = Visibility::Visible;
 
     commands.spawn((
         Name::from("Select Hand Card Window"),
@@ -1173,7 +1150,8 @@ fn on_select_hand_card_command(
 
 fn on_select_maneuver_command(
     trigger: On<SelectManeuverCommand>,
-    controller_q: Query<(&Controller, &ActorManeuvers)>,
+    actor_q: Query<(&Controller, &ActorManeuvers, &MapPos)>,
+    mut active_tile_q: Query<(&mut Transform, &mut Visibility), With<ActiveTile>>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
     let SelectManeuverCommand {
@@ -1184,11 +1162,15 @@ fn on_select_maneuver_command(
         prompt,
     } = trigger.event();
 
-    let (controller, ActorManeuvers(maneuvers)) = controller_q.get(*actor)?;
+    let (controller, ActorManeuvers(maneuvers), actor_pos) = actor_q.get(*actor)?;
     if !controller.is_pc() {
         // ignore AI controlled actors
         return Ok(());
     }
+
+    let (mut active_tile_transform, mut active_tile_visibility) = active_tile_q.single_mut()?;
+    active_tile_transform.translation = actor_pos.into_vec3().with_z(Z_LAYER_UI_MAP_MARKER);
+    *active_tile_visibility = Visibility::Visible;
 
     let options = maneuvers
         .iter()
@@ -1242,6 +1224,7 @@ fn on_select_actor_command(
     trigger: On<SelectActorCommand>,
     controller_q: Query<(&Controller, &Team, &MapPos)>,
     possible_targets_q: Query<(Entity, &Team, &MapPos), With<Actor>>,
+    mut active_tile_q: Query<(&mut Transform, &mut Visibility), With<ActiveTile>>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
     let SelectActorCommand {
@@ -1257,6 +1240,10 @@ fn on_select_actor_command(
         // => ignore, because we handle only user controlled actors here
         return Ok(());
     }
+    let (mut active_tile_transform, mut active_tile_visibility) = active_tile_q.single_mut()?;
+    active_tile_transform.translation = actor_pos.into_vec3().with_z(Z_LAYER_UI_MAP_MARKER);
+    *active_tile_visibility = Visibility::Visible;
+
     commands
         .spawn((
             Name::from("Select Target Actor Window"),
@@ -1302,12 +1289,16 @@ fn on_input_selected(
     event: On<Pointer<Click>>,
     user_input_q: Query<&InputStepData>,
     input_elem_q: Query<Entity, Or<(With<InputWindow>, With<RangeIndicator>, With<PathIndicator>)>>,
+    mut active_tile_q: Query<&mut Visibility, With<ActiveTile>>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
     let InputStepData {
         input_id,
         input_value,
     } = user_input_q.get(event.entity)?;
+
+    let mut active_tile_visibility = active_tile_q.single_mut()?;
+    *active_tile_visibility = Visibility::Hidden;
 
     commands.trigger(InputStepCompletedEvent {
         input_id: input_id.clone(),
@@ -1339,4 +1330,50 @@ fn create_input_window() -> impl Bundle {
         OnCombatState,
         InputWindow,
     )
+}
+
+const RISE_PER_S: f32 = 75.0;
+const HOVER_OFFSET: f32 = 50.0;
+
+#[derive(Component, Clone)]
+pub struct HoverAnimation {
+    timer: Timer,
+}
+
+impl HoverAnimation {
+    pub fn new() -> Self {
+        HoverAnimation {
+            timer: Timer::from_seconds(2.0, TimerMode::Repeating),
+        }
+    }
+}
+
+fn update_hover_animation(
+    time: Res<Time>,
+    mut data: Query<(
+        Mut<HoverAnimation>,
+        Mut<Transform>,
+        &MapPos,
+        Option<&MovementAnimation>,
+    )>,
+) {
+    for (mut anim, mut transform, pos, movement) in data.iter_mut() {
+        anim.timer.tick(time.delta());
+
+        if movement.is_some() {
+            // no messing around while moving
+            continue;
+        }
+
+        let y = pos.into_vec3().y;
+        let dy = if f32::abs(transform.translation.y - y) < HOVER_OFFSET {
+            let dt = anim.timer.elapsed().as_millis() as f32 / 1000.0;
+            dt * RISE_PER_S
+        } else {
+            let dt = (anim.timer.elapsed().as_millis() % 2000) as f32 / 2000.0;
+            HOVER_OFFSET + 20.0 * f32::min(dt, 1.0 - dt)
+        };
+
+        transform.translation.y = y + dy;
+    }
 }

@@ -30,9 +30,10 @@ pub fn setup_combat_flow(mut commands: Commands) {
 }
 
 pub fn handle_turn_phase_start_turn(
+    mut commands: Commands,
     mut deck: ResMut<GameDeck>,
     mut teams_q: Query<(Mut<Hand>, Mut<TeamReady>, &Controller)>,
-    mut activations_q: Query<Mut<ActiveEffects>, With<Actor>>,
+    activations_q: Query<(Entity, &ActiveEffects), With<Actor>>,
     mut next_turn_phase: ResMut<NextState<TurnPhase>>,
 ) {
     // println!("[enter_turn_phase_start_turn]");
@@ -47,8 +48,8 @@ pub fn handle_turn_phase_start_turn(
         }
     }
 
-    for mut active_effects in activations_q.iter_mut() {
-        active_effects.new_turn();
+    for (e, active_effects) in activations_q.iter() {
+        commands.entity(e).insert(active_effects.new_turn());
     }
 
     next_turn_phase.set(TurnPhase::PerformActions);

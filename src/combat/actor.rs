@@ -3,11 +3,12 @@ use rand::prelude::*;
 
 use crate::combat::commands::ManeuverSpeed;
 use crate::combat::flow::Turn;
+use crate::combat::ui::HoverAnimation;
 use crate::core::{
     ActionCheck, ActionEffect, ActionEffectTrigger, ActionFx, ActionKeyword, ActiveDefence,
     ActiveEffects, Attributes, Card, CheckResult, Effect, FeatType, Hand, Health, ItemState, Items,
     KeywordSet, PassiveDefence, RawActionTemplate, Resistance, ResistanceSource, SimpleAction,
-    Suite,
+    StatusKeyword, Suite,
 };
 
 use super::GameDeck;
@@ -41,6 +42,15 @@ impl TeamBundle {
             player_controlled: Controller(is_pc),
             ready: TeamReady(!is_pc), // CPU player are always ready
         }
+    }
+}
+
+#[derive(Debug, Component, Clone, Copy)]
+pub struct StatusFlags(KeywordSet<StatusKeyword>);
+
+impl StatusFlags {
+    pub fn has(&self, flag: StatusKeyword) -> bool {
+        self.0.has(flag)
     }
 }
 
@@ -522,6 +532,7 @@ pub fn handle_action_finished_event(
             } => {
                 active_effects.add_temporary_eff(effect.clone(), *keywords, *turns, descr.clone());
             }
+
             ActionConsequence::Damage(damage_details) => {
                 commands.entity(*e).remove::<ActiveDefence>();
 
@@ -637,4 +648,43 @@ pub struct DamageDetails {
     pub defence: u8,
     pub armor: u8,
     pub actual_damage: u8,
+}
+
+pub fn on_insert_active_effects(
+    trigger: On<Insert, ActiveEffects>,
+    data_q: Query<&ActiveEffects>,
+    mut commands: Commands,
+) -> Result<(), BevyError> {
+    let entity = trigger.event_target();
+    let active_effects = data_q.get(entity)?;
+    let mut status_flags: KeywordSet<StatusKeyword> = KeywordSet::empty();
+
+    for e in active_effects.for_action(KeywordSet::new(&vec![])) {
+        match e.effect {
+            // Effect::Resistance(r) => {}
+            Effect::Status(flags) => {
+                status_flags = status_flags.union(flags);
+                // commands.entity(*e).insert(StatusFlags(ke))
+            }
+            _ => {}
+        }
+    }
+
+    commands.entity(entity).insert(StatusFlags(status_flags));
+
+    Ok(())
+}
+
+pub fn on_insert_status_flags(
+    trigger: On<Insert, StatusFlags>,
+    data_q: Query<&StatusFlags>,
+    mut commands: Commands,
+) -> Result<(), BevyError> {
+    let entity = trigger.event_target();
+    let status_flags = data_q.get(entity)?;
+
+    if status_flags.has(StatusKeyword::Flying) {
+        commands.entity(entity).insert(HoverAnimation::new());
+    }
+    Ok(())
 }

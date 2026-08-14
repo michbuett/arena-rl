@@ -8,7 +8,6 @@ mod generator;
 mod map;
 mod ui;
 
-// use actor::setup_actor_changed;
 use ai::combat_ai_plugin;
 use bevy::prelude::*;
 use generator::{ActorGenerator, setup_generators};
@@ -44,6 +43,8 @@ pub fn combat_plugin(app: &mut App) {
         .add_observer(actor::handle_action_finished_event)
         .add_observer(actor::handle_assign_activation_command)
         .add_observer(actor::on_actor_activated_event)
+        .add_observer(actor::on_insert_status_flags)
+        .add_observer(actor::on_insert_active_effects)
         .add_observer(commands::on_start_input_workflow_command)
         .add_observer(commands::on_fx_finished)
         .add_observer(commands::on_input_step_completed_event)

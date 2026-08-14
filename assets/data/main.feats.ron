@@ -2,6 +2,22 @@
     ("armor-body-medium", (
         name: "Medium Armor",
         feat_type: Item,
-        effects: [Resistance(2)],
+        effects: [(Resistance(2), [])],
+    )),
+    ("armor-body-heavy", (
+        name: "Heavy Armor",
+        feat_type: Item,
+        effects: [
+            (Resistance(4), []),
+            (BoonOrBane(-1), [ActWithPhysicalAg]),
+        ],
+    )),
+    ("flyer", (
+        name: "Flyer",
+        feat_type: Intrinsic,
+        effects: [
+            (Status([Flying]), []),
+            (BoonOrBane(1), [Reaction, Melee]),
+        ],
     )),
 ])

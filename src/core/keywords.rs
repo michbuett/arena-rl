@@ -3,7 +3,12 @@ use std::marker::PhantomData;
 use bevy::prelude::*;
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+pub enum StatusKeyword {
+    Flying,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
 pub enum ActionKeyword {
     Action,
     Reaction,
@@ -21,15 +26,21 @@ impl Into<u64> for ActionKeyword {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+impl Into<u64> for StatusKeyword {
+    fn into(self) -> u64 {
+        self as u64
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KeywordSet<K: Into<u64> + Copy>(u64, PhantomData<K>);
 
-impl<'de> Deserialize<'de> for KeywordSet<ActionKeyword> {
+impl<'de, K: Into<u64> + Copy + Deserialize<'de>> Deserialize<'de> for KeywordSet<K> {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let vec: Vec<ActionKeyword> = Vec::deserialize(deserializer)?;
+        let vec: Vec<K> = Vec::deserialize(deserializer)?;
         Ok(KeywordSet::new(&vec))
     }
 }
@@ -59,6 +70,12 @@ impl<K: Into<u64> + Copy> KeywordSet<K> {
         self
     }
 
+    pub fn union(mut self, other: KeywordSet<K>) -> Self {
+        // let bit: u64 = keyword.into();
+        self.0 = self.0 | other.0;
+        self
+    }
+
     pub fn is_empty(&self) -> bool {
         self.0 == 0
     }
@@ -67,7 +84,6 @@ impl<K: Into<u64> + Copy> KeywordSet<K> {
         other.is_empty() || (self.0 & other.0) == other.0
     }
 
-    #[cfg(test)]
     pub fn has(&self, keyword: K) -> bool {
         let bit: u64 = keyword.into();
         let v = self.0 & (1 << bit);
@@ -121,4 +137,14 @@ fn can_keyword_set_with_macro() {
     assert!(set2.has(Action));
     assert!(set2.has(Physical));
     assert!(set2.has(Melee));
+}
+
+#[test]
+fn can_create_the_union_of_two_sets() {
+    use ActionKeyword::*;
+    let set1 = keyword_set![Action, Melee];
+    let set2 = keyword_set![Action, Physical];
+    let set3 = set1.union(set2);
+
+    assert_eq!(set3, keyword_set![Action, Physical, Melee]);
 }

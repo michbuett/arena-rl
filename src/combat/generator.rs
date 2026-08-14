@@ -103,7 +103,7 @@ impl ActorGenerator {
 
                 let feat_eff = self.feat_store().effect(key);
                 for eff in feat_eff.effects.iter() {
-                    if let Effect::Resistance(resistance) = eff {
+                    if let (Effect::Resistance(resistance), _) = eff {
                         let source = ResistanceSource::Feat(key, descr.feat_type);
                         resistances.push(Resistance::new(source, *resistance));
                     }

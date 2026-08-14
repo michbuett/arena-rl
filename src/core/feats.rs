@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use bevy::{asset::Asset, prelude::*, reflect::TypePath};
 use serde::Deserialize;
 
+use crate::core::StatusKeyword;
+
 use super::{ActionKeyword, KeywordSet};
 
 #[derive(Debug, Component, Clone, Deserialize, Asset, TypePath)]
@@ -12,8 +14,7 @@ pub struct Feats(pub Vec<(String, Feat)>);
 pub struct Feat {
     pub name: String,
     pub feat_type: FeatType,
-    pub effects: Vec<Effect>,
-    pub action_keywords: Option<Vec<ActionKeyword>>,
+    pub effects: Vec<(Effect, KeywordSet<ActionKeyword>)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,8 +23,7 @@ pub struct FeatKey(pub usize);
 #[derive(Debug, Clone)]
 pub struct FeatEffect {
     pub key: FeatKey,
-    pub effects: Vec<Effect>,
-    pub action_keywords: KeywordSet<ActionKeyword>,
+    pub effects: Vec<(Effect, KeywordSet<ActionKeyword>)>,
 }
 
 #[derive(Debug, Clone)]
@@ -57,7 +57,6 @@ impl FeatStore {
             let eff = FeatEffect {
                 key,
                 effects: feat.effects.clone(),
-                action_keywords: KeywordSet::new(feat.action_keywords.as_ref().unwrap_or(&vec![])),
             };
 
             let desc = FeatDescription {
@@ -95,6 +94,7 @@ impl FeatStore {
 pub enum Effect {
     Resistance(u8),
     BoonOrBane(i8),
+    Status(KeywordSet<StatusKeyword>),
 }
 
 #[derive(Debug, Clone)]
@@ -117,10 +117,10 @@ impl ActiveEffects {
     pub fn new(feat_effects: &Vec<FeatEffect>) -> Self {
         let mut active_effects = vec![];
         for fe in feat_effects.iter() {
-            for e in fe.effects.iter() {
+            for (e, keywords) in fe.effects.iter() {
                 active_effects.push(ActiveEffect {
                     effect: e.clone(),
-                    keywords: fe.action_keywords,
+                    keywords: *keywords,
                     source: ActiveEffectSource::Feat(fe.key),
                 })
             }
@@ -143,25 +143,26 @@ impl ActiveEffects {
         });
     }
 
-    pub fn new_turn(&mut self) {
-        self.0 = self
-            .0
-            .drain(..)
-            .filter_map(|eff| match eff.source {
-                ActiveEffectSource::Temporary(turns, descr) => {
-                    if turns > 1 {
-                        Some(ActiveEffect {
-                            effect: eff.effect,
-                            keywords: eff.keywords,
-                            source: ActiveEffectSource::Temporary(turns - 1, descr),
-                        })
-                    } else {
-                        None
+    pub fn new_turn(&self) -> Self {
+        Self(
+            self.0
+                .iter()
+                .filter_map(|eff| match &eff.source {
+                    ActiveEffectSource::Temporary(turns, descr) => {
+                        if *turns > 1 {
+                            Some(ActiveEffect {
+                                effect: eff.effect.clone(),
+                                keywords: eff.keywords,
+                                source: ActiveEffectSource::Temporary(turns - 1, descr.clone()),
+                            })
+                        } else {
+                            None
+                        }
                     }
-                }
-                _ => Some(eff),
-            })
-            .collect();
+                    _ => Some(eff.clone()),
+                })
+                .collect(),
+        )
     }
 
     pub fn for_action(

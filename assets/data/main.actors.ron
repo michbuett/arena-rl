@@ -8,7 +8,8 @@
             physical_agility: 5,
             mental_strength: 2,
             mental_agility: 2,
-        )
+        ),
+        feats: Some(["flyer"]),
     )),
 
     ("player_leader", (
@@ -42,6 +43,6 @@
             mental_strength: 3,
             mental_agility: 3,
         ),
-        feats: Some(["armor-body-medium"]),
+        feats: Some(["armor-body-heavy"]),
     )),
 ])

@@ -223,6 +223,9 @@
             files: ["ui/floor/feet.png"],
         )),
     ("floor-selected", ProtoSpriteConfig(
+            files: ["map/floor-hex-selected-1.png"],
+        )),
+    ("floor-active", ProtoSpriteConfig(
             files: [
                     "map/floor-hex-selected-2.png",
                     "map/floor-hex-selected-3.png",
