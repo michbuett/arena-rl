@@ -1,3 +1,5 @@
+use std::cmp::{max, min};
+
 use bevy::prelude::*;
 use rand::prelude::*;
 
@@ -8,7 +10,7 @@ use crate::core::{
     ActionCheck, ActionEffect, ActionEffectTrigger, ActionFx, ActionKeyword, ActiveDefence,
     ActiveEffects, Attributes, Card, CheckResult, Effect, FeatType, Hand, Health, ItemState, Items,
     KeywordSet, PassiveDefence, RawActionTemplate, Resistance, ResistanceSource, SimpleAction,
-    StatusKeyword, Suite,
+    StatusKeyword,
 };
 
 use super::GameDeck;
@@ -75,82 +77,31 @@ impl Actor {
 #[derive(Debug, Clone, Component)]
 pub struct Active(pub Card);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Initiative(u8);
-
-impl From<Card> for Initiative {
-    fn from(card: Card) -> Self {
-        let face_val = (card.value() - 1) * 4;
-        let suite_val = match card.suite() {
-            Suite::Spades => 0,
-            Suite::Diamonds => 1,
-            Suite::Hearts => 2,
-            Suite::Clubs => 3,
-        };
-        Self(face_val + suite_val)
-    }
-}
-
-impl Initiative {
-    pub fn start() -> Self {
-        Initiative(0)
-    }
-
-    pub fn face_value(self) -> u8 {
-        self.0 / 4 + 1
-    }
-
-    pub fn suite(&self) -> Suite {
-        match self.0 % 4 {
-            0 => Suite::Spades,
-            1 => Suite::Diamonds,
-            2 => Suite::Hearts,
-            3 => Suite::Clubs,
-            _ => panic!("Unreachable"),
-        }
-    }
-}
-
 #[derive(Component, Debug)]
 pub struct Activations {
-    next: Option<(u64, Card)>,
+    next: Option<Turn>,
 }
 
 impl Activations {
     pub fn new(initial_activation: Card) -> Self {
         Self {
-            next: Some((0, initial_activation)),
+            next: Some(Turn::start().next_activation(initial_activation)),
         }
-    }
-
-    pub fn next_activation_initiative(&self, current_turn: u64) -> Option<Initiative> {
-        self.next.and_then(|(turn, card)| {
-            if turn <= current_turn {
-                Some(card.into())
-            } else {
-                None
-            }
-        })
     }
 
     pub fn activate_next(&mut self) -> Card {
         assert!(self.next.is_some());
-        let next = self.next.unwrap().1;
+        let next = self.next.clone().unwrap();
         self.next = None;
-        next
+        next.initiative().as_card()
     }
 
-    pub fn set_next(&mut self, current_turn: &Turn, new_activation: Card) {
-        let turn_number = if current_turn.1 >= new_activation.into() {
-            current_turn.0 + 1
-        } else {
-            current_turn.0
-        };
-        self.next = Some((turn_number, new_activation));
+    pub fn set_next(&mut self, next_activation: Turn) {
+        self.next = Some(next_activation);
     }
 
-    pub fn next(&self) -> Option<(u64, Card)> {
-        self.next
+    pub fn next(&self) -> Option<Turn> {
+        self.next.clone()
     }
 }
 
@@ -371,10 +322,32 @@ pub fn handle_end_activation_command(
             commands.trigger(ActorActivatedEvent(*actor));
         }
 
+        ManeuverSpeed::Quick => {
+            let a1 = activations
+                .next()
+                .unwrap_or_else(|| current_turn.next_activation(deck.0.deal()));
+            let a2 = current_turn.next_activation(deck.0.deal());
+
+            activations.set_next(min(a1, a2));
+            commands.entity(*actor).remove::<Active>();
+            commands.trigger(ActivationEndedEvent(*actor));
+        }
+
         ManeuverSpeed::Normal => {
             if activations.next().is_none() {
-                activations.set_next(&current_turn, deck.0.deal());
+                activations.set_next(current_turn.next_activation(deck.0.deal()));
             }
+            commands.entity(*actor).remove::<Active>();
+            commands.trigger(ActivationEndedEvent(*actor));
+        }
+
+        ManeuverSpeed::Slow => {
+            let a1 = activations
+                .next()
+                .unwrap_or_else(|| current_turn.next_activation(deck.0.deal()));
+            let a2 = current_turn.next_activation(deck.0.deal());
+
+            activations.set_next(max(a1, a2));
             commands.entity(*actor).remove::<Active>();
             commands.trigger(ActivationEndedEvent(*actor));
         }
@@ -413,7 +386,7 @@ pub fn handle_assign_activation_command(
     let hand_card = hand.remove(*card_index);
 
     // info!("handle_assign_activation_command - actor={_name}, card={hand_card:?}",);
-    activations.set_next(&current_turn, hand_card);
+    activations.set_next(current_turn.next_activation(hand_card));
     Ok(())
 }
 

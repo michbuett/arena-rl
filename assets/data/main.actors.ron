@@ -1,7 +1,7 @@
 ([
     ("sucker", (
         name: "Sucker",
-        attacks: ["charge", "dodge"],
+        attacks: ["sucker-charge", "dodge"],
         visual: ["monster-sucker_1"],
         attributes: (
             physical_strength: 3,

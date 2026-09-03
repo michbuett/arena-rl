@@ -2,8 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     GameState,
-    combat::actor::Initiative,
-    core::{ActiveEffects, Hand},
+    core::{ActiveEffects, Card, Hand, Suite},
 };
 
 use super::{
@@ -12,10 +11,69 @@ use super::{
     fx::FxRunning,
 };
 
-#[derive(Debug, Resource)]
-pub struct Turn(pub u64, pub Initiative);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Initiative(u8);
 
-impl Turn {}
+impl From<Card> for Initiative {
+    fn from(card: Card) -> Self {
+        let face_val = (card.value() - 1) * 4;
+        let suite_val = match card.suite() {
+            Suite::Spades => 0,
+            Suite::Diamonds => 1,
+            Suite::Hearts => 2,
+            Suite::Clubs => 3,
+        };
+        Self(face_val + suite_val)
+    }
+}
+
+impl Initiative {
+    pub fn start() -> Self {
+        Initiative(0)
+    }
+
+    pub fn as_card(&self) -> Card {
+        let card_value = (self.0 / 4 + 1).try_into();
+        let value = match card_value {
+            Ok(cv) => cv,
+            Err(e) => panic!("{e}"),
+        };
+        let suite = match self.0 % 4 {
+            0 => Suite::Spades,
+            1 => Suite::Diamonds,
+            2 => Suite::Hearts,
+            3 => Suite::Clubs,
+            _ => panic!("Unreachable"),
+        };
+        Card::new(value, suite)
+    }
+}
+
+#[derive(Debug, Resource, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Turn(u64, Initiative);
+
+impl Turn {
+    pub fn start() -> Self {
+        Turn(0, Initiative::start())
+    }
+
+    pub fn next_activation(&self, card: Card) -> Self {
+        let initiative: Initiative = card.into();
+        if self.1 >= initiative {
+            Self(self.0 + 1, initiative)
+        } else {
+            Self(self.0, initiative)
+        }
+    }
+
+    pub fn turn_number(&self) -> u64 {
+        self.0
+    }
+
+    pub fn initiative(&self) -> Initiative {
+        self.1
+    }
+}
 
 #[derive(SubStates, Hash, Clone, Copy, Eq, PartialEq, Debug, Default)]
 #[source(GameState = GameState::Combat)]
@@ -80,16 +138,13 @@ pub fn handle_turn_phase_perform_actions(
     let curr_turn_number = turn.0;
     let mut actors_to_activate = activations_q
         .iter()
-        .filter_map(|(e, a)| {
-            a.next_activation_initiative(curr_turn_number)
-                .map(|i| (e, i))
-        })
+        .filter_map(|(e, a)| a.next().map(|t| (e, t)))
         .collect::<Vec<_>>();
 
-    actors_to_activate.sort_by_key(|(_, i)| *i);
+    actors_to_activate.sort_by_key(|(_, i)| i.clone());
 
-    if let Some((actor_to_activate, initiative_value)) = actors_to_activate.first() {
-        turn.1 = *initiative_value;
+    if let Some((actor_to_activate, activation_turn)) = actors_to_activate.first() {
+        turn.1 = activation_turn.initiative();
         commands.trigger(BeginActivationCommand(*actor_to_activate));
     } else {
         // There are no more actors to activate

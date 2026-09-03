@@ -178,36 +178,42 @@ impl UserInputWorkflow {
 
         if let InputValue::Maneuver {
             actor,
-            is_reaction,
-            template: tpl @ ManeuverTemplate { actions, .. },
+            template: tpl,
         } = &input_value
         {
-            if *is_reaction {
-                if self.next_action.is_none() {
-                    self.next_action = Some((
-                        ActionOrder::from_template(ActionOrderTemplate::no_op(), self.active_actor),
-                        vec![],
-                    ));
+            match tpl {
+                ManeuverTemplate::Reactive(ReactiveManeuver { actions, .. }) => {
+                    if self.next_action.is_none() {
+                        self.next_action = Some((
+                            ActionOrder::from_template(
+                                ActionOrderTemplate::no_op(),
+                                self.active_actor,
+                            ),
+                            vec![],
+                        ));
+                    }
+
+                    // reaction are excuted right before with the action that tiggered them
+                    // (which is always the next action of the workflow)
+                    for a in actions.iter() {
+                        let mut new_inputs = a.inputs.iter().map(|i| (*actor, i.clone())).collect();
+                        self.unresolved_inputs.append(&mut new_inputs);
+                    }
+
+                    let (_, reactions) = self.next_action.as_mut().unwrap();
+                    let mut new_reactions =
+                        actions.iter().map(|a| (*actor, a.kind.clone())).collect();
+                    reactions.append(&mut new_reactions);
                 }
+                ManeuverTemplate::Active(ActiveManeuver { actions, speed, .. }) => {
+                    let mut new_actions = actions
+                        .iter()
+                        .map(|t| ActionOrder::from_template(t.clone(), *actor))
+                        .collect();
 
-                // reaction are excuted right before with the action that tiggered them
-                // (which is always the next action of the workflow)
-                for a in actions.iter() {
-                    let mut new_inputs = a.inputs.iter().map(|i| (*actor, i.clone())).collect();
-                    self.unresolved_inputs.append(&mut new_inputs);
+                    self.queued_actions.append(&mut new_actions);
+                    self.speed = std::cmp::max(self.speed, *speed);
                 }
-
-                let (_, reactions) = self.next_action.as_mut().unwrap();
-                let mut new_reactions = actions.iter().map(|a| (*actor, a.kind.clone())).collect();
-                reactions.append(&mut new_reactions);
-            } else {
-                let mut new_actions = actions
-                    .iter()
-                    .map(|t| ActionOrder::from_template(t.clone(), *actor))
-                    .collect();
-
-                self.queued_actions.append(&mut new_actions);
-                self.speed = std::cmp::max(self.speed, tpl.speed());
             }
         }
 
@@ -468,54 +474,65 @@ pub enum InputValue {
     Maneuver {
         actor: Entity,
         template: ManeuverTemplate,
-        is_reaction: bool,
     },
 }
 
 #[derive(Debug, Clone, Component)]
 pub struct ActorManeuvers(pub Vec<ManeuverTemplate>);
 
-#[derive(Clone, Debug)]
-pub struct ManeuverTemplate {
-    pub name: String,
-    pub actions: Vec<ActionOrderTemplate>,
-    pub keywords: KeywordSet<ActionKeyword>,
+// #[derive(Clone, Debug, Deserialize)]
+// pub struct ManeuverTemplate {
+//     name: String,
+//     actions: Vec<ActionOrderTemplate>,
+//     keywords: KeywordSet<ActionKeyword>,
+// }
+
+#[derive(Clone, Debug, Deserialize)]
+pub enum ManeuverTemplate {
+    Active(ActiveManeuver),
+    Reactive(ReactiveManeuver),
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ActiveManeuver {
+    name: String,
+    actions: Vec<ActionOrderTemplate>,
+    keywords: KeywordSet<ActionKeyword>,
+    speed: ManeuverSpeed,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ReactiveManeuver {
+    name: String,
+    actions: Vec<ActionOrderTemplate>,
+    keywords: KeywordSet<ActionKeyword>,
 }
 
 impl ManeuverTemplate {
-    fn speed(&self) -> ManeuverSpeed {
-        self.actions
-            .iter()
-            .map(|a| a.speed())
-            .max()
-            .unwrap_or(ManeuverSpeed::Free)
+    pub fn name(&self) -> &str {
+        match &self {
+            Self::Active(ActiveManeuver { name, .. }) => name,
+            Self::Reactive(ReactiveManeuver { name, .. }) => name,
+        }
+    }
+
+    pub fn keywords(&self) -> KeywordSet<ActionKeyword> {
+        match &self {
+            Self::Active(ActiveManeuver { keywords, .. }) => *keywords,
+            Self::Reactive(ReactiveManeuver { keywords, .. }) => *keywords,
+        }
     }
 }
 
 #[derive(Debug, Clone, Deserialize, Asset, TypePath)]
-pub struct ManeuverTemplates(pub Vec<(String, RawManeuverTemplate)>);
+pub struct ManeuverTemplates(pub Vec<(String, ManeuverTemplate)>);
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct RawManeuverTemplate {
-    pub name: String,
-    pub actions: Vec<ActionOrderTemplate>,
-    pub keywords: Vec<ActionKeyword>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, PartialOrd, Eq, Ord)]
 pub enum ManeuverSpeed {
     Free,
+    Quick,
     Normal,
-}
-
-impl Into<ManeuverTemplate> for RawManeuverTemplate {
-    fn into(self) -> ManeuverTemplate {
-        ManeuverTemplate {
-            name: self.name,
-            actions: self.actions,
-            keywords: KeywordSet::new(&self.keywords),
-        }
-    }
+    Slow,
 }
 
 #[derive(Clone, Debug)]
@@ -546,12 +563,6 @@ impl ActionOrderTemplate {
         Self {
             kind: ActionKind::NoOp,
             inputs: vec![],
-        }
-    }
-    pub fn speed(&self) -> ManeuverSpeed {
-        match self.kind {
-            ActionKind::ChangeActivation { .. } => ManeuverSpeed::Free,
-            _ => ManeuverSpeed::Normal,
         }
     }
 }

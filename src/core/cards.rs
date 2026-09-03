@@ -46,6 +46,26 @@ pub enum CardValue {
     Ten,
 }
 
+impl TryFrom<u8> for CardValue {
+    type Error = String;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(CardValue::Ace),
+            2 => Ok(CardValue::Two),
+            3 => Ok(CardValue::Three),
+            4 => Ok(CardValue::Four),
+            5 => Ok(CardValue::Five),
+            6 => Ok(CardValue::Six),
+            7 => Ok(CardValue::Seven),
+            8 => Ok(CardValue::Eight),
+            9 => Ok(CardValue::Nine),
+            10 => Ok(CardValue::Ten),
+            v => Err(format!("Invalid card value {v}")),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Card {
     value: CardValue,
@@ -53,24 +73,17 @@ pub struct Card {
 }
 
 impl Card {
+    pub fn new(value: CardValue, suite: Suite) -> Self {
+        Self { value, suite }
+    }
+
     /// Creates a card with a given value and a given suite (for tests)
     /// Panics if value > 10 or value < 1
-    fn new(value: u8, suite: Suite) -> Self {
-        let value = match value {
-            1 => CardValue::Ace,
-            2 => CardValue::Two,
-            3 => CardValue::Three,
-            4 => CardValue::Four,
-            5 => CardValue::Five,
-            6 => CardValue::Six,
-            7 => CardValue::Seven,
-            8 => CardValue::Eight,
-            9 => CardValue::Nine,
-            10 => CardValue::Ten,
-            v => panic!("Invalid card value {v}"),
-        };
-
-        Self { value, suite }
+    fn parse(value: u8, suite: Suite) -> Self {
+        match value.try_into() {
+            Result::Ok(value) => Self { value, suite },
+            Result::Err(err) => panic!("{err}"),
+        }
     }
 
     pub fn value(&self) -> u8 {
@@ -128,7 +141,7 @@ impl Deck {
         for _ in 0..NUM_DECKS_PER_GAME {
             for suite in suites.iter() {
                 for value in 1..=10 {
-                    cards.push(Card::new(value, *suite))
+                    cards.push(Card::parse(value, *suite))
                 }
             }
         }

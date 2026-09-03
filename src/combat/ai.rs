@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::combat::commands::ManeuverTemplate;
+
 use super::{
     actor::{Actor, Controller, Team},
     commands::{
@@ -36,13 +38,11 @@ fn handle_select_maneuver_command(
 
     let mut options = maneuvers
         .iter()
-        .filter_map(|m| {
-            if m.keywords.contains(*filter) {
-                Some(m.clone())
-            } else {
-                None
-            }
+        .filter(|m| {
+            *is_reaction == matches!(m, ManeuverTemplate::Reactive(..))
+                && m.keywords().contains(*filter)
         })
+        .cloned()
         .collect::<Vec<_>>();
 
     // println!(
@@ -70,7 +70,6 @@ fn handle_select_maneuver_command(
             input_value: InputValue::Maneuver {
                 actor: *actor,
                 template: selected_maneuver,
-                is_reaction: *is_reaction,
             },
         });
     }

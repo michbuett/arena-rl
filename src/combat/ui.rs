@@ -2,7 +2,7 @@ use bevy::{prelude::*, window::PrimaryWindow};
 
 use crate::MarkedForDeath;
 use crate::animations::MovementAnimation;
-use crate::combat::commands::SelectHandCardCommand;
+use crate::combat::commands::{ManeuverTemplate, SelectHandCardCommand};
 use crate::core::{
     ActiveEffect, ActiveEffectSource, ActiveEffects, AttributeType, Card, CheckResult, FeatStore,
     FlipModifierSource, Hand, Health, ItemState, Items, KeywordSet, PassiveDefence, Suite,
@@ -345,15 +345,10 @@ fn update_details_window_text_on_change(
 
 fn update_turn_info(turn: Res<Turn>, mut turn_info_q: Query<Mut<Text>, With<TurnInfo>>) {
     if let Ok(mut turn_info) = turn_info_q.single_mut() {
-        let tn = turn.0;
-        let face = turn.1.face_value();
-        let suite = match turn.1.suite() {
-            Suite::Clubs => "Clubs",
-            Suite::Spades => "Spades",
-            Suite::Hearts => "Hearts",
-            Suite::Diamonds => "Diamonds",
-        };
-        turn_info.0 = format!("Turn: {tn} >> {face} of {suite}");
+        let tn = turn.turn_number();
+        let card = card_descr(&turn.initiative().as_card());
+
+        turn_info.0 = format!("Turn: {tn} >> {card}");
     }
 }
 
@@ -371,7 +366,7 @@ impl Description {
 }
 
 fn update_description_on_turn_changed(
-    turn_number: Res<Turn>,
+    turn: Res<Turn>,
     mut actor_q: Query<
         (
             &Activations,
@@ -395,7 +390,7 @@ fn update_description_on_turn_changed(
             (None, activations),
             items,
             active_effects,
-            turn_number.0,
+            &turn,
         );
     }
 }
@@ -421,7 +416,7 @@ fn update_description_on_changed(
             Changed<PassiveDefence>,
         )>,
     >,
-    turn_number: Res<Turn>,
+    turn: Res<Turn>,
 ) {
     for (
         _,
@@ -442,7 +437,7 @@ fn update_description_on_changed(
             (active, activations),
             items,
             active_effects,
-            turn_number.0,
+            &turn,
         );
     }
 }
@@ -454,16 +449,17 @@ fn describe_actor(
     activations: (Option<&Active>, &Activations),
     items: &Items,
     active_effects: &ActiveEffects,
-    current_turn: u64,
+    current_turn: &Turn,
 ) -> String {
     let activations_txt = if let Some(Active(activation_card)) = activations.0 {
         format!("(active) {}", card_descr(&activation_card))
     } else {
-        if let Some((turn, card)) = activations.1.next() {
-            if turn > current_turn {
-                format!("Next turn: {} ({turn}/{current_turn})", card_descr(&card))
+        if let Some(turn) = activations.1.next() {
+            let card_descr = card_descr(&turn.initiative().as_card());
+            if turn.turn_number() > current_turn.turn_number() {
+                format!("Next turn: {card_descr}",)
             } else {
-                format!("This turn: {}", card_descr(&card))
+                format!("This turn: {card_descr}",)
             }
         } else {
             " / ".to_string()
@@ -591,13 +587,13 @@ fn on_activation_ended_event(
     trigger: On<ActivationEndedEvent>,
     actor_q: Query<(&Activations, Option<&Active>)>,
     activation_indicator_q: Query<(Entity, &ChildOf), With<ActivationIndicator>>,
-    turn_number: Res<Turn>,
+    turn: Res<Turn>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
     let ActivationEndedEvent(e) = trigger.event();
     let (activations, active) = actor_q.get(*e)?;
     clear_activation_indicator_for(activation_indicator_q, &mut commands, *e);
-    insert_activation_indicator_for_entity(&mut commands, *e, activations, active, turn_number.0);
+    insert_activation_indicator_for_entity(&mut commands, *e, activations, active, &turn);
     Ok(())
 }
 
@@ -607,18 +603,12 @@ fn update_indicators_when_activations_changed(
         Or<(Changed<Activations>, Added<Active>)>,
     >,
     activation_indicator_q: Query<(Entity, &ChildOf), With<ActivationIndicator>>,
-    turn_number: Res<Turn>,
+    turn: Res<Turn>,
     mut commands: Commands,
 ) {
     for (e, activations, active) in actor_q.iter() {
         clear_activation_indicator_for(activation_indicator_q, &mut commands, e);
-        insert_activation_indicator_for_entity(
-            &mut commands,
-            e,
-            activations,
-            active,
-            turn_number.0,
-        );
+        insert_activation_indicator_for_entity(&mut commands, e, activations, active, &turn);
     }
 }
 
@@ -639,16 +629,17 @@ fn insert_activation_indicator_for_entity(
     entity: Entity,
     activations: &Activations,
     active: Option<&Active>,
-    current_turn: u64,
+    current_turn: &Turn,
 ) {
     commands.entity(entity).with_children(|parent| {
         if let Some(Active(card)) = active {
             spawn_activation_indicators(parent, &card, (0.0, 72.0));
         }
 
-        if let Some((turn, card)) = activations.next() {
-            let offset_x = if turn > current_turn { 50.0 } else { 0.0 };
-            spawn_activation_indicators(parent, &card, (offset_x, -48.0));
+        if let Some(turn) = activations.next() {
+            let next_turn = turn.turn_number() > current_turn.turn_number();
+            let offset_x = if next_turn { 50.0 } else { 0.0 };
+            spawn_activation_indicators(parent, &turn.initiative().as_card(), (offset_x, -48.0));
         }
     });
 }
@@ -1174,13 +1165,11 @@ fn on_select_maneuver_command(
 
     let options = maneuvers
         .iter()
-        .filter_map(|m| {
-            if m.keywords.contains(*filter) {
-                Some(m.clone())
-            } else {
-                None
-            }
+        .filter(|m| {
+            *is_reaction == matches!(m, ManeuverTemplate::Reactive(..))
+                && m.keywords().contains(*filter)
         })
+        .cloned()
         .collect::<Vec<_>>();
 
     if options.is_empty() {
@@ -1197,7 +1186,7 @@ fn on_select_maneuver_command(
                 parent.spawn(text(prompt, TextStyle::UiNormal));
 
                 for m in options.iter() {
-                    let txt = &m.name;
+                    let txt = m.name();
 
                     parent
                         .spawn((
@@ -1207,7 +1196,6 @@ fn on_select_maneuver_command(
                                 input_id: input_id.clone(),
                                 input_value: InputValue::Maneuver {
                                     actor: *actor,
-                                    is_reaction: *is_reaction,
                                     template: m.clone(),
                                 },
                             },
