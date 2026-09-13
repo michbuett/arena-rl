@@ -834,7 +834,7 @@ fn describe_action_details(cr: &CheckResult, feat_store: &FeatStore) -> String {
     }
 
     let mut modifier_txt_vec = vec![];
-    let (base_target_num, target_attr, modifier) = cr.check.as_ref().unwrap();
+    let (base_tn, target_attr, modifier) = cr.check.as_ref().unwrap();
 
     for (modifier, src) in modifier.iter() {
         modifier_txt_vec.push(match src {
@@ -851,9 +851,9 @@ fn describe_action_details(cr: &CheckResult, feat_store: &FeatStore) -> String {
         });
     }
 
+    let (ace_tn, check_tn) = modifier.tn(*base_tn);
     let target_txt = format!(
-        "{} ({})",
-        modifier.tn(*base_target_num),
+        "{ace_tn}/{check_tn} ({})",
         match target_attr {
             AttributeType::PhysicalStr => "Strength",
             AttributeType::PhysicalAg => "Agility",
@@ -863,7 +863,7 @@ fn describe_action_details(cr: &CheckResult, feat_store: &FeatStore) -> String {
     );
 
     format!(
-        "Flip: {} VS {target_txt}\nModifier:\n{base_target_num} (base value)\n{}",
+        "Flip: {} VS {target_txt}\nModifier:\n{base_tn} (base value)\n{}",
         short_format_cards(&cr.cards),
         modifier_txt_vec.join("\n")
     )
