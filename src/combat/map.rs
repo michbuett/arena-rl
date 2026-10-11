@@ -1,8 +1,9 @@
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BTreeMap, BinaryHeap, HashMap};
 use std::hash::Hash;
 
 use bevy::prelude::*;
+use serde::Deserialize;
 
 const SQRT_3: f32 = 1.7320508076;
 const HEX_SIZE: f32 = 64.0;
@@ -118,10 +119,29 @@ fn test_can_convert_screen_coord_to_hex_and_back() {
     assert_eq!(hex3, MapPos::from(hex3.into_vec3()));
 }
 
+#[derive(Asset, TypePath, Debug, Default, Deserialize)]
+pub struct MapSpec {
+    grid: Vec<String>,
+    legend: BTreeMap<String, TileSpec>,
+    focus_pos: (i32, i32),
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TileSpec {
+    tile_type: TileType,
+    spawn: Option<SpawnSpec>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SpawnSpec {
+    id: String,
+}
+
 #[derive(Resource)]
 pub struct HexMap {
     tiles: HashMap<MapPos, TileType>,
     obstacles: HashMap<MapPos, Obstacle>,
+    spawn_points: HashMap<String, Vec<MapPos>>,
 
     pub camera_focus: MapPos,
     pub scroll_limit_x: (f32, f32),
@@ -129,6 +149,47 @@ pub struct HexMap {
 }
 
 impl HexMap {
+    pub fn from_spec(spec: &MapSpec) -> Self {
+        let mut tiles = HashMap::new();
+        let mut spawn_points = HashMap::new();
+
+        for (row, row_str) in spec.grid.iter().rev().enumerate() {
+            for (idx, tile_char) in row_str.chars().enumerate() {
+                if tile_char.is_whitespace() {
+                    // ignore whitespace
+                    continue;
+                }
+
+                let col = idx / 2;
+                let tile_spec = spec.legend.get(&tile_char.to_string()).unwrap();
+                let map_pos = MapPos::from_oddr(col as i32, row as i32);
+
+                if let Some(spawn_spec) = tile_spec.spawn.as_ref() {
+                    if !spawn_points.contains_key(&spawn_spec.id) {
+                        spawn_points.insert(spawn_spec.id.clone(), vec![]);
+                    }
+
+                    spawn_points.get_mut(&spawn_spec.id).unwrap().push(map_pos);
+                }
+
+                tiles.insert(map_pos, tile_spec.tile_type);
+            }
+        }
+
+        let camera_focus = MapPos::from_oddr(spec.focus_pos.0, spec.focus_pos.1); // TODO
+        let focus_vec = camera_focus.into_vec3();
+
+        const SCROLL_PADDING: f32 = 500.0;
+        Self {
+            tiles,
+            obstacles: HashMap::new(), // TODO
+            spawn_points,
+            camera_focus,
+            scroll_limit_x: (focus_vec.x - SCROLL_PADDING, focus_vec.x + SCROLL_PADDING),
+            scroll_limit_y: (focus_vec.y - SCROLL_PADDING, focus_vec.y + SCROLL_PADDING),
+        }
+    }
+
     pub fn tiles(&self) -> impl Iterator<Item = (&MapPos, &TileType)> {
         self.tiles.iter()
     }
@@ -150,54 +211,39 @@ impl HexMap {
 
         find_path_astar(from, to, self)
     }
+
+    pub fn spawn_points(&self, team_ref: &str) -> &Vec<MapPos> {
+        self.spawn_points.get(team_ref).as_ref().unwrap()
+    }
 }
 
+#[rustfmt::skip]
+#[cfg(test)]
 pub fn dummy_hex() -> HexMap {
-    let mut tiles = HashMap::new();
-    let raw = vec![
-        /*        0 1 2 3 4 5 6 7 8 9 */
-        /*  0 */ "    . . . . . . . .    ",
-        /*  1 */ "   . . . . . . . . .   ",
-        /*  2 */ "  . . . . . . . . . .  ",
-        /*  3 */ " . . . . . . . . . . . ",
-        /*  4 */ ". . . . . . . . . . . .",
-        /*  5 */ " . . . . . . . . . . . ",
-        /*  6 */ ". . . . . . . . . . . .",
-        /*  7 */ " . . . . . . . . . . . ",
-        /*  8 */ "  . . . . . . . . . .  ",
-        /*  9 */ "   . . . . . . . . .   ",
-        /* 10 */ "    . . . . . . . .    ",
-    ];
-
-    // let mut tiles = vec![];
-    for (row, row_str) in raw.iter().enumerate() {
-        let start_idx = row_str.find(|c| !char::is_whitespace(c)).unwrap() / 2;
-        let tiles_in_row = row_str
-            .split_whitespace()
-            .filter_map(|tile_str| match tile_str {
-                "." => Some(TileType::Floor),
-                _ => None,
-            })
-            .enumerate();
-
-        for (col, ttype) in tiles_in_row {
-            tiles.insert(
-                MapPos::from_oddr((start_idx + col) as i32, row as i32),
-                ttype,
-            );
-        }
-    }
-
-    let camera_focus = MapPos::from_oddr(5, 5);
-    let focus_vec = camera_focus.into_vec3();
-
-    HexMap {
-        tiles,
-        obstacles: HashMap::new(), // TODO
-        camera_focus,
-        scroll_limit_x: (focus_vec.x - 500.0, focus_vec.x + 500.0),
-        scroll_limit_y: (focus_vec.y - 500.0, focus_vec.y + 500.0),
-    }
+    HexMap::from_spec(&MapSpec {
+        grid: vec![
+            /*        0 1 2 3 4 5 6 7 8 9 */
+            /*  0 */ "    . . . . . . . .    ".to_string(),
+            /*  1 */ "   . . . . . . . . .   ".to_string(),
+            /*  2 */ "  . . . . . . . . . .  ".to_string(),
+            /*  3 */ " . . . . . . . . . . . ".to_string(),
+            /*  4 */ ". . . . . . . . . . . .".to_string(),
+            /*  5 */ " . . . . . . . . . . . ".to_string(),
+            /*  6 */ ". . . . . . . . . . . .".to_string(),
+            /*  7 */ " . . . . . . . . . . . ".to_string(),
+            /*  8 */ "  . . . . . . . . . .  ".to_string(),
+            /*  9 */ "   . . . . . . . . .   ".to_string(),
+            /* 10 */ "    . . . . . . . .    ".to_string(),
+        ],
+        legend: BTreeMap::from_iter([(
+            ".".to_string(),
+            TileSpec {
+                tile_type: TileType::Floor,
+                spawn: None,
+            },
+        )]),
+        ..Default::default()
+    })
 }
 
 #[test]
@@ -226,7 +272,7 @@ fn test_map_can_determine_neighbor_tiles() {
     ], neighbors);
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 pub enum TileType {
     Floor,
     // Void,
@@ -378,7 +424,6 @@ fn find_path_astar(start: MapPos, goal: MapPos, m: &HexMap) -> Option<Path> {
                 if costs.is_none() || costs.unwrap().0 > new_costs {
                     let mut new_path = path.clone();
                     let priority = new_costs + euclid_dis(&neighor_pos, &goal);
-                    // let priority = new_costs + neighor_pos.distance(&goal);
 
                     new_path.push(neighor_pos);
 
@@ -393,19 +438,6 @@ fn find_path_astar(start: MapPos, goal: MapPos, m: &HexMap) -> Option<Path> {
     None
 }
 
-// const DP: f32 = 1.0; // distance for perpendicular (non-diaginal) steps
-// const DD: f32 = 1.0; // distance for diaginal steps; sqrt(2)
-
-// /// Estimates the distance between two map points (tiles) A and B ignoring
-// /// possible obstacles
-// /// (based on http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html#heuristics-for-grid-maps)
-// fn distance(MapPos(x1, y1): MapPos, MapPos(x2, y2): MapPos) -> f32 {
-//     let dx = x1.checked_sub(x2).unwrap_or(0) as f32;
-//     let dy = y1.checked_sub(y2).unwrap_or(0) as f32;
-
-//     DP * (dx + dy) + (DD - 2.0 * DP) * f32::min(dx, dy)
-// }
-
 fn costs((_, _, obs): &Tile) -> f32 {
     obs.map(|Obstacle(c)| c).unwrap_or(1.0)
 }
@@ -415,4 +447,11 @@ fn euclid_dis(a: &MapPos, b: &MapPos) -> f32 {
     let dr = (b.r - a.r) as f32;
 
     f32::sqrt(dq * dq + dr * dr + dq * dr)
+}
+
+#[test]
+fn test_map_syntax() {
+    let raw_string = std::fs::read_to_string("assets/data/maps/arena01.map.ron").unwrap();
+    let map_spec: Result<MapSpec, _> = ron::from_str(&raw_string);
+    assert!(map_spec.is_ok());
 }

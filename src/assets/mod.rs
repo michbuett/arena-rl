@@ -2,7 +2,7 @@ mod sprites;
 
 use crate::{
     GameState,
-    combat::ManeuverTemplates,
+    combat::{ManeuverTemplates, MapSpec},
     core::{ActorTemplates, Feats},
 };
 use bevy::{
@@ -101,10 +101,12 @@ pub fn assets_plugin(app: &mut App) {
         .init_asset::<RawSpriteConfig>()
         .init_asset::<ManeuverTemplates>()
         .init_asset::<Feats>()
+        .init_asset::<MapSpec>()
         .register_asset_loader(DataAssetLoader::<ManeuverTemplates>::new("maneuvers.ron"))
         .register_asset_loader(DataAssetLoader::<ActorTemplates>::new("actors.ron"))
         .register_asset_loader(DataAssetLoader::<RawSpriteConfig>::new("sprites.ron"))
         .register_asset_loader(DataAssetLoader::<Feats>::new("feats.ron"))
+        .register_asset_loader(DataAssetLoader::<MapSpec>::new("map.ron"))
         .add_observer(on_sprite_config_loaded_event)
         .add_observer(handle_all_assets_loaded_event)
         .add_systems(OnEnter(GameState::Start), load_data_files)
@@ -139,6 +141,11 @@ fn load_data_files(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((
         Loading,
         AssetHandle(asset_server.load::<Feats>("data/main.feats.ron").untyped()),
+    ));
+
+    commands.spawn((
+        Loading,
+        AssetHandle(asset_server.load_folder("data/maps").untyped()),
     ));
 
     commands.spawn((

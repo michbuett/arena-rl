@@ -11,17 +11,19 @@ mod ui;
 use ai::combat_ai_plugin;
 use bevy::prelude::*;
 use generator::{ActorGenerator, setup_generators};
+use rand::seq::IteratorRandom;
 
 use crate::{GameState, assets::Visual, core::Deck, despawn_screen};
 
 use self::{
     actor::{ActorBundle, Team, TeamBundle},
     flow::{TurnPhase, handle_turn_phase_start_turn, setup_combat_flow},
-    map::{HexMap, MapPos, update_obstacles_in_map},
+    map::{HexMap, update_obstacles_in_map},
     ui::combat_ui_plugin,
 };
 
 pub use commands::ManeuverTemplates;
+pub use map::MapSpec;
 
 #[derive(Component)]
 struct OnCombatState;
@@ -72,9 +74,11 @@ pub fn combat_plugin(app: &mut App) {
     // setup_actor_changed(app);
 }
 
-fn setup_map(mut commands: Commands) {
-    let map = map::dummy_hex();
-
+fn setup_map(map_specs: Res<Assets<MapSpec>>, mut commands: Commands) {
+    // let mut rng = rand::thread_rng();
+    let (_, spec) = map_specs.iter().choose(&mut rand::thread_rng()).unwrap();
+    let map = HexMap::from_spec(spec);
+    // let map = map::dummy_hex();
     for (hex_pos, _tile_type) in map.tiles() {
         commands.spawn((
             Name::from(format!("Tile_{:?}", hex_pos)),
@@ -105,17 +109,18 @@ fn setup_camera(
     Ok(())
 }
 
-fn setup_actors(mut commands: Commands, actor_generator: Res<ActorGenerator>) {
+fn setup_actors(mut commands: Commands, map: Res<HexMap>, actor_generator: Res<ActorGenerator>) {
     let player_team = Team(commands.spawn(TeamBundle::new("Player", true)).id());
     let cpu_team = Team(commands.spawn(TeamBundle::new("CPU", false)).id());
     let mut deck = Deck::new_rnd();
 
+    let mut player_spawn_points = map.spawn_points("player").iter();
     commands.spawn((
         ActorBundle::new(
             Name::new("Player (Leader)"),
             player_team,
             true,
-            MapPos::from_oddr(5, 5),
+            player_spawn_points.next().copied().unwrap(),
         ),
         actor_generator.generate_actor("player_leader", &mut deck),
     ));
@@ -125,17 +130,18 @@ fn setup_actors(mut commands: Commands, actor_generator: Res<ActorGenerator>) {
             Name::new("Player (Tank)"),
             player_team,
             true,
-            MapPos::from_oddr(5, 6),
+            player_spawn_points.next().copied().unwrap(),
         ),
         actor_generator.generate_actor("player_tank", &mut deck),
     ));
 
+    let mut enemy_spawn_points = map.spawn_points("enemy_land").iter();
     commands.spawn((
         ActorBundle::new(
             Name::new("Sucker #1"),
             cpu_team,
             false,
-            MapPos::from_oddr(2, 2),
+            enemy_spawn_points.next().copied().unwrap(),
         ),
         actor_generator.generate_actor("sucker", &mut deck),
     ));
@@ -145,7 +151,7 @@ fn setup_actors(mut commands: Commands, actor_generator: Res<ActorGenerator>) {
             Name::new("Sucker #2"),
             cpu_team,
             false,
-            MapPos::from_oddr(8, 2),
+            enemy_spawn_points.next().copied().unwrap(),
         ),
         actor_generator.generate_actor("sucker", &mut deck),
     ));
