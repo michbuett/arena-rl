@@ -94,7 +94,8 @@ pub fn combat_ui_plugin(app: &mut App) {
             Update,
             (
                 process_keyboard_input,
-                update_turn_info.run_if(resource_exists_and_changed::<Turn>),
+                (update_turn_info, update_indicators_for_new_turn)
+                    .run_if(resource_exists_and_changed::<Turn>),
                 update_description_on_changed,
                 update_player_hand_window,
                 update_details_window_text_on_change,
@@ -595,6 +596,18 @@ fn on_activation_ended_event(
     clear_activation_indicator_for(activation_indicator_q, &mut commands, *e);
     insert_activation_indicator_for_entity(&mut commands, *e, activations, active, &turn);
     Ok(())
+}
+
+fn update_indicators_for_new_turn(
+    actor_q: Query<(Entity, &Activations, Option<&Active>)>,
+    activation_indicator_q: Query<(Entity, &ChildOf), With<ActivationIndicator>>,
+    turn: Res<Turn>,
+    mut commands: Commands,
+) {
+    for (e, activations, active) in actor_q.iter() {
+        clear_activation_indicator_for(activation_indicator_q, &mut commands, e);
+        insert_activation_indicator_for_entity(&mut commands, e, activations, active, &turn);
+    }
 }
 
 fn update_indicators_when_activations_changed(

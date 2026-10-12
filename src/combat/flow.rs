@@ -143,58 +143,49 @@ pub fn handle_turn_phase_perform_actions(
 
     actors_to_activate.sort_by_key(|(_, i)| i.clone());
 
-    if let Some((actor_to_activate, activation_turn)) = actors_to_activate.first() {
-        turn.1 = activation_turn.initiative();
-        commands.trigger(BeginActivationCommand(*actor_to_activate));
-    } else {
-        // There are no more actors to activate
+    let Some((actor_to_activate, activation_turn)) = actors_to_activate.first() else {
+        // This should not happen because every actor gets a new activation when he completed his last activation
+        panic!("There is no actor to activate");
+    };
+
+    // println!("ACTIVATE:{actor_to_activate:?} ({activation_turn:?})");
+    if activation_turn.turn_number() > curr_turn_number {
         turn.0 = curr_turn_number + 1;
         turn.1 = Initiative::start();
         next_turn_phase.set(TurnPhase::StartTurn);
+    } else {
+        turn.1 = activation_turn.initiative();
+        commands.trigger(BeginActivationCommand(*actor_to_activate));
     }
+}
 
-    // }
+#[test]
+fn turns_are_sorted_correctly() {
+    use crate::core::CardValue::*;
+    use crate::core::Suite::*;
 
-    // let mut current_initiative = Some(turn_number.1);
-    // while let Some(initiative) = current_initiative {
-    //     for (entity, activations, ..) in activations_q.iter() {
-    //         if let Some(initiative_value) = activations.next_activation_initiative(turn_number.0) {
-    //             if initiative_value <= initiative {
-    //                 commands.trigger(BeginActivationCommand(entity));
-    //                 return;
-    //             }
-    //         }
-    //     }
-    //     current_initiative = initiative.step()
-    // }
+    let t1 = Turn::start().next_activation(Card::new(Five, Spades));
+    let t2 = Turn::start().next_activation(Card::new(Three, Clubs));
+    let t3 = Turn::start().next_activation(Card::new(Three, Diamonds));
+    let t4 = Turn::start().next_activation(Card::new(Three, Hearts));
+    let t5 = Turn::start().next_activation(Card::new(Eight, Hearts));
+    let t6 = Turn::start().next_activation(Card::new(Ace, Hearts));
+    let t7 = Turn::start()
+        .next_activation(Card::new(Eight, Hearts))
+        .next_activation(Card::new(Two, Spades));
+    let t8 = Turn::start()
+        .next_activation(Card::new(Three, Hearts))
+        .next_activation(Card::new(Ace, Spades));
+    let mut set = vec![t1, t2, t3, t4, t5, t6, t7, t8];
 
-    // turn_number.0 += 1;
-    // next_turn_phase.set(TurnPhase::StartTurn);
+    set.sort();
 
-    // // Activate actors in order if the initiative card
-    // // let mut actor_to_activate: Option<(Entity, u8)> = None;
-
-    // // for (entity, activations, ..) in activations_q.iter() {
-    // // if let Some(initiative_value) = activations.next_activation_initiative(turn_number.0) {}
-    // //         actor_to_activate = actor_to_activate.map_or(
-    // //             Some((entity, initiative_value)),
-    // //             |(id_so_far, ini_so_far)| {
-    // //                 if initiative_value < ini_so_far {
-    // //                     Some((entity, initiative_value))
-    // //                 } else {
-    // //                     Some((id_so_far, ini_so_far))
-    // //                 }
-    // //             },
-    // //         );
-    // //     }
-    // // }
-
-    // // println!("ACTIVATE:{:?}", actor_to_activate);
-    // if let Some((entity, _)) = actor_to_activate {
-    //     commands.trigger(BeginActivationCommand(entity));
-    // } else {
-    //     // There are no more actors to activate
-    //     turn_number.0 += 1;
-    //     next_turn_phase.set(TurnPhase::StartTurn);
-    // }
+    assert_eq!(set[0], t6);
+    assert_eq!(set[1], t3);
+    assert_eq!(set[2], t4);
+    assert_eq!(set[3], t2);
+    assert_eq!(set[4], t1);
+    assert_eq!(set[5], t5);
+    assert_eq!(set[6], t8);
+    assert_eq!(set[7], t7);
 }
