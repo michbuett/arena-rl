@@ -624,7 +624,7 @@ pub struct DamageDetails {
 }
 
 pub fn on_insert_active_effects(
-    trigger: On<Insert, ActiveEffects>,
+    trigger: On<Insert<ActiveEffects>>,
     data_q: Query<&ActiveEffects>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
@@ -649,7 +649,7 @@ pub fn on_insert_active_effects(
 }
 
 pub fn on_insert_status_flags(
-    trigger: On<Insert, StatusFlags>,
+    trigger: On<Insert<StatusFlags>>,
     data_q: Query<&StatusFlags>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {

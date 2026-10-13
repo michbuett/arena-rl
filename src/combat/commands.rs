@@ -105,7 +105,7 @@ pub fn on_start_input_workflow_command(
 }
 
 pub fn on_fx_finished(
-    _trigger: On<Remove, FxRunning>,
+    _trigger: On<Remove<FxRunning>>,
     input_workflow: Option<ResMut<UserInputWorkflow>>,
     mut commands: Commands,
 ) {

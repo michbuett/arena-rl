@@ -206,7 +206,7 @@ fn setup_ui(mut commands: Commands) {
 }
 
 fn process_map_scroll(
-    event: On<Pointer<Scroll>>,
+    event: On<PointerScroll>,
     dim: Res<ScrollBounds>,
     mut camera_transform_query: Query<&mut Transform, With<Camera>>,
 ) -> Result<(), BevyError> {
@@ -218,7 +218,7 @@ fn process_map_scroll(
 }
 
 fn process_map_click(
-    _event: On<Pointer<Click>>,
+    _event: On<PointerClick>,
     map: Res<HexMap>,
     fx_running_q: Query<(), With<FxRunning>>,
     window_query: Query<&Window, With<PrimaryWindow>>,
@@ -766,7 +766,7 @@ fn describe_action_consequence(
 }
 
 fn show_combat_result_details(
-    event: On<Pointer<Click>>,
+    event: On<PointerClick>,
     log_result_details_q: Query<&CombatLogDetails>,
     generator: Res<ActorGenerator>,
     mut commands: Commands,
@@ -810,7 +810,7 @@ fn show_combat_result_details(
 }
 
 fn on_click_close_combat_log_details(
-    mut event: On<Pointer<Click>>,
+    mut event: On<PointerClick>,
     log_result_entry_q: Query<&CombatLogEntry>,
     mut commands: Commands,
 ) {
@@ -962,14 +962,14 @@ fn update_player_hand_window(
 }
 
 fn on_click_hand_card(
-    click: On<Pointer<Click>>,
+    click: On<PointerClick>,
     hand_cards_q: Query<(&PlayerHandCard, &Team)>,
     input_req: Option<Res<SelectHandCardInput>>,
     mut hand_q: Query<Mut<Hand>>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
-    let Pointer { entity, .. } = click.event();
-    let (PlayerHandCard(index), hand_team) = hand_cards_q.get(*entity)?;
+    let entity = click.event_target();
+    let (PlayerHandCard(index), hand_team) = hand_cards_q.get(entity)?;
     let mut hand = hand_q.get_mut(hand_team.0)?;
 
     if input_req.is_none() {
@@ -1065,7 +1065,7 @@ fn on_select_path_command(
 }
 
 fn on_range_indicator_click(
-    trigger: On<Pointer<Click>>,
+    trigger: On<PointerClick>,
     pos_path_q: Query<&PossibleMovePath>,
     path_ind_q: Query<Entity, With<PathIndicator>>,
     mut commands: Commands,
@@ -1287,7 +1287,7 @@ fn on_select_actor_command(
 }
 
 fn on_input_selected(
-    event: On<Pointer<Click>>,
+    event: On<PointerClick>,
     user_input_q: Query<&InputStepData>,
     input_elem_q: Query<Entity, Or<(With<InputWindow>, With<RangeIndicator>, With<PathIndicator>)>>,
     mut active_tile_q: Query<&mut Visibility, With<ActiveTile>>,
