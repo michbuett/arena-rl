@@ -469,7 +469,7 @@ pub fn handle_action_finished_event(
         let (mut health, mut active_effects, mut protection, mut items) = health_q.get_mut(*e)?;
         match c {
             ActionConsequence::ArmorBreak => {
-                let mut rng = rand::thread_rng();
+                let mut rng = rand::rng();
                 let protecting_item = protection
                     .0
                     .iter()

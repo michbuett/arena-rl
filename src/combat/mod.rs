@@ -76,7 +76,7 @@ pub fn combat_plugin(app: &mut App) {
 
 fn setup_map(map_specs: Res<Assets<MapSpec>>, mut commands: Commands) {
     // let mut rng = rand::thread_rng();
-    let (_, spec) = map_specs.iter().choose(&mut rand::thread_rng()).unwrap();
+    let (_, spec) = map_specs.iter().choose(&mut rand::rng()).unwrap();
     let map = HexMap::from_spec(spec);
     // let map = map::dummy_hex();
     for (hex_pos, _tile_type) in map.tiles() {

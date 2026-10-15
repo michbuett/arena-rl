@@ -146,7 +146,7 @@ impl Deck {
             }
         }
 
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         cards.shuffle(&mut rng);
         cards
     }

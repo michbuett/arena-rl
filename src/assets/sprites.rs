@@ -3,10 +3,7 @@ use crate::{
     animations::{FadeAnimation, SpriteAnimation},
 };
 use bevy::{ecs::system::EntityCommands, prelude::*};
-use rand::{
-    distributions::uniform::{SampleRange, SampleUniform},
-    prelude::*,
-};
+use rand::random_range;
 use serde::Deserialize;
 use std::{collections::HashMap, fmt::Display, time::Duration};
 
@@ -254,7 +251,7 @@ fn insert_sprite(
                 .map(|image_id| sprite_cfg_map.sources.texture_index(*image_id).unwrap_or(0))
                 .collect::<Vec<_>>();
 
-            let current_idx: usize = rand_between(0..indices.len());
+            let current_idx: usize = random_range(0..indices.len());
             let mut timer = Timer::new(
                 Duration::from_millis(*frame_duration as u64),
                 TimerMode::Repeating,
@@ -266,7 +263,7 @@ fn insert_sprite(
             };
 
             timer.tick(Duration::from_millis(
-                rand_between(0..*frame_duration) as u64
+                random_range(0..*frame_duration) as u64
             ));
 
             commands.insert((
@@ -295,13 +292,4 @@ fn insert_sprite(
 
 fn combat_sprite_path(n: impl Display) -> String {
     format!("images/combat/{n}")
-}
-
-fn rand_between<R, T>(r: R) -> T
-where
-    T: SampleUniform,
-    R: SampleRange<T>,
-{
-    let mut rng = thread_rng();
-    rng.gen_range(r)
 }

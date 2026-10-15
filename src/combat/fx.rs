@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use bevy::prelude::*;
-use rand::prelude::Distribution;
+use rand::{distr::Uniform, prelude::Distribution, random_range};
 
 use crate::{
     EndOfLive, MarkedForDeath,
@@ -250,8 +250,9 @@ fn handle_blood_splatter(commands: &mut Commands, pos: Vec3) {
         let visual = Visual::Single(format!("blood-splatter-{}", (i % 3) + 1));
         let move_steps = animation_path(pos, (50, 100));
         let stains_pos = move_steps.last().unwrap().with_z(Z_LAYER_FLOOR);
-        let mv_dur =
-            Duration::from_millis(between(400, (BLOOD_SPLATTER_DURATION - 100) as i32) as u64);
+        let mv_dur = Duration::from_millis(random_range(
+            400..=(BLOOD_SPLATTER_DURATION - 100) as i32,
+        ) as u64);
         let eol_dur = duration + Duration::from_millis(100); // a little bit of extra time to avoid stuttering
 
         commands.spawn((
@@ -313,23 +314,17 @@ fn handle_custom_effect(commands: &mut Commands, eff: &CustomEffect) {
 }
 
 fn animation_path(source_pos: Vec3, length: (u32, u32)) -> Vec<Vec3> {
-    let mut rng = rand::thread_rng();
-    let distribution_dir = rand::distributions::Uniform::from(-100..=100);
+    let mut rng = rand::rng();
+    let distribution_dir = Uniform::new_inclusive(-100, 100).unwrap();
     let dir = Vec2::new(
         distribution_dir.sample(&mut rng) as f32,
         distribution_dir.sample(&mut rng) as f32,
     )
     .normalize();
 
-    let distribution_length = rand::distributions::Uniform::from(length.0..=length.1);
+    let distribution_length = Uniform::new_inclusive(length.0, length.1).unwrap();
     let length = distribution_length.sample(&mut rng) as f32;
     let target_pos = source_pos + (dir * length).extend(0.0);
 
     vec![source_pos, target_pos]
-}
-
-fn between(num1: i32, num2: i32) -> i32 {
-    let mut rng = rand::thread_rng();
-    let distribution = rand::distributions::Uniform::from(num1..=num2);
-    distribution.sample(&mut rng)
 }
